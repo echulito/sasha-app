@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=6;
+var APP_V=7;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -341,26 +341,28 @@ function verProducto(c){
       (f.clase?'<div style="margin-top:8px"><span class="chip '+({ESTRELLA:'v',VOLUMEN:'c',NICHO:'a',REVISAR:'a',PIERDE:'r'}[f.clase]||'c')+'">'+(f.clase==='ESTRELLA'?'⭐ ':'')+esc(f.clase)+'</span> <span class="note">puesto '+f.puesto+' en contribución · deja '+pesos(f.contribucionMes)+' por mes</span></div>':'')+
       '</div>';
     h+='<div class="grid" style="margin-top:12px">';
-    // Margen con el costo del sistema (lo que figura hoy) y con el de la lista vigente (al reponer).
-    var cs=p.costoSistema||0, cl=p.costoLista||0, pv=p.precio||0, pv2=p.porVenta||0;
-    var mS=pv&&cs?(pv-cs)/pv:null, mL=pv&&cl?(pv-cl)/pv:null;
-    var cBase=cs||cl, mBase=cs?mS:mL, gBase=pv&&cBase?pv-cBase:null;
-    var nivel=mBase===null?'sin':(mBase<pv2?'mal':(mBase<p.minimo?'bajo':(p.objetivo&&mBase<p.objetivo?'ok':'bien')));
+    // REGLA DEL COSTO: con stock, si la lista bajó se usa el costo del sistema; si subió, el de la lista.
+    // Sin stock, el de la lista (es lo que vas a pagar al reponer).
+    var cs=p.costoSistema||0, cl=p.costoLista||0, pv=p.precio||0, pv2=p.porVenta||0, hayStock=(p.stock||0)>0;
+    var cUso, origen, aviso='';
+    if(cs&&cl){
+      if(cl>cs+1){cUso=cl;origen='de la lista, subió';aviso='<div class="eval mal" style="margin-top:8px">La lista SUBIÓ de '+pesos(cs)+' a '+pesos(cl)+': cambiá el costo en Civil System ya (tarea CAMBIAR COSTO) y revisá el precio.</div>';}
+      else if(cl<cs-1&&hayStock){cUso=cs;origen='del sistema, hay stock';aviso='<div class="note">La lista bajó a '+pesos(cl)+'. Mientras quede stock se mantiene el costo del sistema; cuando se agote, se pide cambiarlo.</div>';}
+      else if(cl<cs-1){cUso=cl;origen='de la lista, sin stock';aviso='<div class="note">Sin stock y la lista bajó: cambiá el costo a '+pesos(cl)+' (tarea CAMBIAR COSTO). En el sistema hoy figura '+pesos(cs)+'.</div>';}
+      else {cUso=cs;origen='del sistema';}
+    } else if(cs){cUso=cs;origen='del sistema';} else if(cl){cUso=cl;origen='de la lista';} else {cUso=0;origen='';}
+    var mUso=pv&&cUso?(pv-cUso)/pv:null, gUso=pv&&cUso?pv-cUso:null;
+    var nivel=mUso===null?'sin':(mUso<pv2?'mal':(mUso<p.minimo?'bajo':(p.objetivo&&mUso<p.objetivo?'ok':'bien')));
     var txtNivel={sin:'Sin costo cargado: no se puede calcular el margen.',mal:'MAL: con las comisiones, cada venta pierde plata.',
       bajo:'BAJO: no llega al margen mínimo del local ('+pct(p.minimo,0)+') para cubrir los gastos fijos.',
       ok:'ACEPTABLE: cubre los gastos, pero está debajo del objetivo ('+pct(p.objetivo,0)+').',bien:'BIEN: llega al objetivo de margen.'}[nivel];
     h+='<div class="card"><h2>Precio y margen</h2>'+
       '<div class="row"><span>Precio de venta</span><span>'+pesos(pv)+'</span></div>'+
-      (cs?'<div class="row"><span>Costo en el sistema</span><span>'+pesos(cs)+'</span></div>'+
-        '<div class="row"><span><b>Ganancia por unidad</b> (precio − costo)</span><span class="'+(gBase>=0?'pos':'neg')+'"><b>'+pesos(gBase)+'</b></span></div>'+
-        '<div class="row"><span><b>Margen</b></span><span><b>'+pct(mS)+'</b></span></div>':'')+
-      (!cs&&cl?'<div class="row"><span>Costo (lista vigente)</span><span>'+pesos(cl)+'</span></div>'+
-        '<div class="row"><span><b>Ganancia por unidad</b> (precio − costo)</span><span><b>'+pesos(pv-cl)+'</b></span></div>'+
-        '<div class="row"><span><b>Margen</b></span><span><b>'+pct(mL)+'</b></span></div>':'')+
-      '<div class="eval '+nivel+'">'+esc(txtNivel)+'</div>'+
-      (cs&&cl&&Math.abs(cl-cs)>1?'<div class="row" style="margin-top:8px"><span>Costo en la lista vigente (al reponer)</span><span>'+pesos(cl)+'</span></div>'+
-        '<div class="row"><span>Ganancia y margen al reponer</span><span class="'+(cl<cs?'pos':'neg')+'">'+pesos(pv-cl)+' · '+pct(mL)+'</span></div>'+
-        '<div class="note">'+(cl<cs?'La lista está más barata que el costo cargado en el sistema: actualizá el costo en Civil System (tarea CAMBIAR COSTO).':'La lista está más cara que el costo del sistema: al reponer vas a ganar menos.')+'</div>':'')+
+      (cUso?'<div class="row"><span>Costo '+origen+'</span><span>'+pesos(cUso)+'</span></div>'+
+        '<div class="row"><span><b>Ganancia por unidad</b> (precio − costo)</span><span class="'+(gUso>=0?'pos':'neg')+'"><b>'+pesos(gUso)+'</b></span></div>'+
+        '<div class="row"><span><b>Margen</b></span><span><b>'+pct(mUso)+'</b></span></div>':'')+
+      '<div class="eval '+nivel+'">'+esc(txtNivel)+'</div>'+aviso+
+      (cs&&cl&&Math.abs(cl-cs)>1?'<div class="row" style="margin-top:8px"><span>Costo en el sistema · en la lista</span><span>'+pesos(cs)+' · '+pesos(cl)+'</span></div>':'')+
       (p.precioSugerido?'<div class="note">Precio sugerido este mes: <b>'+pesos(p.precioSugerido)+'</b></div>':'')+'</div>';
     var dias=p.diasStock, colorD=dias===null?'':(dias<7?'neg':(dias<20?'warn':'pos'));
     h+='<div class="card"><h2>Stock</h2>'+
