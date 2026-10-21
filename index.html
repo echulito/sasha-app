@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=16;
+var APP_V=17;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -777,15 +777,25 @@ function bajarArchivo(bytes,nombre){
   var blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download=nombre;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove()},4000);
 }
+var ULT_PDF=null;
+// Con el PDF ya armado: en el celular abre el menú de compartir (WhatsApp, Drive, Guardar en Archivos); si no, lo baja o lo abre.
+function compartirPDF(){
+  if(!ULT_PDF)return;
+  var f=null;try{f=new File([ULT_PDF.bytes],ULT_PDF.nombre,{type:'application/pdf'})}catch(e){f=null}
+  if(f&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:ULT_PDF.nombre}).catch(function(){});return}
+  var url=URL.createObjectURL(new Blob([ULT_PDF.bytes],{type:'application/pdf'}));
+  var w=window.open(url,'_blank');if(!w)bajarArchivo(ULT_PDF.bytes,ULT_PDF.nombre);
+}
 function hoyTxt(off){var d=new Date(Date.now()+(off||0)*86400000);return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear()}
 $('bpdf').onclick=function(){
   calcEstrategia(); var e=EST.ult; if(!e||!e.d.c||!e.P){$('epdfmsg').innerHTML='<b class="neg">Falta el precio de la opción elegida.</b>';return}
   var d=e.d, P=SPROD||{}, op2=e.op===2&&e.desc>0, pv=proveedorElegido();
   $('epdfmsg').textContent='Armando la propuesta…';
-  var guardar=(d.q>0)?guardarSimulacion(e).catch(function(){return ''}):Promise.resolve('');
   var nombre='propuesta_'+((P.codigo||'producto')+'_'+(op2?'con-oferta':'sin-oferta')+'_'+hoyTxt().replace(/\//g,'-'))+'.pdf';
-  Promise.all([guardar,cargarLibPDF()]).then(function(res){
-    var id=res[0];
+  // Primero se arma y se baja el PDF (rápido, sin esperar a ECHU): si se espera a que se guarde, el celular
+  // ya no lo toma como un toque tuyo y no lo deja bajar. Después se guarda en Gestión de Compras.
+  cargarLibPDF().then(function(lib){
+    var id='';var res=[id,lib];
     var $f=function(n){return '$ '+Math.round(n||0).toLocaleString('es-AR')};
     var pc=function(n){return (n*100).toFixed(1).replace('.',',')+'%'};
     return armarPDF(res[1],function(D){
@@ -803,11 +813,16 @@ $('bpdf').onclick=function(){
         D.fila('Proyección de ventas',e.proy.toFixed(1).replace('.',',')+' u.');D.fila('Ganancia proyectada',$f(e.ganProy),e.ganProy<0);
         var falta=Math.max(0,e.objU-e.proy);D.fila('¿Se cumple el objetivo?',falta>0?'NO: faltan '+Math.ceil(falta)+' u.':'SÍ',falta>0);
         if(falta>0)D.fila('Plata parada si no se vende',$f(falta*d.c),true);}
-      D.sub('');D.parrafo('Seguimiento: '+(id?'quedó en Gestión de Compras 2026. Cuando la pidas, tildá "¿Se pidió?": desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.':'para seguirla, elegí un producto y una cantidad antes de bajarla.'));
+      D.sub('');D.parrafo('Seguimiento: '+(d.q>0?'quedó en Gestión de Compras 2026. Cuando la pidas, tildá "¿Se pidió?": desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.':'para seguirla, elegí un producto y una cantidad antes de bajarla.'));
     }).then(function(bytes){
+      ULT_PDF={bytes:bytes,nombre:nombre};
       bajarArchivo(bytes,nombre);
-      $('epdfmsg').innerHTML='Listo: se bajó <b>'+esc(nombre)+'</b>'+(id?' y quedó guardada en Gestión de Compras 2026. Cuando la pidas, tildá “¿Se pidió?”.':(d.q>0?' (no se pudo guardar: actualizá ECHU a la 5.17).':'. Para guardarla, poné la cantidad.'));
-      cargarPropuestas();
+      var base='PDF listo: <b>'+esc(nombre)+'</b>. Si no lo ves en Descargas, tocá: <div class="btns" style="margin-top:6px"><button class="btn sec" onclick="compartirPDF()">Abrir / compartir el PDF</button></div>';
+      $('epdfmsg').innerHTML=base+(d.q>0?'Guardando en Gestión de Compras…':'Para guardarla en Gestión de Compras, poné la cantidad.');
+      if(d.q>0)guardarSimulacion(e).then(function(gid){
+        $('epdfmsg').innerHTML=base+(gid?'Quedó guardada en Gestión de Compras 2026. Cuando la pidas, tildá “¿Se pidió?”.':'No se pudo guardar en Gestión de Compras.');
+        cargarPropuestas();
+      }).catch(function(err){$('epdfmsg').innerHTML=base+'<b class="neg">No se pudo guardar: '+esc(err.message)+'</b>'});
     });
   }).catch(function(err){$('epdfmsg').innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
 };
@@ -896,7 +911,7 @@ function cargarPropuestas(){
   }).catch(function(){$('lprop').innerHTML='Para ver el seguimiento, actualizá ECHU a la versión 5.17.'});
 }
 
-document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',cargarPropuestas);
+document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',function(){cargarPropuestas();cargarLibPDF().catch(function(){})});
 </script>
 </body>
 </html>
