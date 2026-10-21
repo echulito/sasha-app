@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=14;
+var APP_V=15;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -81,6 +81,7 @@ label{font-size:12px;color:var(--gris);font-weight:600;display:block;margin:10px
 .marcas{position:relative;height:28px;font-size:10px;color:var(--gris)}
 .marcas span{position:absolute;transform:translateX(-50%);white-space:nowrap}
 .oculto{display:none}
+.opc{border:2px solid var(--linea);border-radius:12px;padding:10px 12px;margin-top:12px;cursor:pointer;transition:background .4s}.opc.on{border-color:var(--azul2);background:#f8fbff}.opc-h{display:flex;justify-content:space-between;align-items:center;gap:8px}.opc-h b{font-size:15px}.opc .tick{font-size:12px;font-weight:700;color:var(--gris)}.opc.on .tick{color:var(--azul2)}.opc.flash{background:#fff3c4}
 .seg{display:flex;gap:6px;margin:10px 0 4px}.seg button{flex:1;border:2px solid var(--linea);background:#fff;border-radius:10px;padding:8px 4px;font-weight:700;color:var(--gris);cursor:pointer;font-size:13px}.seg button small{font-weight:600}.seg button.on{border-color:var(--azul2);background:var(--celeste);color:var(--azul2)}
 #login{max-width:420px;margin:40px auto;padding:0 16px}
 #login .logo{width:72px;height:72px;border-radius:18px;margin:0 auto 12px;display:block}
@@ -113,7 +114,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
 </div>
 <div id="app" class="oculto">
 <header>
-  <button class="recargar" onclick="cargar()">↻ Actualizar</button><h1>Sasha · Mi negocio</h1>
+  <button class="recargar" onclick="actualizarApp()">↻ Actualizar</button><h1>Sasha · Mi negocio</h1>
   <div class="sub"><span id="sub">Cargando…</span><button class="salir" onclick="salir()">salir</button><span style="opacity:.55;font-size:11px;margin-left:6px" id="verapp"></span></div>
   <nav>
     <button class="on" data-tab="resumen">Resumen</button>
@@ -154,30 +155,30 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
     <div id="sres" style="margin-top:12px"></div>
     <div class="card oculto" id="sest" style="margin-top:12px">
       <h2>Estrategia de precio y objetivo</h2>
-      <div class="note" style="margin-top:0">Elegí una opción. El PDF se arma solo con la opción elegida.</div>
-      <div class="seg" id="eopc">
-        <button data-o="1" class="on">Opción 1<br><small>Sin oferta</small></button>
-        <button data-o="2">Opción 2<br><small>Con oferta (llamador)</small></button>
-      </div>
-      <label>Precio que cobrás ($)</label>
-      <input id="epre" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0">
-      <div class="btns" style="margin-top:6px"><button class="btn sec" id="bsugerir">Sugerir precio (margen objetivo)</button></div>
-      <div id="eof2" class="oculto">
-        <label>Descuento que se muestra (%)</label>
-        <input id="epct" type="number" inputmode="decimal" min="1" max="80" value="20">
-        <div class="note">Cobrás lo mismo que en la opción 1 (mismo margen): solo se carga un precio de lista más alto con la bonificación, para que se vea en oferta.</div>
-      </div>
+      <div class="note" style="margin-top:0">Se completa sola con el precio de arriba: así quedaría <b>sin oferta</b> y <b>con oferta</b>. Si querés, cambiá cualquier número. Tocá la opción que querés bajar en PDF.</div>
       <div class="two">
         <div><label>Duración / objetivo (días)</label><input id="edias" type="number" inputmode="numeric" min="1" value="30"></div>
         <div><label>Objetivo: vender (unidades)</label><input id="eobj" type="number" inputmode="numeric" min="0"></div>
       </div>
-      <label>Ventas extra esperadas (%)</label>
-      <input id="eaum" type="number" inputmode="decimal" min="0" value="0">
       <div id="ebase"></div>
-      <div id="eres"></div>
+      <div class="opc on" id="op1">
+        <div class="opc-h"><b>Opción 1 · Sin oferta</b><span class="tick" id="tk1"></span></div>
+        <label>Precio que cobrás ($)</label>
+        <input id="e1pre" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0">
+        <div id="e1res"></div>
+      </div>
+      <div class="opc" id="op2">
+        <div class="opc-h"><b>Opción 2 · Con oferta (llamador)</b><span class="tick" id="tk2"></span></div>
+        <div class="two">
+          <div><label>Precio que cobrás ($)</label><input id="epre" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0"></div>
+          <div><label>Descuento que se ve (%)</label><input id="epct" type="number" inputmode="decimal" min="1" max="80" value="20"></div>
+        </div>
+        <label>Ventas extra por la oferta (%)</label>
+        <input id="eaum" type="number" inputmode="decimal" min="0" value="30">
+        <div id="e2res"></div>
+      </div>
       <div class="btns">
-        <button class="btn sec" id="busarof">Usar este precio arriba</button>
-        <button class="btn" id="bpdf">⬇ Bajar propuesta (PDF)</button>
+        <button class="btn" id="bpdf">⬇ Bajar propuesta (PDF) · Opción 1</button>
       </div>
       <div id="epdfmsg" class="note"></div>
     </div>
@@ -235,9 +236,9 @@ function entrar(){
   api('login',{pin:$('lpin').value.trim()}).then(function(j){CFG.token=j.token;guardarCfg();$('lpin').value='';arrancar()})
    .catch(function(e){$('lerr').textContent=/Failed to fetch|RED|no respondió/.test(e.message)?'No se pudo conectar con ECHU. Revisá la dirección y que esté publicada para "Cualquier persona".':e.message;$('campoUrl').style.display=''});
 }
-function arrancar(){$('login').classList.add('oculto');$('app').classList.remove('oculto');cargar()}
+function arrancar(){$('login').classList.add('oculto');$('app').classList.remove('oculto');try{restaurarEstado()}catch(e){}cargar()}
 
-var D=null, ADMIN={porVenta:0.03,minimo:0.5,deseado:0.6,fijos:0}, SPROD=null;
+var DETCOD='', D=null, ADMIN={porVenta:0.03,minimo:0.5,deseado:0.6,fijos:0}, SPROD=null;
 function $(id){return document.getElementById(id)}
 function $$(n){return Math.round(n||0).toLocaleString('es-AR')}
 function pesos(n){if(n===null||n===undefined||isNaN(n))return '-';return (n<0?'-$ ':'$ ')+$$(Math.abs(n))}
@@ -277,7 +278,7 @@ function formatearMientrasEscribe(e){
   el.value='$ '+miles(ent||'0')+(dec!==null?','+dec:'');
   try{el.setSelectionRange(el.value.length,el.value.length)}catch(x){}
 }
-['scosto','sprecio','epre'].forEach(function(id){var el=$(id);
+['scosto','sprecio','epre','e1pre'].forEach(function(id){var el=$(id);
   el.addEventListener('input',formatearMientrasEscribe,true);
   el.addEventListener('compositionend',function(e){formatearMientrasEscribe({target:el});el.dispatchEvent(new Event('input'))});
   el.addEventListener('blur',function(){formatearMientrasEscribe({target:el})});
@@ -290,7 +291,8 @@ function cargar(){
 }
 $('lbtn').onclick=entrar;
 $('lpin').addEventListener('keydown',function(e){if(e.key==='Enter')entrar()});
-if(CFG.url&&CFG.token)arrancar();else mostrarLogin();
+// Arranca cuando ya está cargado todo el código (para poder recuperar dónde estabas).
+setTimeout(function(){if(CFG.url&&CFG.token)arrancar();else mostrarLogin()},0);
 if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){})}
 
 function pintarResumen(d){
@@ -395,6 +397,7 @@ function buscador(input,cont,alElegir){
 buscador($('q'),$('resultados'),function(c){verProducto(c)});
 
 function verProducto(c){
+  DETCOD=c;
   $('detalle').innerHTML='<div class="cargando">Cargando producto…</div>';
   api('producto',{codigo:c}).then(function(p){
     if(!p){$('detalle').innerHTML='<div class="card">No encontré ese producto.</div>';return}
@@ -482,12 +485,19 @@ buscador($('sq'),$('sresultados'),function(c){
   $('sprod').textContent='Cargando…';
   api('producto',{codigo:c}).then(function(p){elegirSim(p)}).catch(function(e){$('sprod').innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
 });
+function pintarSprod(){
+  var p=SPROD;
+  $('sprod').innerHTML=p?'<b>'+esc(p.producto)+'</b> · hoy: costo '+pesos(p.costo)+', precio '+pesos(p.precio)+', margen '+pct(p.margen)+', stock '+$$(p.stock)+', vende '+(p.ventaMensual||0).toFixed(1).replace('.',',')+' por mes. <a href="#" id="squitar">quitar</a>':'';
+  if(p)$('squitar').onclick=function(e){e.preventDefault();elegirSim(null)};
+}
 function elegirSim(p){
   SPROD=p;$('sq').value='';
-  $('sprod').innerHTML=p?'<b>'+esc(p.producto)+'</b> · hoy: costo '+pesos(p.costo)+', precio '+pesos(p.precio)+', margen '+pct(p.margen)+', stock '+$$(p.stock)+', vende '+(p.ventaMensual||0).toFixed(1).replace('.',',')+' por mes. <a href="#" id="squitar">quitar</a>':'';
-  if(p){$('squitar').onclick=function(e){e.preventDefault();elegirSim(null)};
+  EST.t1=EST.t2=EST.tObj=false;EST.lista2=0;$('eobj').value='';
+  pintarSprod();
+  if(p){
     if(!$('scosto').value&&p.costo)ponerPesos('scosto',Math.round(p.costo));
-    if(!$('sprecio').value&&p.precio)ponerPesos('sprecio',Math.round(p.precio))}
+    if(p.precio)ponerPesos('sprecio',Math.round(p.precio));
+  }
   recalcular();
 }
 ['scosto','scant','sprecio'].forEach(function(id){$(id).addEventListener('input',function(){recalcular(id)})});
@@ -499,7 +509,7 @@ function precioPara(c,m){return m<1?Math.ceil(c/(1-m)/10)*10:0}
 function setPrecio(v){ponerPesos('sprecio',v);recalcular()}
 function recalcular(origen){
   var c=num('scosto')||0, q=+$('scant').value||0, P=num('sprecio')||0;
-  var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=(SPROD&&SPROD.objetivo)||ADMIN.deseado||0;
+  var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=objetivoSim();
   if(!c){$('sres').innerHTML='<div class="card note">Cargá el costo por unidad para empezar.</div>';$('smarcas').innerHTML='';return}
   var pNoPerder=precioPara(c,pv), pMin=precioPara(c,mn), pObj=precioPara(c,obj);
   if(!P){P=pObj;if(document.activeElement!==$('sprecio'))ponerPesos('sprecio',P)}
@@ -507,9 +517,9 @@ function recalcular(origen){
   if(origen!=='slider')$('sslider').value=Math.max(0,Math.min(90,Math.round(m*100)));
   $('sslider').max=90;
   var marca=function(v,t){return '<span style="left:'+(v/90*100)+'%">'+t+'</span>'};
-  $('smarcas').innerHTML=marca(pv*100,'▲ no perder')+marca(mn*100,'▲ mínimo')+marca(Math.min(89,obj*100),'<span style="position:relative;top:12px">▲ objetivo</span>');
+  $('smarcas').innerHTML=marca(pv*100,'▲ no perder')+marca(mn*100,'▲ mínimo')+marca(Math.min(89,obj*100),'<span style="position:relative;top:12px">▲ deseado</span>');
   var ganU=P*(1-pv)-c, nivel=m<pv?'mal':(m<mn?'bajo':(m<obj?'ok':'bien'));
-  var txt={mal:'PERDÉS PLATA en cada venta.',bajo:'Ganás algo, pero no cubre los gastos del local.',ok:'Cubre los gastos del local. Todavía podés sacarle más.',bien:'Llega al objetivo de margen.'}[nivel];
+  var txt={mal:'PERDÉS PLATA en cada venta.',bajo:'Ganás algo, pero no cubre los gastos del local.',ok:'Cubre los gastos del local. Todavía podés sacarle más.',bien:'Llega a tu margen deseado.'}[nivel];
   var colorM={mal:'var(--rojo)',bajo:'var(--rojo)',ok:'var(--amar)',bien:'var(--verde)'}[nivel];
   var h='<div class="grid">';
   h+='<div class="card"><h2>Con este precio</h2><div class="big" style="color:'+colorM+'">'+(m<-1?'Menos que el costo':pct(m))+'</div><div class="bar"><i style="width:'+Math.max(0,Math.min(100,m/0.9*100))+'%;background:'+colorM+'"></i></div>'+
@@ -518,8 +528,8 @@ function recalcular(origen){
   h+='<div class="card"><h2>¿A cuánto venderlo?</h2>'+
     '<div class="row"><span>Para no perder (costo + comisiones)</span><span>'+pesos(pNoPerder)+'</span></div>'+
     '<div class="row"><span>Para cubrir los gastos del local ('+pct(mn,0)+')</span><span>'+pesos(pMin)+'</span></div>'+
-    '<div class="row"><span>Para llegar al objetivo ('+pct(obj,0)+')</span><span class="pos">'+pesos(pObj)+'</span></div>'+
-    '<div class="btns"><button class="btn sec" onclick="setPrecio('+pMin+')">Usar mínimo</button><button class="btn" onclick="setPrecio('+pObj+')">Usar objetivo</button></div></div>';
+    '<div class="row"><span>Para llegar a tu margen deseado ('+pct(obj,0)+')</span><span class="pos">'+pesos(pObj)+'</span></div>'+
+    '<div class="btns"><button class="btn sec" onclick="setPrecio('+pMin+')">Usar mínimo</button><button class="btn" onclick="setPrecio('+pObj+')">Usar deseado</button></div></div>';
   if(q>0){
     var inv=q*c, recup=P*(1-pv)>0?Math.ceil(inv/(P*(1-pv))):null, cubre=(1-mn)>0&&P>0?Math.ceil(inv/(P*(1-mn))):null;
     var vm=SPROD?SPROD.ventaMensual:0;
@@ -540,7 +550,7 @@ function recalcular(origen){
         '<div class="row"><span>Como mucho (2 meses)</span><span>'+$$(maximo)+' u.</span></div>'+
         (q>0&&q>maximo?'<div class="eval bajo">Con '+$$(q)+' te queda plata parada más de 2 meses: comprá menos salvo que el precio sea una oportunidad única.</div>':'')+
         (q>0&&q<minimo?'<div class="eval ok">Con '+$$(q)+' no llegás a cubrir un mes de venta.</div>':'')
-      :'<div class="note">Este producto no tiene ventas registradas: comprá poco para probar.</div>')+'</div>';
+      :'<div class="note">Este producto no tiene ventas registradas: comprá poco para probar.</div>')+htmlBulto(c,q,vm2,minimo)+'</div>';
     if(SPROD.costo>0){
       var ahorro=1-c/SPROD.costo;
       h+='<div class="card"><h2>Contra tu costo de hoy</h2>'+
@@ -551,7 +561,8 @@ function recalcular(origen){
         h+='<div class="row"><span>Oferta manteniendo tu margen de hoy ('+pct(SPROD.margen,0)+')</span><span class="pos">'+pesos(pMismoMargen)+' ('+pct(1-pMismoMargen/SPROD.precio,0)+' off)</span></div>'+
           '<div class="row"><span>Oferta más baja sin bajar del mínimo</span><span>'+pesos(pOfMin)+(pOfMin<SPROD.precio?' ('+pct(1-pOfMin/SPROD.precio,0)+' off)':'')+'</span></div>'+
           '<div class="row"><span>Si mantenés el precio ('+pesos(SPROD.precio)+')</span><span class="pos">margen '+pct((SPROD.precio-c)/SPROD.precio)+'</span></div>'+
-          '<div class="btns"><button class="btn sec" onclick="setPrecio('+pMismoMargen+')">Usar oferta</button><button class="btn sec" onclick="setPrecio('+Math.round(SPROD.precio)+')">Mantener precio</button></div>';
+          '<div class="btns"><button class="btn sec" onclick="usarOferta('+pMismoMargen+')">Usar oferta</button><button class="btn sec" onclick="mantenerPrecio()">Mantener precio</button></div>'+
+          '<div class="note">Los botones arman la estrategia de abajo: "Usar oferta" pone la opción 2 a '+pesos(pMismoMargen)+' y "Mantener precio" la opción 1 a '+pesos(SPROD.precio)+'.</div>';
         if(ahorro>=0.2)h+='<div class="eval bien">Es '+pct(ahorro,0)+' más barato: buena oportunidad. Podés hacer una oferta y seguir ganando, o mantener el precio y ganar más margen.</div>';
       }
       h+='</div>';
@@ -561,101 +572,159 @@ function recalcular(origen){
   $('sres').innerHTML=h;
 }
 
-/* ---------------- ESTRATEGIA DE PRECIO (OPCIÓN 1 / OPCIÓN 2) + PROPUESTA ---------------- */
-var EST={op:1,aumTocado:false};
+/* ---------------- ESTRATEGIA DE PRECIO: OPCIÓN 1 (sin oferta) Y OPCIÓN 2 (con oferta), SIEMPRE COMPLETAS ---------------- */
+// t1/t2/tObj = el usuario tocó ese número a mano (si no, se completa solo).
+var EST={op:1,t1:false,t2:false,tObj:false,vm:0};
 function r10(x){return Math.round(x/10)*10}
+// Objetivo del simulador: el MARGEN DESEADO de ADMINISTRACION (no el objetivo por clase del plan de subas).
+function objetivoSim(){return ADMIN.deseado||(SPROD&&SPROD.objetivo)||0}
 function datosSim(){
   var c=num('scosto')||0, q=+$('scant').value||0;
-  var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=(SPROD&&SPROD.objetivo)||ADMIN.deseado||0;
+  var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=objetivoSim();
   return {c:c,q:q,pv:pv,mn:mn,obj:obj,pMin:precioPara(c,mn),pObj:precioPara(c,obj)};
-}
-function sugerirEstrategia(){
-  var d=datosSim(); if(!d.c)return;
-  ponerPesos('epre',Math.max(d.pObj, SPROD&&SPROD.precio?Math.round(SPROD.precio):0));
-  if(!$('eobj').value)$('eobj').value=d.q||'';
-  calcEstrategia();
 }
 function elegirOpcion(o){
   EST.op=o;
-  document.querySelectorAll('#eopc button').forEach(function(b){b.classList.toggle('on',+b.dataset.o===o)});
-  $('eof2').classList.toggle('oculto',o!==2);
-  if(!EST.aumTocado)$('eaum').value=o===2?30:0;
-  calcEstrategia();
+  [1,2].forEach(function(k){$('op'+k).classList.toggle('on',k===o);$('tk'+k).textContent=k===o?'✓ va al PDF':'tocá para elegir'});
+  $('bpdf').textContent='⬇ Bajar propuesta (PDF) · Opción '+o;
+  if(EST.r)EST.ult=EST.r[o];
 }
-document.querySelectorAll('#eopc button').forEach(function(b){b.onclick=function(){elegirOpcion(+b.dataset.o)}});
+$('op1').addEventListener('click',function(){if(EST.op!==1)elegirOpcion(1)});
+$('op2').addEventListener('click',function(){if(EST.op!==2)elegirOpcion(2)});
+elegirOpcion(1);
+function calcOpcion(o,d,vm,dias,objU){
+  var P=num(o===1?'e1pre':'epre')||0;
+  var desc=o===2?Math.min(80,Math.max(0,+$('epct').value||0))/100:0;
+  var lista=o===2&&desc>0?r10(P/(1-desc)):P;
+  // "Usar oferta": el precio tachado es exactamente tu precio de hoy.
+  if(o===2&&EST.lista2&&EST.lista2>P){lista=EST.lista2;desc=1-P/lista}
+  var aum=o===2?Math.max(0,+$('eaum').value||0)/100:0;
+  var m=P>0?(P-d.c)/P:0, gan=P*(1-d.pv)-d.c;
+  var proy=vm/30*dias*(1+aum);
+  var vendibles=d.q?Math.min(d.q,proy):proy;
+  return {op:o,P:P,lista:lista,desc:desc,m:m,gan:gan,dias:dias,aum:aum,vm:vm,proy:proy,objU:objU,ganProy:vendibles*gan,d:d};
+}
+function htmlOpcion(e){
+  var d=e.d, of=e.op===2&&e.desc>0;
+  if(!e.P)return '<div class="note">Poné el precio que cobrás.</div>';
+  var nivel=e.m<d.pv?'mal':(e.m<d.mn?'bajo':(e.m<d.obj?'ok':'bien'));
+  var h='<div style="margin:10px 0 4px;padding:10px;border-radius:10px;background:#fff8e1;text-align:center">'+
+    '<div class="note" style="margin:0">Así se ve en el local</div>'+
+    (of?'<div><s style="color:var(--gris)">'+pesos(e.lista)+'</s> &nbsp; <b style="font-size:22px;color:var(--rojo)">'+pesos(e.P)+'</b> &nbsp; <span class="chip r">−'+pct(e.desc,0)+'</span></div>'
+       :'<div><b style="font-size:22px">'+pesos(e.P)+'</b></div>')+'</div>';
+  h+='<div class="row"><span>Margen</span><span class="'+(nivel==='bien'||nivel==='ok'?'pos':'neg')+'"><b>'+pct(e.m)+'</b></span></div>'+
+    '<div class="row"><span>Ganancia por unidad (después de comisiones)</span><span class="'+(e.gan>=0?'pos':'neg')+'">'+pesos(e.gan)+'</span></div>';
+  if(e.vm>0){
+    var falta=Math.max(0,e.objU-e.proy);
+    h+='<div class="row"><span>Venderías en '+e.dias+' días'+(e.aum?' (+'+pct(e.aum,0)+' por la oferta)':'')+'</span><span>'+e.proy.toFixed(1).replace('.',',')+' u.</span></div>'+
+      '<div class="row"><span>Ganancia en esos días</span><span class="'+(e.ganProy>=0?'pos':'neg')+'">'+pesos(e.ganProy)+'</span></div>'+
+      (e.objU>0?(falta<=0?'<div class="eval bien">Cumple el objetivo de '+$$(e.objU)+' u.</div>'
+        :'<div class="eval bajo">No llega al objetivo: faltan '+Math.ceil(falta)+' u. Si no se venden, quedan '+pesos(falta*d.c)+' de plata parada.</div>'):'');
+  }
+  if(e.P<d.pMin)h+='<div class="eval mal">Queda debajo del mínimo del local ('+pesos(d.pMin)+'): no cubre los gastos.</div>';
+  h+='<div style="margin-top:8px;padding:8px 10px;border:1px dashed var(--azul2);border-radius:10px"><b>Para cargar en el sistema</b>'+
+    (of?'<div class="row"><span>Precio de venta (lista)</span><span>'+pesos(e.lista)+'</span></div><div class="row"><span>Bonificación</span><span>'+pct(e.desc,0)+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(e.P)+'</b></span></div>'
+       :'<div class="row"><span>Precio de venta</span><span><b>'+pesos(e.P)+'</b></span></div>')+'</div>';
+  return h;
+}
 function calcEstrategia(){
   var d=datosSim(), card=$('sest');
   card.classList.toggle('oculto',!d.c);
   if(!d.c)return;
-  if(!$('epre').value&&document.activeElement!==$('epre'))sugerirEstrategia();
-  var P=num('epre')||0, desc=EST.op===2?Math.min(80,Math.max(0,+$('epct').value||0))/100:0;
-  var lista=EST.op===2&&desc>0?r10(P/(1-desc)):P;
-  var dias=Math.max(1,+$('edias').value||30), aum=(+$('eaum').value||0)/100;
+  // Se completa sola: opción 1 = el precio de arriba; opción 2 = cobrás lo mismo, con un precio de lista más alto y la bonificación.
+  var pArriba=num('sprecio')||d.pObj;
+  if(!EST.t1&&document.activeElement!==$('e1pre'))ponerPesos('e1pre',pArriba);
+  if(!EST.t2&&document.activeElement!==$('epre'))ponerPesos('epre',num('e1pre')||pArriba);
   var vm=SPROD&&SPROD.ventaMensual?SPROD.ventaMensual:0;
   if($('ebase').getAttribute('data-k')!==String(!vm)){
-    $('ebase').innerHTML=!vm?'<label>Ventas por mes que esperás</label><input id="evm" type="number" inputmode="decimal" min="0" value="'+(EST.vm||'')+'">':'';
+    $('ebase').innerHTML=!vm?'<label>Ventas por mes que esperás (sin oferta)</label><input id="evm" type="number" inputmode="decimal" min="0" value="'+(EST.vm||'')+'">':'';
     $('ebase').setAttribute('data-k',String(!vm));
     if($('evm'))$('evm').addEventListener('input',function(){EST.vm=+$('evm').value||0;calcEstrategia()});
   }
   if(!vm)vm=EST.vm||0;
-  var m=P>0?(P-d.c)/P:0, gan=P*(1-d.pv)-d.c;
-  var proy=vm/30*dias*(1+aum), objU=+$('eobj').value||d.q||Math.round(proy);
-  var vendibles=d.q?Math.min(d.q,proy):proy, ganProy=vendibles*gan;
-  var nivel=m<d.pv?'mal':(m<d.mn?'bajo':(m<d.obj?'ok':'bien'));
-  var hh='<div style="margin:10px 0;padding:12px;border-radius:10px;background:#fff8e1;text-align:center">'+
-    '<div class="note" style="margin:0">Opción '+EST.op+' · así se ve en el local</div>'+
-    (EST.op===2&&desc>0?'<div><s style="color:var(--gris)">'+pesos(lista)+'</s> &nbsp; <b style="font-size:24px;color:var(--rojo)">'+pesos(P)+'</b> &nbsp; <span class="chip r">−'+pct(desc,0)+'</span></div>':'<div><b style="font-size:24px">'+pesos(P)+'</b></div>')+'</div>';
-  hh+='<div class="row"><span>Margen</span><span class="'+(nivel==='bien'||nivel==='ok'?'pos':'neg')+'"><b>'+pct(m)+'</b></span></div>'+
-    '<div class="row"><span>Ganancia por unidad (después de comisiones)</span><span class="'+(gan>=0?'pos':'neg')+'">'+pesos(gan)+'</span></div>'+
-    (P<d.pMin?'<div class="eval mal">Este precio queda debajo del mínimo del local ('+pesos(d.pMin)+'): en el mes perdés plata con este producto.</div>':'');
-  hh+='<div style="margin-top:8px;padding:10px;border:1px dashed var(--azul2);border-radius:10px"><b>Para cargar en el sistema</b>'+
-    (EST.op===2&&desc>0
-      ?'<div class="row"><span>Precio de venta (lista)</span><span>'+pesos(lista)+'</span></div><div class="row"><span>Bonificación</span><span>'+pct(desc,0)+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(P)+'</b></span></div>'
-      :'<div class="row"><span>Precio de venta</span><span><b>'+pesos(P)+'</b></span></div>')+'</div>';
-  hh+='<div class="row" style="margin-top:8px"><span>Objetivo</span><span><b>'+$$(objU)+' u. en '+dias+' días</b></span></div>';
-  if(vm>0){
-    var falta=Math.max(0,objU-proy), subir=objU/(vm/30*dias)-1;
-    hh+='<div class="row"><span>Proyección'+(aum?' (+'+pct(aum,0)+' de ventas)':'')+'</span><span>'+proy.toFixed(1).replace('.',',')+' u.</span></div>'+
-      '<div class="row"><span>Ganancia proyectada</span><span class="'+(ganProy>=0?'pos':'neg')+'">'+pesos(ganProy)+'</span></div>'+
-      (falta<=0?'<div class="eval bien">Con este ritmo se cumple el objetivo.</div>':
-      '<div class="eval bajo">No llega: faltarían '+Math.ceil(falta)+' u. Para cumplirlo, la venta tendría que subir '+pct(subir,0)+' respecto de hoy. Si no se venden, quedan '+pesos(falta*d.c)+' de plata parada en mercadería.</div>');
-  } else hh+='<div class="note">Cargá cuántas esperás vender por mes para ver la proyección.</div>';
-  $('eres').innerHTML=hh;
-  EST.ult={op:EST.op,P:P,lista:lista,desc:desc,m:m,gan:gan,dias:dias,aum:aum,vm:vm,proy:proy,objU:objU,ganProy:ganProy,d:d};
+  var dias=Math.max(1,+$('edias').value||30);
+  if(!EST.tObj&&document.activeElement!==$('eobj')){var sug=d.q||Math.round(vm/30*dias);$('eobj').value=sug>0?sug:''}
+  var objU=+$('eobj').value||0;
+  var e1=calcOpcion(1,d,vm,dias,objU), e2=calcOpcion(2,d,vm,dias,objU);
+  $('e1res').innerHTML=htmlOpcion(e1);
+  $('e2res').innerHTML=htmlOpcion(e2);
+  EST.r={1:e1,2:e2};EST.ult=EST.r[EST.op];
 }
-['epre','epct','edias','eaum','eobj'].forEach(function(id){$(id).addEventListener('input',function(){if(id==='eaum')EST.aumTocado=true;calcEstrategia()})});
-$('bsugerir').onclick=sugerirEstrategia;
-$('busarof').onclick=function(){var P=num('epre');if(P)setPrecio(P)};
+[['e1pre','t1'],['epre','t2'],['eobj','tObj'],['edias',''],['epct',''],['eaum','']].forEach(function(x){
+  $(x[0]).addEventListener('input',function(){if(x[1])EST[x[1]]=true;if(x[0]==='epre'||x[0]==='epct')EST.lista2=0;calcEstrategia()});
+});
+function irAEstrategia(o){
+  var el=$('op'+o)||$('sest'), alto=(document.querySelector('header')||{}).offsetHeight||0;
+  window.scrollTo({top:el.getBoundingClientRect().top+window.scrollY-alto-10,behavior:'smooth'});
+  el.classList.add('flash');setTimeout(function(){el.classList.remove('flash')},1200);
+}
+// Botones de "Contra tu costo de hoy": arman la estrategia y te llevan a verla.
+function usarOferta(p){
+  if(!SPROD||!SPROD.precio)return;
+  ponerPesos('epre',p);EST.t2=true;EST.lista2=Math.round(SPROD.precio);
+  $('epct').value=Math.max(1,Math.round((1-p/SPROD.precio)*100));
+  calcEstrategia();elegirOpcion(2);irAEstrategia(2);guardarEstadoPronto();
+}
+function mantenerPrecio(){
+  if(!SPROD||!SPROD.precio)return;
+  ponerPesos('sprecio',Math.round(SPROD.precio));ponerPesos('e1pre',Math.round(SPROD.precio));EST.t1=true;
+  recalcular();elegirOpcion(1);irAEstrategia(1);guardarEstadoPronto();
+}
 var _recalcOrig=recalcular;
-recalcular=function(o){_recalcOrig(o);try{pintarBultos()}catch(e){}try{calcEstrategia()}catch(e){}};
+recalcular=function(o){_recalcOrig(o);try{calcEstrategia()}catch(e){}};
 function bultoPrincipal(){var b=(SPROD&&SPROD.bultos)||[];return b.filter(function(x){return x.unidades>1})[0]||null}
 function textoBultos(q,u){if(!u||u<=1||!q)return '';var n=Math.floor(q/u),r=q-n*u;return n&&!r?n+' bulto'+(n>1?'s':'')+' de '+u:(n?n+' bulto'+(n>1?'s':'')+' de '+u+' + '+r+' sueltas':'surtido / por unidad ('+q+' u.)')}
-function setCant(v){$('scant').value=v;recalcular()}
-function pintarBultos(){
-  if(!SPROD||!$('scosto').value)return;
-  var bs=(SPROD.bultos||[]).filter(function(x){return x.unidades>1});
-  var c=num('scosto')||0, q=+$('scant').value||0, vm=SPROD.ventaMensual||0, st=Math.max(0,SPROD.stock||0);
-  var h='<div class="card" style="margin-bottom:12px"><h2>Compra por bulto</h2>';
-  if(!bs.length){h+='<div class="note" style="margin-top:0">Las listas no informan bulto para este producto: se compra por unidad o surtido.</div></div>';}
-  else{
-    var b=bs[0],u=b.unidades;
-    h+='<div class="row"><span>Bulto en '+esc(b.proveedor)+(b.actual?' (tu proveedor)':'')+'</span><span><b>'+u+' u.</b></span></div>'+
-      '<div class="row"><span>Costo del bulto (a $'+$$(c)+' c/u)</span><span>'+pesos(c*u)+'</span></div>';
-    var minimo=Math.max(0,Math.ceil(vm-st)), dura=vm>0?u/(vm/30):null;
-    if(vm>0)h+='<div class="row"><span>Un bulto te dura</span><span class="'+(dura>60?'neg':'')+'">'+Math.round(dura)+' días</span></div>';
-    h+='<div class="btns">';
-    [1,2,3].forEach(function(k){h+='<button class="btn '+(q===k*u?'':'sec')+'" onclick="setCant('+(k*u)+')">'+k+' bulto'+(k>1?'s':'')+'<br><small>'+(k*u)+' u. · '+pesos(c*u*k)+(vm>0?' · '+Math.round(k*u/(vm/30))+' días':'')+'</small></button>'});
-    h+='</div>';
-    if(vm>0){
-      if(dura>60)h+='<div class="eval bajo">Un bulto entero te dura más de 2 meses: conviene comprar surtido o por unidad ('+minimo+' u. para un mes).</div>';
-      else{var nb=Math.max(1,Math.ceil(minimo/u));h+='<div class="eval bien">Sugerido: '+nb+' bulto'+(nb>1?'s':'')+' ('+(nb*u)+' u.) para cubrir el mes.</div>';}
-    }
-    if(bs.length>1)h+='<div class="note">Otras listas: '+bs.slice(1).map(function(x){return esc(x.proveedor)+' bulto de '+x.unidades+' a '+pesos(x.costo)+' c/u'}).join(' · ')+'</div>';
-    if(q)h+='<div class="note">Tu compra: <b>'+esc(textoBultos(q,u))+'</b></div>';
-    h+='</div>';
-  }
-  var cont=$('sres');var div=document.createElement('div');div.innerHTML=h;cont.insertBefore(div.firstChild,cont.firstChild);
+// El bulto se informa dentro de "¿Cuántos comprar?": cuánto trae, cuánto te dura y si conviene.
+function htmlBulto(c,q,vm,minimo){
+  var b=bultoPrincipal(); if(!b)return '';
+  var u=b.unidades, dura=vm>0?u/(vm/30):null;
+  var h='<div class="row"><span>Viene en bulto de ('+esc(b.proveedor)+')</span><span>'+u+' u. · '+pesos(c*u)+'</span></div>';
+  if(dura!==null)h+='<div class="row"><span>Un bulto te dura</span><span class="'+(dura>60?'neg':'')+'">'+Math.round(dura)+' días</span></div>';
+  if(dura!==null)h+=dura>60?'<div class="note"><b>No conviene el bulto entero:</b> comprá surtido o por unidad.</div>'
+    :'<div class="note"><b>Conviene por bulto:</b> '+Math.max(1,Math.ceil(minimo/u))+' bulto'+(Math.ceil(minimo/u)>1?'s':'')+' cubre'+(Math.ceil(minimo/u)>1?'n':'')+' el mes.</div>';
+  return h;
 }
+
+/* ---------------- LA APP RECUERDA DÓNDE ESTABAS (al salir y volver) ---------------- */
+// Se guarda al salir de la app. Se borra con "↻ Actualizar" o si la cerraste hace más de 30 minutos.
+var ESTADO_K='sasha_estado', NO_GUARDAR=false;
+function estadoActual(){
+  var t=document.querySelector('nav button.on');
+  return {t:Date.now(),tab:t?t.dataset.tab:'resumen',q:$('q').value,det:DETCOD||'',sprod:SPROD,
+    scosto:$('scosto').value,scant:$('scant').value,sprecio:$('sprecio').value,
+    e:{op:EST.op,lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,tObj:EST.tObj,vm:EST.vm,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,edias:$('edias').value,eobj:$('eobj').value},
+    y:window.scrollY};
+}
+function guardarEstado(){if(NO_GUARDAR||$('app').classList.contains('oculto'))return;try{var s=JSON.stringify(estadoActual());sessionStorage.setItem(ESTADO_K,s);localStorage.setItem(ESTADO_K,s)}catch(e){}}
+var _tGuardar=null;
+function guardarEstadoPronto(){clearTimeout(_tGuardar);_tGuardar=setTimeout(guardarEstado,400)}
+function borrarEstado(){try{sessionStorage.removeItem(ESTADO_K);localStorage.removeItem(ESTADO_K)}catch(e){}}
+function leerEstado(){
+  var s=null;
+  try{s=sessionStorage.getItem(ESTADO_K);
+    if(!s){var l=localStorage.getItem(ESTADO_K);if(l&&Date.now()-JSON.parse(l).t<30*60000)s=l}
+  }catch(e){s=null}
+  try{return s?JSON.parse(s):null}catch(e){return null}
+}
+function restaurarEstado(){
+  var s=leerEstado(); if(!s)return;
+  $('q').value=s.q||'';
+  SPROD=s.sprod||null; pintarSprod();
+  $('scosto').value=s.scosto||'';$('scant').value=s.scant||'';$('sprecio').value=s.sprecio||'';
+  var e=s.e||{};
+  ['e1pre','epre','epct','eaum','edias','eobj'].forEach(function(id){if(e[id]!==undefined)$(id).value=e[id]});
+  EST.t1=!!e.t1;EST.t2=!!e.t2;EST.lista2=e.lista2||0;EST.tObj=!!e.tObj;EST.vm=e.vm||0;
+  elegirOpcion(e.op===2?2:1);
+  if(s.det)verProducto(s.det);
+  if(s.tab&&s.tab!=='resumen')irA(s.tab);
+  recalcular();
+  setTimeout(function(){window.scrollTo(0,s.y||0)},s.tab==='productos'?1500:200);
+}
+function actualizarApp(){NO_GUARDAR=true;borrarEstado();location.reload()}
+document.addEventListener('visibilitychange',function(){if(document.hidden)guardarEstado()});
+window.addEventListener('pagehide',guardarEstado);
+document.addEventListener('input',guardarEstadoPronto,true);
+document.addEventListener('click',guardarEstadoPronto,true);
 
 function cargarLibPDF(){
   return new Promise(function(ok,mal){
@@ -692,7 +761,7 @@ function bajarArchivo(bytes,nombre){
 }
 function hoyTxt(off){var d=new Date(Date.now()+(off||0)*86400000);return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear()}
 $('bpdf').onclick=function(){
-  calcEstrategia(); var e=EST.ult; if(!e||!e.d.c){return}
+  calcEstrategia(); var e=EST.ult; if(!e||!e.d.c||!e.P){$('epdfmsg').innerHTML='<b class="neg">Falta el precio de la opción elegida.</b>';return}
   var d=e.d, P=SPROD||{}, op2=e.op===2&&e.desc>0;
   $('epdfmsg').textContent='Armando la propuesta…';
   var datos={codigo:P.codigo||'',producto:P.producto||'Producto sin elegir',costo:d.c,cantidad:d.q||0,precioSinOferta:e.lista,precioConOferta:e.P,
