@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=17;
+var APP_V=18;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -163,6 +163,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
     <div id="sres" style="margin-top:12px"></div>
     <div class="card oculto" id="sest" style="margin-top:12px">
       <h2>Estrategia de precio y objetivo</h2>
+      <div id="eedit"></div>
       <div class="note" style="margin-top:0">Se completa sola con el precio de arriba: así quedaría <b>sin oferta</b> y <b>con oferta</b>. Si querés, cambiá cualquier número. Tocá la opción que querés bajar en PDF.</div>
       <div class="two">
         <div><label>Duración / objetivo (días)</label><input id="edias" type="number" inputmode="numeric" min="1" value="30"></div>
@@ -501,7 +502,7 @@ function pintarSprod(){
 }
 function elegirSim(p){
   SPROD=p;$('sq').value='';
-  EST.t1=EST.t2=EST.tObj=false;EST.lista2=0;$('eobj').value='';
+  EST.t1=EST.t2=EST.tObj=false;EST.lista2=0;EST.editId='';if($('eedit'))pintarEdicion();$('eobj').value='';
   pintarSprod();
   PROV.modo='L';PROV.sel=p?(((p.bultos||[]).filter(function(x){return x.actual})[0]||{}).proveedor||p.proveedor||''):PROV.sel;
   pintarProveedores();
@@ -585,7 +586,7 @@ function recalcular(origen){
 
 /* ---------------- ESTRATEGIA DE PRECIO: OPCIÓN 1 (sin oferta) Y OPCIÓN 2 (con oferta), SIEMPRE COMPLETAS ---------------- */
 // t1/t2/tObj = el usuario tocó ese número a mano (si no, se completa solo).
-var EST={op:1,t1:false,t2:false,tObj:false,vm:0};
+var EST={op:1,t1:false,t2:false,tObj:false,vm:0,editId:''};
 function r10(x){return Math.round(x/10)*10}
 // Objetivo del simulador: el MARGEN DESEADO de ADMINISTRACION (no el objetivo por clase del plan de subas).
 function objetivoSim(){return ADMIN.deseado||(SPROD&&SPROD.objetivo)||0}
@@ -708,7 +709,7 @@ function estadoActual(){
   var t=document.querySelector('nav button.on');
   return {t:Date.now(),tab:t?t.dataset.tab:'resumen',q:$('q').value,det:DETCOD||'',sprod:SPROD,
     scosto:$('scosto').value,scant:$('scant').value,sprecio:$('sprecio').value,prov:{modo:PROV.modo,sel:PROV.sel,fuera:$('sprovf').value},
-    e:{op:EST.op,lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,tObj:EST.tObj,vm:EST.vm,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,edias:$('edias').value,eobj:$('eobj').value},
+    e:{op:EST.op,editId:EST.editId||'',lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,tObj:EST.tObj,vm:EST.vm,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,edias:$('edias').value,eobj:$('eobj').value},
     y:window.scrollY};
 }
 function guardarEstado(){if(NO_GUARDAR||$('app').classList.contains('oculto'))return;try{var s=JSON.stringify(estadoActual());sessionStorage.setItem(ESTADO_K,s);localStorage.setItem(ESTADO_K,s)}catch(e){}}
@@ -731,7 +732,7 @@ function restaurarEstado(){
   $('scosto').value=s.scosto||'';$('scant').value=s.scant||'';$('sprecio').value=s.sprecio||'';
   var e=s.e||{};
   ['e1pre','epre','epct','eaum','edias','eobj'].forEach(function(id){if(e[id]!==undefined)$(id).value=e[id]});
-  EST.t1=!!e.t1;EST.t2=!!e.t2;EST.lista2=e.lista2||0;EST.tObj=!!e.tObj;EST.vm=e.vm||0;
+  EST.t1=!!e.t1;EST.t2=!!e.t2;EST.lista2=e.lista2||0;EST.editId=e.editId||'';pintarEdicion();EST.tObj=!!e.tObj;EST.vm=e.vm||0;
   elegirOpcion(e.op===2?2:1);
   if(s.det)verProducto(s.det);
   if(s.tab&&s.tab!=='resumen')irA(s.tab);
@@ -787,46 +788,6 @@ function compartirPDF(){
   var w=window.open(url,'_blank');if(!w)bajarArchivo(ULT_PDF.bytes,ULT_PDF.nombre);
 }
 function hoyTxt(off){var d=new Date(Date.now()+(off||0)*86400000);return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear()}
-$('bpdf').onclick=function(){
-  calcEstrategia(); var e=EST.ult; if(!e||!e.d.c||!e.P){$('epdfmsg').innerHTML='<b class="neg">Falta el precio de la opción elegida.</b>';return}
-  var d=e.d, P=SPROD||{}, op2=e.op===2&&e.desc>0, pv=proveedorElegido();
-  $('epdfmsg').textContent='Armando la propuesta…';
-  var nombre='propuesta_'+((P.codigo||'producto')+'_'+(op2?'con-oferta':'sin-oferta')+'_'+hoyTxt().replace(/\//g,'-'))+'.pdf';
-  // Primero se arma y se baja el PDF (rápido, sin esperar a ECHU): si se espera a que se guarde, el celular
-  // ya no lo toma como un toque tuyo y no lo deja bajar. Después se guarda en Gestión de Compras.
-  cargarLibPDF().then(function(lib){
-    var id='';var res=[id,lib];
-    var $f=function(n){return '$ '+Math.round(n||0).toLocaleString('es-AR')};
-    var pc=function(n){return (n*100).toFixed(1).replace('.',',')+'%'};
-    return armarPDF(res[1],function(D){
-      D.titulo('Sasha · Propuesta de compra');
-      D.sub('Opción '+e.op+': '+(op2?'con oferta (llamador)':'sin oferta')+' · simulación, no es una orden real · '+hoyTxt()+(id?' · ID '+id:''));
-      D.seccion('Producto');D.fila('Producto',(P.producto||'Sin elegir').slice(0,60));D.fila('Código interno',P.codigo||'-');D.fila('Proveedor actual',P.proveedor||'-');
-      if(P.costo)D.fila('Costo de hoy · stock · vende por mes',$f(P.costo)+' · '+(P.stock||0)+' u. · '+(P.ventaMensual||0).toFixed(1).replace('.',',')+' u.');
-      D.seccion('Compra');D.fila('Dónde comprar',pv.nombre?pv.nombre.slice(0,40)+(pv.fuera?' (fuera de las listas)':' (de mis listas)'):'sin elegir');D.fila('Costo por unidad',$f(d.c));var bp=bultoPrincipal();if(bp){D.fila('Bulto ('+bp.proveedor+')',bp.unidades+' u. · '+$f(d.c*bp.unidades)+' el bulto');D.fila('Cantidad',(d.q||0)+' u. = '+textoBultos(d.q||0,bp.unidades));}else D.fila('Cantidad',(d.q||0)+' u. (sin bulto informado)');D.fila('Inversión',$f(d.c*(d.q||0)));
-      D.seccion('Para cargar en el sistema');
-      if(op2){D.fila('Precio de venta (lista)',$f(e.lista));D.fila('Bonificación',Math.round(e.desc*100)+'%');D.fila('Se cobra',$f(e.P));D.fila('Vigencia de la oferta',hoyTxt()+' al '+hoyTxt(e.dias));}
-      else D.fila('Precio de venta',$f(e.P));
-      D.fila('Margen',pc(e.m),e.m<d.mn);D.fila('Ganancia por unidad (después de comisiones)',$f(e.gan),e.gan<0);
-      D.seccion('Objetivo y proyección');D.fila('Objetivo',e.objU+' u. en '+e.dias+' días (hasta '+hoyTxt(e.dias)+')');
-      if(e.vm>0){D.fila('Venta base por mes',e.vm.toFixed(1).replace('.',',')+' u.');if(e.aum)D.fila('Ventas extra esperadas','+'+Math.round(e.aum*100)+'%');
-        D.fila('Proyección de ventas',e.proy.toFixed(1).replace('.',',')+' u.');D.fila('Ganancia proyectada',$f(e.ganProy),e.ganProy<0);
-        var falta=Math.max(0,e.objU-e.proy);D.fila('¿Se cumple el objetivo?',falta>0?'NO: faltan '+Math.ceil(falta)+' u.':'SÍ',falta>0);
-        if(falta>0)D.fila('Plata parada si no se vende',$f(falta*d.c),true);}
-      D.sub('');D.parrafo('Seguimiento: '+(d.q>0?'quedó en Gestión de Compras 2026. Cuando la pidas, tildá "¿Se pidió?": desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.':'para seguirla, elegí un producto y una cantidad antes de bajarla.'));
-    }).then(function(bytes){
-      ULT_PDF={bytes:bytes,nombre:nombre};
-      bajarArchivo(bytes,nombre);
-      var base='PDF listo: <b>'+esc(nombre)+'</b>. Si no lo ves en Descargas, tocá: <div class="btns" style="margin-top:6px"><button class="btn sec" onclick="compartirPDF()">Abrir / compartir el PDF</button></div>';
-      $('epdfmsg').innerHTML=base+(d.q>0?'Guardando en Gestión de Compras…':'Para guardarla en Gestión de Compras, poné la cantidad.');
-      if(d.q>0)guardarSimulacion(e).then(function(gid){
-        $('epdfmsg').innerHTML=base+(gid?'Quedó guardada en Gestión de Compras 2026. Cuando la pidas, tildá “¿Se pidió?”.':'No se pudo guardar en Gestión de Compras.');
-        cargarPropuestas();
-      }).catch(function(err){$('epdfmsg').innerHTML=base+'<b class="neg">No se pudo guardar: '+esc(err.message)+'</b>'});
-    });
-  }).catch(function(err){$('epdfmsg').innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
-};
-
 /* ---------------- ¿DÓNDE LO COMPRARÍAS? (proveedor de mis listas o de afuera) ---------------- */
 var PROV={modo:'L',sel:'',lista:[]};
 function normProv(t){return String(t||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]/g,'')}
@@ -871,33 +832,145 @@ $('sprov').addEventListener('change',function(){
   infoProveedor();recalcular();guardarEstadoPronto();
 });
 
-/* ---------------- GUARDAR LA SIMULACIÓN (planilla Gestión de Compras 2026) ---------------- */
+/* ---------------- PDF DE LA PROPUESTA (se arma desde una "foto" de la simulación: sirve para volver a bajarlo) ---------------- */
+function fotoPDF(e){
+  var d=e.d, P=SPROD||{}, bp=bultoPrincipal(), pv=proveedorElegido();
+  return {op:e.op,of:e.op===2&&e.desc>0,lista:e.lista,desc:e.desc,P:e.P,m:e.m,gan:e.gan,dias:e.dias,aum:e.aum,vm:e.vm,proy:e.proy,objU:e.objU,ganProy:e.ganProy,
+    c:d.c,q:d.q||0,mn:d.mn,fecha:hoyTxt(),hasta:hoyTxt(e.dias),prov:pv,bulto:bp?{proveedor:bp.proveedor,unidades:bp.unidades}:null,
+    prod:{codigo:P.codigo||'',producto:P.producto||'',proveedor:P.proveedor||'',costo:P.costo||0,stock:P.stock||0,ventaMensual:P.ventaMensual||0}};
+}
+// Para simulaciones viejas (sin foto guardada): se arma con lo que quedó en la planilla.
+function fotoDesdeFila(x){
+  var of=x.precioSinOferta>x.precioConOferta+1, P=x.precioConOferta||0, pv=ADMIN.porVenta||0;
+  return {op:of?2:1,of:of,lista:x.precioSinOferta||P,desc:of?1-P/x.precioSinOferta:0,P:P,m:P?(P-x.costo)/P:0,gan:P*(1-pv)-x.costo,dias:x.dias||30,aum:0,vm:0,proy:0,
+    objU:x.objetivo||0,ganProy:0,c:x.costo,q:x.cantidad,mn:ADMIN.minimo||0,fecha:x.fecha,hasta:'',prov:{nombre:x.proveedor||'',fuera:!!x.fueraDeLista},bulto:null,
+    prod:{codigo:x.codigo||'',producto:x.producto||'',proveedor:'',costo:0,stock:0,ventaMensual:0}};
+}
+function nombrePDF(f){return 'propuesta_'+((f.prod.codigo||'producto')+'_'+(f.of?'con-oferta':'sin-oferta')+'_'+String(f.fecha||hoyTxt()).replace(/\//g,'-'))+'.pdf'}
+function armarPDFDesde(f,id){
+  return cargarLibPDF().then(function(lib){
+    var $f=function(n){return '$ '+Math.round(n||0).toLocaleString('es-AR')};
+    var pc=function(n){return (n*100).toFixed(1).replace('.',',')+'%'};
+    var P=f.prod;
+    return armarPDF(lib,function(D){
+      D.titulo('Sasha · Propuesta de compra');
+      D.sub('Opción '+f.op+': '+(f.of?'con oferta (llamador)':'sin oferta')+' · simulación, no es una orden real · '+f.fecha+(id?' · ID '+id:''));
+      D.seccion('Producto');D.fila('Producto',(P.producto||'Sin elegir').slice(0,60));D.fila('Código interno',P.codigo||'-');if(P.proveedor)D.fila('Proveedor actual',P.proveedor);
+      if(P.costo)D.fila('Costo de hoy · stock · vende por mes',$f(P.costo)+' · '+(P.stock||0)+' u. · '+(P.ventaMensual||0).toFixed(1).replace('.',',')+' u.');
+      D.seccion('Compra');D.fila('Dónde comprar',f.prov&&f.prov.nombre?f.prov.nombre.slice(0,40)+(f.prov.fuera?' (fuera de las listas)':' (de mis listas)'):'sin elegir');
+      D.fila('Costo por unidad',$f(f.c));
+      if(f.bulto){D.fila('Bulto ('+f.bulto.proveedor+')',f.bulto.unidades+' u. · '+$f(f.c*f.bulto.unidades)+' el bulto');D.fila('Cantidad',f.q+' u. = '+textoBultos(f.q,f.bulto.unidades));}
+      else D.fila('Cantidad',f.q+' u.');
+      D.fila('Inversión',$f(f.c*f.q));
+      D.seccion('Para cargar en el sistema');
+      if(f.of){D.fila('Precio de venta (lista)',$f(f.lista));D.fila('Bonificación',Math.round(f.desc*100)+'%');D.fila('Se cobra',$f(f.P));if(f.hasta)D.fila('Vigencia de la oferta',f.fecha+' al '+f.hasta);}
+      else D.fila('Precio de venta',$f(f.P));
+      D.fila('Margen',pc(f.m),f.m<f.mn);D.fila('Ganancia por unidad (después de comisiones)',$f(f.gan),f.gan<0);
+      D.seccion('Objetivo y proyección');D.fila('Objetivo',f.objU+' u. en '+f.dias+' días'+(f.hasta?' (hasta '+f.hasta+')':''));
+      if(f.vm>0){D.fila('Venta base por mes',f.vm.toFixed(1).replace('.',',')+' u.');if(f.aum)D.fila('Ventas extra esperadas','+'+Math.round(f.aum*100)+'%');
+        D.fila('Proyección de ventas',f.proy.toFixed(1).replace('.',',')+' u.');D.fila('Ganancia proyectada',$f(f.ganProy),f.ganProy<0);
+        var falta=Math.max(0,f.objU-f.proy);D.fila('¿Se cumple el objetivo?',falta>0?'NO: faltan '+Math.ceil(falta)+' u.':'SÍ',falta>0);
+        if(falta>0)D.fila('Plata parada si no se vende',$f(falta*f.c),true);}
+      D.sub('');D.parrafo('Seguimiento: queda en Gestión de Compras 2026. Cuando la pidas, tildá "¿Se pidió?": desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.');
+    });
+  });
+}
+var BOTON_COMPARTIR='<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="compartirPDF()">Abrir / compartir el PDF</button></div>';
+$('bpdf').onclick=function(){
+  calcEstrategia(); var e=EST.ult; if(!e||!e.d.c||!e.P){$('epdfmsg').innerHTML='<b class="neg">Falta el precio de la opción elegida.</b>';return}
+  var f=fotoPDF(e), nombre=nombrePDF(f);
+  $('epdfmsg').textContent='Armando la propuesta…';
+  // Primero se baja el PDF (sin esperar a ECHU: si no, el celular no lo deja bajar); después se guarda.
+  armarPDFDesde(f,EST.editId).then(function(bytes){
+    ULT_PDF={bytes:bytes,nombre:nombre};
+    bajarArchivo(bytes,nombre);
+    var base='PDF listo: <b>'+esc(nombre)+'</b>. Si no lo ves en Descargas, tocá:'+BOTON_COMPARTIR;
+    $('epdfmsg').innerHTML=base+(f.q>0?'Guardando en Gestión de Compras…':'Para guardarla en Gestión de Compras, poné la cantidad.');
+    if(f.q>0)guardarSimulacion(e).then(function(r){
+      $('epdfmsg').innerHTML=base+mensajeGuardado(r);cargarPropuestas();
+    }).catch(function(err){$('epdfmsg').innerHTML=base+'<b class="neg">No se pudo guardar: '+esc(err.message)+'</b>'});
+  }).catch(function(err){$('epdfmsg').innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
+};
+
+/* ---------------- GUARDAR / EDITAR / BORRAR SIMULACIONES (planilla Gestión de Compras 2026) ---------------- */
 function datosSimulacion(e){
   var d=e.d, P=SPROD||{}, op2=e.op===2&&e.desc>0, pv=proveedorElegido();
-  return {codigo:P.codigo||'',producto:P.producto||'Producto sin elegir',proveedor:pv.nombre,fueraDeLista:pv.fuera,
+  return {id:EST.editId||'',codigo:P.codigo||'',producto:P.producto||'Producto sin elegir',proveedor:pv.nombre,fueraDeLista:pv.fuera,
     costo:d.c,cantidad:d.q||0,precioSinOferta:e.lista,precioConOferta:e.P,
     ofertaPct:op2?Math.round(e.desc*100):0,margen:Math.round(e.m*1000)/10,gananciaUnidad:Math.round(e.gan),objetivo:e.objU,dias:e.dias,
-    ventaMensual:Math.round(e.vm*10)/10,aumento:Math.round(e.aum*100),proyeccion:Math.round(e.proy*10)/10,gananciaProyectada:Math.round(e.ganProy)};
+    ventaMensual:Math.round(e.vm*10)/10,aumento:Math.round(e.aum*100),proyeccion:Math.round(e.proy*10)/10,gananciaProyectada:Math.round(e.ganProy),
+    pdf:fotoPDF(e),
+    ed:{sprecio:$('sprecio').value,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2}};
 }
-function guardarSimulacion(e){return api('guardar_propuesta',{datos:JSON.stringify(datosSimulacion(e))}).then(function(r){return r&&r.id})}
+// Una vez guardada, lo que guardes o bajes de nuevo actualiza la MISMA fila (no se duplica).
+function guardarSimulacion(e){
+  return api('guardar_propuesta',{datos:JSON.stringify(datosSimulacion(e))}).then(function(r){
+    if(r&&r.id){EST.editId=r.id;pintarEdicion();guardarEstadoPronto()}
+    return r||{};
+  });
+}
+function mensajeGuardado(r){
+  return r&&r.id?(r.actualizada?'Se actualizó la simulación '+esc(r.id)+' en Gestión de Compras 2026 (no se duplicó).':'Quedó guardada en Gestión de Compras 2026 ('+esc(r.id)+'). Cuando la pidas, tildá <b>“¿Se pidió?”</b>.')
+    :'No se pudo guardar en Gestión de Compras.';
+}
+function pintarEdicion(){
+  $('eedit').innerHTML=EST.editId?'<div class="eval ok" style="margin:0 0 8px">Simulación guardada ('+esc(EST.editId)+'). Si cambiás algo y guardás o bajás el PDF, se actualiza esa misma fila. <a href="#" onclick="nuevaSim();return false">Empezar una nueva</a></div>':'';
+  $('bguardar').textContent=EST.editId?'Guardar cambios':'Guardar simulación (sin PDF)';
+}
+function nuevaSim(){EST.editId='';pintarEdicion();guardarEstadoPronto()}
 $('bguardar').onclick=function(){
   calcEstrategia(); var e=EST.ult;
   if(!e||!e.d.c||!e.P){$('epdfmsg').innerHTML='<b class="neg">Falta el costo o el precio.</b>';return}
   if(!e.d.q){$('epdfmsg').innerHTML='<b class="neg">Poné la cantidad que comprarías para guardarla.</b>';return}
   $('epdfmsg').textContent='Guardando…';
-  guardarSimulacion(e).then(function(id){
-    $('epdfmsg').innerHTML='Listo: quedó en <b>Gestión de Compras 2026</b>'+(id?' ('+esc(id)+')':'')+'. Cuando la pidas, tildá <b>“¿Se pidió?”</b>.';
-    cargarPropuestas();
-  }).catch(function(err){$('epdfmsg').innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
+  guardarSimulacion(e).then(function(r){$('epdfmsg').innerHTML=mensajeGuardado(r);cargarPropuestas()})
+    .catch(function(err){$('epdfmsg').innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
 };
+var PROPS=[];
+function bajarPDFPropuesta(i,btn){
+  var x=PROPS[i]; if(!x)return;
+  var f=x.datos&&x.datos.pdf?x.datos.pdf:fotoDesdeFila(x), nombre=nombrePDF(f), msg=$('pmsg'+i);
+  msg.textContent='Armando el PDF…';
+  armarPDFDesde(f,x.id).then(function(bytes){
+    ULT_PDF={bytes:bytes,nombre:nombre};bajarArchivo(bytes,nombre);
+    msg.innerHTML='PDF listo: <b>'+esc(nombre)+'</b>. Si no lo ves en Descargas, tocá:'+BOTON_COMPARTIR;
+  }).catch(function(err){msg.innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
+}
+function editarPropuesta(i){
+  var x=PROPS[i]; if(!x)return;
+  var ed=(x.datos&&x.datos.ed)||{}, foto=x.datos&&x.datos.pdf;
+  var op=foto?foto.op:(x.precioSinOferta>x.precioConOferta+1?2:1);
+  $('pmsg'+i).textContent='Cargando en el simulador…';
+  var seguir=function(p){
+    elegirSim(p);
+    ponerPesos('scosto',x.costo);$('scant').value=x.cantidad||'';
+    PROV.modo=x.fueraDeLista?'F':'L';PROV.sel=x.fueraDeLista?'':(x.proveedor||'');$('sprovf').value=x.fueraDeLista?(x.proveedor||''):'';pintarProveedores();
+    if(ed.sprecio)$('sprecio').value=ed.sprecio;
+    if(ed.e1pre){$('e1pre').value=ed.e1pre;EST.t1=!!ed.t1}
+    if(op===2){ponerPesos('epre',x.precioConOferta);EST.t2=true;$('epct').value=ed.epct||Math.round((1-x.precioConOferta/x.precioSinOferta)*100);EST.lista2=ed.lista2||0;if(ed.eaum!==undefined)$('eaum').value=ed.eaum}
+    else if(!ed.e1pre){ponerPesos('e1pre',x.precioConOferta);EST.t1=true}
+    $('edias').value=x.dias||30;$('eobj').value=x.objetivo||'';EST.tObj=true;
+    EST.editId=x.id;elegirOpcion(op);recalcular();pintarEdicion();
+    $('pmsg'+i).textContent='';irA('simulador');guardarEstado();
+  };
+  if(x.codigo)api('producto',{codigo:x.codigo}).then(seguir).catch(function(){seguir(null)});else seguir(null);
+}
+function borrarPropuesta(i,btn){
+  var x=PROPS[i]; if(!x)return;
+  if(!btn.dataset.seguro){btn.dataset.seguro='1';btn.textContent='¿Seguro? tocá de nuevo';setTimeout(function(){if(btn.isConnected){delete btn.dataset.seguro;btn.textContent='Borrar'}},4000);return}
+  $('pmsg'+i).textContent='Borrando…';
+  api('borrar_propuesta',{id:x.id}).then(function(){if(EST.editId===x.id)nuevaSim();cargarPropuestas()})
+    .catch(function(err){$('pmsg'+i).innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
+}
 
 function cargarPropuestas(){
   if(!CFG.token)return;
   api('propuestas').then(function(l){
-    if(!l||!l.length){$('lprop').innerHTML='Todavía no hay simulaciones guardadas. Guardá una (o bajala en PDF) y queda acá.';return}
-    $('lprop').innerHTML=l.slice(0,20).map(function(x){
+    PROPS=(l||[]).slice(0,20);
+    if(!PROPS.length){$('lprop').innerHTML='Todavía no hay simulaciones guardadas. Guardá una (o bajala en PDF) y queda acá.';return}
+    $('lprop').innerHTML=PROPS.map(function(x,i){
       var est=x.estado||'', ch=/✔/.test(est)?'v':(/NO LLEG/.test(est)?'r':(/PEDIDA|VENDIENDO/.test(est)?'c':'a'));
-      var h='<div style="padding:8px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(x.producto)+'</b><span class="chip '+ch+'">'+(x.pedido?'pedida':'sin pedir')+'</span></div>'+
+      var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(x.producto)+'</b><span class="chip '+ch+'">'+(x.pedido?'pedida':'sin pedir')+'</span></div>'+
         '<div>'+esc(x.fecha)+' · '+(x.proveedor?esc(x.proveedor)+(x.fueraDeLista?' (fuera de las listas)':''):'proveedor sin elegir')+' · '+$$(x.cantidad)+' u. a '+pesos(x.costo)+'</div>'+
         '<div>'+(x.precioSinOferta>x.precioConOferta+1?'con oferta: '+pesos(x.precioSinOferta)+' → '+pesos(x.precioConOferta):'sin oferta: '+pesos(x.precioConOferta))+' · objetivo '+$$(x.objetivo)+' u. en '+$$(x.dias)+' días</div>';
       if(x.llego){
@@ -905,10 +978,12 @@ function cargarPropuestas(){
           '<div>Llegó el '+esc(x.llego)+(x.entraron?' ('+$$(x.entraron)+' u.)':'')+' · vendidas <b>'+$$(x.vendidas)+'</b> en '+$$(x.diasDesde)+' días'+(x.ritmo!==null?' · '+String(Math.round(x.ritmo*10)/10).replace('.',',')+' por mes':'')+
           (typeof x.resto==='number'&&x.resto>0?' · lo que queda se vende en ~'+$$(x.resto)+' días':'')+'</div>';
       }
-      h+='<div class="note" style="margin-top:4px"><b class="'+(ch==='v'?'pos':ch==='r'?'neg':'')+'">'+esc(est)+'</b></div></div>';
+      h+='<div class="note" style="margin-top:4px"><b class="'+(ch==='v'?'pos':ch==='r'?'neg':'')+'">'+esc(est)+'</b></div>'+
+        '<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="bajarPDFPropuesta('+i+',this)">⬇ PDF</button><button class="btn sec" onclick="editarPropuesta('+i+')">Editar</button><button class="btn sec" style="color:var(--rojo)" onclick="borrarPropuesta('+i+',this)">Borrar</button></div>'+
+        '<div class="note" id="pmsg'+i+'"></div></div>';
       return h;
     }).join('');
-  }).catch(function(){$('lprop').innerHTML='Para ver el seguimiento, actualizá ECHU a la versión 5.17.'});
+  }).catch(function(){$('lprop').innerHTML='Para ver el seguimiento, actualizá ECHU a la versión 5.18.'});
 }
 
 document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',function(){cargarPropuestas();cargarLibPDF().catch(function(){})});
