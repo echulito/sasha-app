@@ -2,6 +2,20 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
+<script>
+/* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
+var APP_V=5;
+(function(){
+  if(window.__remota)return;
+  var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
+  if(!u)return;
+  fetch(u+(u.indexOf('?')>=0?'&':'?')+'accion=app&_='+Date.now(),{cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
+    if(j&&j.ok&&j.v>APP_V&&j.html){
+      document.open();document.write(j.html.replace('<head>','<head><script>window.__remota=1<\/script>'));document.close();
+    }
+  }).catch(function(){});
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sasha · Mi negocio</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -146,13 +160,37 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
 var CFG={url:'',token:''};
 try{CFG.url=localStorage.getItem('echu_url')||'';CFG.token=localStorage.getItem('echu_token')||''}catch(e){}
 function guardarCfg(){try{localStorage.setItem('echu_url',CFG.url);localStorage.setItem('echu_token',CFG.token)}catch(e){}}
-function api(accion,params){
+function jsonp(url){
+  return new Promise(function(ok,mal){
+    var nombre='echu_cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
+    var s=document.createElement('script'),fin=false;
+    var limpiar=function(){fin=true;try{delete window[nombre]}catch(e){window[nombre]=undefined}if(s.parentNode)s.parentNode.removeChild(s)};
+    window[nombre]=function(d){limpiar();ok(d)};
+    s.onerror=function(){if(!fin){limpiar();mal(new Error('RED'))}};
+    setTimeout(function(){if(!fin){limpiar();mal(new Error('RED'))}},60000);
+    s.src=url+'&callback='+nombre;
+    document.head.appendChild(s);
+  });
+}
+function api(accion,params,intento){
+  intento=intento||1;
   var q='accion='+encodeURIComponent(accion)+(CFG.token?'&token='+encodeURIComponent(CFG.token):'');
   Object.keys(params||{}).forEach(function(k){q+='&'+k+'='+encodeURIComponent(params[k])});
-  return fetch(CFG.url+(CFG.url.indexOf('?')>=0?'&':'?')+q,{redirect:'follow'}).then(function(r){return r.json()}).then(function(j){
-    if(!j.ok){ if(j.error==='PIN'&&accion!=='login'){salir(true)} throw new Error(j.mensaje||j.error||'Error') }
-    return accion==='login'?j:j.datos;
-  });
+  q+='&_='+Date.now();
+  var url=CFG.url+(CFG.url.indexOf('?')>=0?'&':'?')+q;
+  // 1er intento: consulta normal. Si el celular la corta, 2do y 3ro por el otro camino (JSONP).
+  var pedido=intento===1
+    ? fetch(url,{redirect:'follow',cache:'no-store'}).then(function(r){return r.text()}).then(function(t){try{return JSON.parse(t)}catch(e){throw new Error('RED')}})
+    : jsonp(url);
+  return pedido.catch(function(e){
+      if(intento<3)return new Promise(function(ok){setTimeout(ok,800*intento)}).then(function(){return api(accion,params,intento+1)}).then(function(d){return {__ok:true,d:d}});
+      throw new Error('ECHU no respondió (puede estar ocupado actualizándose). Probá de nuevo en un momento.');
+    })
+    .then(function(j){
+      if(j&&j.__ok)return j.d;
+      if(!j.ok){ if(j.error==='PIN'&&accion!=='login'){salir(true)} throw new Error(j.mensaje||j.error||'Error') }
+      return accion==='login'?j:j.datos;
+    });
 }
 function mostrarLogin(msg){$('app').classList.add('oculto');$('login').classList.remove('oculto');$('campoUrl').style.display=CFG.url?'none':'';$('lerr').textContent=msg||'';}
 function salir(vencido){CFG.token='';guardarCfg();mostrarLogin(vencido?'La sesión venció: volvé a poner el PIN.':'')}
@@ -161,7 +199,7 @@ function entrar(){
   if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(CFG.url)){$('lerr').textContent='Pegá la dirección de ECHU (empieza con https://script.google.com/).';$('campoUrl').style.display='';return}
   $('lerr').textContent='Entrando…';
   api('login',{pin:$('lpin').value.trim()}).then(function(j){CFG.token=j.token;guardarCfg();$('lpin').value='';arrancar()})
-   .catch(function(e){$('lerr').textContent=e.message==='Failed to fetch'?'No se pudo conectar con ECHU. Revisá la dirección y que esté publicada para "Cualquier persona".':e.message;$('campoUrl').style.display=''});
+   .catch(function(e){$('lerr').textContent=/Failed to fetch|RED|no respondió/.test(e.message)?'No se pudo conectar con ECHU. Revisá la dirección y que esté publicada para "Cualquier persona".':e.message;$('campoUrl').style.display=''});
 }
 function arrancar(){$('login').classList.add('oculto');$('app').classList.remove('oculto');cargar()}
 
@@ -295,7 +333,7 @@ buscador($('q'),$('resultados'),function(c){verProducto(c)});
 
 function verProducto(c){
   $('detalle').innerHTML='<div class="cargando">Cargando producto…</div>';
-  api('producto',{c:c}).then(function(p){
+  api('producto',{codigo:c}).then(function(p){
     if(!p){$('detalle').innerHTML='<div class="card">No encontré ese producto.</div>';return}
     var f=p.ficha||{}, h='';
     h+='<div class="card"><div style="display:flex;gap:10px;align-items:center"><div class="dot '+(p.descontinuado?'D':'A')+'" style="width:32px;height:32px;font-size:14px">'+(p.descontinuado?'D':'A')+'</div>'+
@@ -339,7 +377,7 @@ function verProducto(c){
 /* ---------------- SIMULADOR ---------------- */
 buscador($('sq'),$('sresultados'),function(c){
   $('sprod').textContent='Cargando…';
-  api('producto',{c:c}).then(function(p){elegirSim(p)}).catch(function(e){$('sprod').textContent=e.message});
+  api('producto',{codigo:c}).then(function(p){elegirSim(p)}).catch(function(e){$('sprod').innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
 });
 function elegirSim(p){
   SPROD=p;$('sq').value='';
