@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=11;
+var APP_V=12;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -143,11 +143,11 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <div class="lista" id="sresultados"></div>
       <div id="sprod" class="note"></div>
       <div class="two">
-        <div><label>Costo por unidad ($)</label><input id="scosto" type="number" inputmode="decimal" min="0"></div>
+        <div><label>Costo por unidad ($)</label><input id="scosto" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0"></div>
         <div><label>Cantidad que comprarías</label><input id="scant" type="number" inputmode="numeric" min="0"></div>
       </div>
       <label>Precio de venta ($)</label>
-      <input id="sprecio" type="number" inputmode="decimal" min="0">
+      <input id="sprecio" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0">
       <input id="sslider" class="slider" type="range" min="0" max="100" step="1">
       <div class="marcas" id="smarcas"></div>
     </div>
@@ -160,7 +160,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
         <button data-o="2">Opción 2<br><small>Con oferta (llamador)</small></button>
       </div>
       <label>Precio que cobrás ($)</label>
-      <input id="epre" type="number" inputmode="decimal" min="0">
+      <input id="epre" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0">
       <div class="btns" style="margin-top:6px"><button class="btn sec" id="bsugerir">Sugerir precio (margen objetivo)</button></div>
       <div id="eof2" class="oculto">
         <label>Descuento que se muestra (%)</label>
@@ -253,6 +253,21 @@ document.querySelectorAll('nav button').forEach(function(b){b.onclick=function()
 }});
 function irA(tab){document.querySelector('nav button[data-tab="'+tab+'"]').click()}
 
+
+/* ---------- montos en pesos: "$ 5.095" o "$ 5.095,50" (se formatea mientras escribís) ---------- */
+function parsePesos(t){t=String(t||'').replace(/[^0-9,]/g,'');var i=t.indexOf(',');if(i>=0)t=t.slice(0,i).replace(/,/g,'')+'.'+t.slice(i+1).replace(/,/g,'');var n=parseFloat(t);return isNaN(n)?0:n}
+function num(id){return parsePesos($(id).value)}
+function miles(s){return s.replace(/^0+(?=\d)/,'').replace(/\B(?=(\d{3})+(?!\d))/g,'.')}
+function fmtPesos(v){if(v===''||v===null||v===undefined||isNaN(v))return '';var n=Math.round(Number(v)*100)/100,ent=Math.floor(Math.abs(n)),dec=Math.round((Math.abs(n)-ent)*100);return '$ '+miles(String(ent))+(dec?','+String(dec).padStart(2,'0').replace(/0$/,''):'')}
+function ponerPesos(id,v){$(id).value=fmtPesos(v)}
+function formatearMientrasEscribe(e){
+  var el=e.target,t=el.value.replace(/[^0-9,]/g,''),i=t.indexOf(',');
+  var ent=i>=0?t.slice(0,i):t,dec=i>=0?t.slice(i+1).replace(/,/g,'').slice(0,2):null;
+  if(!ent&&dec===null){el.value='';return}
+  el.value='$ '+miles(ent||'0')+(dec!==null?','+dec:'');
+  try{el.setSelectionRange(el.value.length,el.value.length)}catch(x){}
+}
+['scosto','sprecio','epre'].forEach(function(id){$(id).addEventListener('input',formatearMientrasEscribe,true)});
 /* ---------------- RESUMEN ---------------- */
 function cargar(){
   $('sub').textContent='Cargando…';
@@ -457,23 +472,23 @@ function elegirSim(p){
   SPROD=p;$('sq').value='';
   $('sprod').innerHTML=p?'<b>'+esc(p.producto)+'</b> · hoy: costo '+pesos(p.costo)+', precio '+pesos(p.precio)+', margen '+pct(p.margen)+', stock '+$$(p.stock)+', vende '+(p.ventaMensual||0).toFixed(1).replace('.',',')+' por mes. <a href="#" id="squitar">quitar</a>':'';
   if(p){$('squitar').onclick=function(e){e.preventDefault();elegirSim(null)};
-    if(!$('scosto').value&&p.costo)$('scosto').value=Math.round(p.costo);
-    if(!$('sprecio').value&&p.precio)$('sprecio').value=Math.round(p.precio)}
+    if(!$('scosto').value&&p.costo)ponerPesos('scosto',Math.round(p.costo));
+    if(!$('sprecio').value&&p.precio)ponerPesos('sprecio',Math.round(p.precio))}
   recalcular();
 }
 ['scosto','scant','sprecio'].forEach(function(id){$(id).addEventListener('input',function(){recalcular(id)})});
 $('sslider').addEventListener('input',function(){
-  var c=+$('scosto').value||0; if(!c)return;
-  var m=+$('sslider').value/100; $('sprecio').value=Math.round(c/(1-m)); recalcular('slider');
+  var c=num('scosto')||0; if(!c)return;
+  var m=+$('sslider').value/100; ponerPesos('sprecio',Math.round(c/(1-m))); recalcular('slider');
 });
 function precioPara(c,m){return m<1?Math.ceil(c/(1-m)/10)*10:0}
-function setPrecio(v){$('sprecio').value=v;recalcular()}
+function setPrecio(v){ponerPesos('sprecio',v);recalcular()}
 function recalcular(origen){
-  var c=+$('scosto').value||0, q=+$('scant').value||0, P=+$('sprecio').value||0;
+  var c=num('scosto')||0, q=+$('scant').value||0, P=num('sprecio')||0;
   var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=(SPROD&&SPROD.objetivo)||ADMIN.deseado||0;
   if(!c){$('sres').innerHTML='<div class="card note">Cargá el costo por unidad para empezar.</div>';$('smarcas').innerHTML='';return}
   var pNoPerder=precioPara(c,pv), pMin=precioPara(c,mn), pObj=precioPara(c,obj);
-  if(!P){P=pObj;$('sprecio').value=P}
+  if(!P){P=pObj;ponerPesos('sprecio',P)}
   var m=P>0?(P-c)/P:0;
   if(origen!=='slider')$('sslider').value=Math.max(0,Math.min(90,Math.round(m*100)));
   $('sslider').max=90;
@@ -536,13 +551,13 @@ function recalcular(origen){
 var EST={op:1,aumTocado:false};
 function r10(x){return Math.round(x/10)*10}
 function datosSim(){
-  var c=+$('scosto').value||0, q=+$('scant').value||0;
+  var c=num('scosto')||0, q=+$('scant').value||0;
   var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=(SPROD&&SPROD.objetivo)||ADMIN.deseado||0;
   return {c:c,q:q,pv:pv,mn:mn,obj:obj,pMin:precioPara(c,mn),pObj:precioPara(c,obj)};
 }
 function sugerirEstrategia(){
   var d=datosSim(); if(!d.c)return;
-  $('epre').value=Math.max(d.pObj, SPROD&&SPROD.precio?Math.round(SPROD.precio):0);
+  ponerPesos('epre',Math.max(d.pObj, SPROD&&SPROD.precio?Math.round(SPROD.precio):0));
   if(!$('eobj').value)$('eobj').value=d.q||'';
   calcEstrategia();
 }
@@ -559,7 +574,7 @@ function calcEstrategia(){
   card.classList.toggle('oculto',!d.c);
   if(!d.c)return;
   if(!$('epre').value)sugerirEstrategia();
-  var P=+$('epre').value||0, desc=EST.op===2?Math.min(80,Math.max(0,+$('epct').value||0))/100:0;
+  var P=num('epre')||0, desc=EST.op===2?Math.min(80,Math.max(0,+$('epct').value||0))/100:0;
   var lista=EST.op===2&&desc>0?r10(P/(1-desc)):P;
   var dias=Math.max(1,+$('edias').value||30), aum=(+$('eaum').value||0)/100;
   var vm=SPROD&&SPROD.ventaMensual?SPROD.ventaMensual:0;
@@ -596,7 +611,7 @@ function calcEstrategia(){
 }
 ['epre','epct','edias','eaum','eobj'].forEach(function(id){$(id).addEventListener('input',function(){if(id==='eaum')EST.aumTocado=true;calcEstrategia()})});
 $('bsugerir').onclick=sugerirEstrategia;
-$('busarof').onclick=function(){var P=+$('epre').value;if(P)setPrecio(P)};
+$('busarof').onclick=function(){var P=num('epre');if(P)setPrecio(P)};
 var _recalcOrig=recalcular;
 recalcular=function(o){_recalcOrig(o);try{pintarBultos()}catch(e){}try{calcEstrategia()}catch(e){}};
 function bultoPrincipal(){var b=(SPROD&&SPROD.bultos)||[];return b.filter(function(x){return x.unidades>1})[0]||null}
@@ -605,7 +620,7 @@ function setCant(v){$('scant').value=v;recalcular()}
 function pintarBultos(){
   if(!SPROD||!$('scosto').value)return;
   var bs=(SPROD.bultos||[]).filter(function(x){return x.unidades>1});
-  var c=+$('scosto').value||0, q=+$('scant').value||0, vm=SPROD.ventaMensual||0, st=Math.max(0,SPROD.stock||0);
+  var c=num('scosto')||0, q=+$('scant').value||0, vm=SPROD.ventaMensual||0, st=Math.max(0,SPROD.stock||0);
   var h='<div class="card" style="margin-bottom:12px"><h2>Compra por bulto</h2>';
   if(!bs.length){h+='<div class="note" style="margin-top:0">Las listas no informan bulto para este producto: se compra por unidad o surtido.</div></div>';}
   else{
