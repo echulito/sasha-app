@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=10;
+var APP_V=11;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -438,6 +438,7 @@ function verProducto(c){
     h+='<div class="card"><h2>Proveedor</h2>'+
       '<div class="row"><span>Proveedor</span><span>'+esc(p.proveedor||'-')+'</span></div>'+
       '<div class="row"><span>Código de proveedor</span><span>'+esc(p.codigoProveedor||'-')+'</span></div>'+
+      ((p.bultos||[]).filter(function(x){return x.unidades>1}).slice(0,1).map(function(x){return '<div class="row"><span>Bulto ('+esc(x.proveedor)+')</span><span>'+x.unidades+' u. · '+pesos(x.costo*x.unidades)+'</span></div>'}).join(''))+
       (p.mejorCosto?'<div class="eval bien">Más barato en '+esc(p.mejorDonde)+': '+pesos(p.mejorCosto)+' ('+pct(1-p.mejorCosto/p.costo,0)+' menos). Con ese costo el margen sería '+pct(p.precio?(p.precio-p.mejorCosto)/p.precio:null)+'.</div>':'<div class="note">No hay un costo más barato en otra lista vigente.</div>')+
       (f.recomendacion?'<div class="note"><b>'+esc(f.recomendacion)+'</b></div>':'')+
       '<div class="btns"><button class="btn" id="bsim">Simular una compra de este producto</button></div></div>';
@@ -597,7 +598,35 @@ function calcEstrategia(){
 $('bsugerir').onclick=sugerirEstrategia;
 $('busarof').onclick=function(){var P=+$('epre').value;if(P)setPrecio(P)};
 var _recalcOrig=recalcular;
-recalcular=function(o){_recalcOrig(o);try{calcEstrategia()}catch(e){}};
+recalcular=function(o){_recalcOrig(o);try{pintarBultos()}catch(e){}try{calcEstrategia()}catch(e){}};
+function bultoPrincipal(){var b=(SPROD&&SPROD.bultos)||[];return b.filter(function(x){return x.unidades>1})[0]||null}
+function textoBultos(q,u){if(!u||u<=1||!q)return '';var n=Math.floor(q/u),r=q-n*u;return n&&!r?n+' bulto'+(n>1?'s':'')+' de '+u:(n?n+' bulto'+(n>1?'s':'')+' de '+u+' + '+r+' sueltas':'surtido / por unidad ('+q+' u.)')}
+function setCant(v){$('scant').value=v;recalcular()}
+function pintarBultos(){
+  if(!SPROD||!$('scosto').value)return;
+  var bs=(SPROD.bultos||[]).filter(function(x){return x.unidades>1});
+  var c=+$('scosto').value||0, q=+$('scant').value||0, vm=SPROD.ventaMensual||0, st=Math.max(0,SPROD.stock||0);
+  var h='<div class="card" style="margin-bottom:12px"><h2>Compra por bulto</h2>';
+  if(!bs.length){h+='<div class="note" style="margin-top:0">Las listas no informan bulto para este producto: se compra por unidad o surtido.</div></div>';}
+  else{
+    var b=bs[0],u=b.unidades;
+    h+='<div class="row"><span>Bulto en '+esc(b.proveedor)+(b.actual?' (tu proveedor)':'')+'</span><span><b>'+u+' u.</b></span></div>'+
+      '<div class="row"><span>Costo del bulto (a $'+$$(c)+' c/u)</span><span>'+pesos(c*u)+'</span></div>';
+    var minimo=Math.max(0,Math.ceil(vm-st)), dura=vm>0?u/(vm/30):null;
+    if(vm>0)h+='<div class="row"><span>Un bulto te dura</span><span class="'+(dura>60?'neg':'')+'">'+Math.round(dura)+' días</span></div>';
+    h+='<div class="btns">';
+    [1,2,3].forEach(function(k){h+='<button class="btn '+(q===k*u?'':'sec')+'" onclick="setCant('+(k*u)+')">'+k+' bulto'+(k>1?'s':'')+'<br><small>'+(k*u)+' u. · '+pesos(c*u*k)+(vm>0?' · '+Math.round(k*u/(vm/30))+' días':'')+'</small></button>'});
+    h+='</div>';
+    if(vm>0){
+      if(dura>60)h+='<div class="eval bajo">Un bulto entero te dura más de 2 meses: conviene comprar surtido o por unidad ('+minimo+' u. para un mes).</div>';
+      else{var nb=Math.max(1,Math.ceil(minimo/u));h+='<div class="eval bien">Sugerido: '+nb+' bulto'+(nb>1?'s':'')+' ('+(nb*u)+' u.) para cubrir el mes.</div>';}
+    }
+    if(bs.length>1)h+='<div class="note">Otras listas: '+bs.slice(1).map(function(x){return esc(x.proveedor)+' bulto de '+x.unidades+' a '+pesos(x.costo)+' c/u'}).join(' · ')+'</div>';
+    if(q)h+='<div class="note">Tu compra: <b>'+esc(textoBultos(q,u))+'</b></div>';
+    h+='</div>';
+  }
+  var cont=$('sres');var div=document.createElement('div');div.innerHTML=h;cont.insertBefore(div.firstChild,cont.firstChild);
+}
 
 function cargarLibPDF(){
   return new Promise(function(ok,mal){
@@ -651,7 +680,7 @@ $('bpdf').onclick=function(){
       D.sub('Opción '+e.op+': '+(op2?'con oferta (llamador)':'sin oferta')+' · simulación, no es una orden real · '+hoyTxt()+(id?' · ID '+id:''));
       D.seccion('Producto');D.fila('Producto',(P.producto||'Sin elegir').slice(0,60));D.fila('Código interno',P.codigo||'-');D.fila('Proveedor actual',P.proveedor||'-');
       if(P.costo)D.fila('Costo de hoy · stock · vende por mes',$f(P.costo)+' · '+(P.stock||0)+' u. · '+(P.ventaMensual||0).toFixed(1).replace('.',',')+' u.');
-      D.seccion('Compra');D.fila('Costo por unidad',$f(d.c));D.fila('Cantidad',(d.q||0)+' u.');D.fila('Inversión',$f(d.c*(d.q||0)));
+      D.seccion('Compra');D.fila('Costo por unidad',$f(d.c));var bp=bultoPrincipal();if(bp){D.fila('Bulto ('+bp.proveedor+')',bp.unidades+' u. · '+$f(d.c*bp.unidades)+' el bulto');D.fila('Cantidad',(d.q||0)+' u. = '+textoBultos(d.q||0,bp.unidades));}else D.fila('Cantidad',(d.q||0)+' u. (sin bulto informado)');D.fila('Inversión',$f(d.c*(d.q||0)));
       D.seccion('Para cargar en el sistema');
       if(op2){D.fila('Precio de venta (lista)',$f(e.lista));D.fila('Bonificación',Math.round(e.desc*100)+'%');D.fila('Se cobra',$f(e.P));D.fila('Vigencia de la oferta',hoyTxt()+' al '+hoyTxt(e.dias));}
       else D.fila('Precio de venta',$f(e.P));
