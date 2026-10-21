@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=8;
+var APP_V=9;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -151,6 +151,34 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <div class="marcas" id="smarcas"></div>
     </div>
     <div id="sres" style="margin-top:12px"></div>
+    <div class="card oculto" id="sest" style="margin-top:12px">
+      <h2>Estrategia de oferta y objetivo</h2>
+      <div class="note" style="margin-top:0">Armá el precio "normal" y el de oferta (el llamador que la gente ve rebajado). Podés cambiar cualquier número.</div>
+      <div class="btns" style="margin-top:4px"><button class="btn sec" id="bsugerir">Sugerir estrategia</button></div>
+      <div class="two">
+        <div><label>Precio sin oferta ($)</label><input id="ereg" type="number" inputmode="decimal" min="0"></div>
+        <div><label>Oferta (% de descuento)</label><input id="epct" type="number" inputmode="decimal" min="0" max="90"></div>
+      </div>
+      <div class="two">
+        <div><label>Precio con oferta ($)</label><input id="eof" type="number" inputmode="decimal" min="0"></div>
+        <div><label>Duración / objetivo (días)</label><input id="edias" type="number" inputmode="numeric" min="1" value="30"></div>
+      </div>
+      <div class="two">
+        <div><label>Ventas extra esperadas por la oferta (%)</label><input id="eaum" type="number" inputmode="decimal" min="0" value="30"></div>
+        <div><label>Objetivo: vender (unidades)</label><input id="eobj" type="number" inputmode="numeric" min="0"></div>
+      </div>
+      <div id="ebase"></div>
+      <div id="eres"></div>
+      <div class="btns">
+        <button class="btn sec" id="busarof">Usar el precio con oferta arriba</button>
+        <button class="btn" id="bpdf">⬇ Bajar propuesta (PDF)</button>
+      </div>
+      <div id="epdfmsg" class="note"></div>
+    </div>
+    <div class="card" id="sprop" style="margin-top:12px">
+      <h2>Mis propuestas (seguimiento)</h2>
+      <div id="lprop" class="note" style="margin-top:0">Las propuestas que bajás en PDF quedan guardadas acá y en ECHU (solapa PROPUESTAS). Se compara con lo vendido de verdad.</div>
+    </div>
   </section>
 </main>
 </div>
@@ -496,6 +524,155 @@ function recalcular(origen){
   h+='</div>';
   $('sres').innerHTML=h;
 }
+
+/* ---------------- ESTRATEGIA DE OFERTA + PROPUESTA ---------------- */
+var EST={editado:false};
+function r10(x){return Math.round(x/10)*10}
+function datosSim(){
+  var c=+$('scosto').value||0, q=+$('scant').value||0;
+  var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=(SPROD&&SPROD.objetivo)||ADMIN.deseado||0;
+  return {c:c,q:q,pv:pv,mn:mn,obj:obj,pMin:precioPara(c,mn),pObj:precioPara(c,obj)};
+}
+function sugerirEstrategia(){
+  var d=datosSim(); if(!d.c)return;
+  var reg=Math.max(d.pObj, SPROD&&SPROD.precio?Math.round(SPROD.precio):0);
+  var of=Math.max(d.pMin, r10(reg*0.8));
+  $('ereg').value=reg; $('eof').value=of; $('epct').value=reg>0?Math.round((1-of/reg)*100):0;
+  if(!$('eobj').value||!EST.editado){ $('eobj').value=d.q||''; }
+  calcEstrategia();
+}
+function calcEstrategia(){
+  var d=datosSim(), card=$('sest');
+  card.classList.toggle('oculto',!d.c);
+  if(!d.c)return;
+  if(!$('ereg').value&&!$('eof').value)sugerirEstrategia();
+  var reg=+$('ereg').value||0, of=+$('eof').value||reg, dias=Math.max(1,+$('edias').value||30), aum=(+$('eaum').value||0)/100;
+  var vm=SPROD&&SPROD.ventaMensual?SPROD.ventaMensual:0;
+  var base='';
+  if(!vm){ base='<label>Ventas por mes que esperás (sin oferta)</label><input id="evm" type="number" inputmode="decimal" min="0" value="'+(EST.vm||'')+'">'; }
+  if($('ebase').getAttribute('data-k')!==String(!vm)){ $('ebase').innerHTML=base; $('ebase').setAttribute('data-k',String(!vm)); if($('evm'))$('evm').addEventListener('input',function(){EST.vm=+$('evm').value||0;calcEstrategia()}); }
+  if(!vm)vm=EST.vm||0;
+  var pct2=reg>0?1-of/reg:0, m=of>0?(of-d.c)/of:0, gan=of*(1-d.pv)-d.c;
+  var proy=vm/30*dias*(1+aum), objU=+$('eobj').value||d.q||Math.round(proy);
+  var vendibles=d.q?Math.min(d.q,proy):proy, ganProy=vendibles*gan;
+  var nivel=m<d.pv?'mal':(m<d.mn?'bajo':(m<d.obj?'ok':'bien'));
+  var hh='<div style="margin:10px 0;padding:12px;border-radius:10px;background:#fff8e1;text-align:center">'+
+    '<div class="note" style="margin:0">Así se ve en el local</div>'+
+    (pct2>0.004?'<div><s style="color:var(--gris)">'+pesos(reg)+'</s> &nbsp; <b style="font-size:24px;color:var(--rojo)">'+pesos(of)+'</b> &nbsp; <span class="chip r">−'+pct(pct2,0)+'</span></div>':'<div><b style="font-size:24px">'+pesos(of)+'</b> <span class="note">(sin oferta)</span></div>')+'</div>';
+  hh+='<div class="row"><span>Margen vendiendo en oferta</span><span class="'+(nivel==='bien'||nivel==='ok'?'pos':'neg')+'"><b>'+pct(m)+'</b></span></div>'+
+    '<div class="row"><span>Ganancia por unidad en oferta (después de comisiones)</span><span class="'+(gan>=0?'pos':'neg')+'">'+pesos(gan)+'</span></div>'+
+    (of<d.pMin?'<div class="eval mal">La oferta queda debajo del mínimo del local ('+pesos(d.pMin)+'): en el mes perdés plata con este producto.</div>':'')+
+    (reg<d.pObj?'<div class="eval ok">El precio sin oferta está debajo del de tu objetivo ('+pesos(d.pObj)+').</div>':'');
+  hh+='<div class="row" style="margin-top:8px"><span>Objetivo</span><span><b>'+$$(objU)+' u. en '+dias+' días</b></span></div>';
+  if(vm>0){
+    var cumple=proy>=objU, falta=Math.max(0,objU-proy), subir=vm>0?objU/(vm/30*dias)-1:0;
+    hh+='<div class="row"><span>Proyección con la oferta (+'+pct(aum,0)+' de ventas)</span><span>'+proy.toFixed(1).replace('.',',')+' u.</span></div>'+
+      '<div class="row"><span>Ganancia proyectada</span><span class="'+(ganProy>=0?'pos':'neg')+'">'+pesos(ganProy)+'</span></div>'+
+      (cumple?'<div class="eval bien">Con este ritmo se cumple el objetivo.</div>':
+      '<div class="eval bajo">No llega: faltarían '+Math.ceil(falta)+' u. Para cumplirlo, la venta tendría que subir '+pct(subir,0)+' respecto de hoy. Si no se venden, quedan '+pesos(falta*d.c)+' de plata parada en mercadería.</div>');
+  } else {
+    hh+='<div class="note">Cargá cuántas esperás vender por mes para ver la proyección.</div>';
+  }
+  $('eres').innerHTML=hh;
+  EST.ult={reg:reg,of:of,pct:pct2,m:m,gan:gan,dias:dias,aum:aum,vm:vm,proy:proy,objU:objU,ganProy:ganProy,d:d};
+}
+['ereg','epct','eof','edias','eaum','eobj'].forEach(function(id){$(id).addEventListener('input',function(){
+  EST.editado=true;
+  var reg=+$('ereg').value||0;
+  if(id==='epct'&&reg){$('eof').value=r10(reg*(1-(+$('epct').value||0)/100))}
+  if((id==='eof'||id==='ereg')&&reg){$('epct').value=Math.round((1-(+$('eof').value||reg)/reg)*100)}
+  calcEstrategia();
+})});
+$('bsugerir').onclick=function(){EST.editado=false;sugerirEstrategia()};
+$('busarof').onclick=function(){var of=+$('eof').value;if(of)setPrecio(of)};
+var _recalcOrig=recalcular;
+recalcular=function(o){_recalcOrig(o);try{calcEstrategia()}catch(e){}};
+
+function cargarLibPDF(){
+  return new Promise(function(ok,mal){
+    if(window.PDFLib)return ok(window.PDFLib);
+    var s=document.createElement('script');s.src='pdf-lib.min.js';
+    s.onload=function(){ok(window.PDFLib)};s.onerror=function(){mal(new Error('No se pudo cargar el generador de PDF.'))};
+    document.head.appendChild(s);
+  });
+}
+// Mini "documento" con pdf-lib: títulos, filas (texto a la izquierda y valor a la derecha) y párrafos.
+function armarPDF(PDFLib,arma){
+  return PDFLib.PDFDocument.create().then(function(pdf){
+    return Promise.all([pdf.embedFont(PDFLib.StandardFonts.Helvetica),pdf.embedFont(PDFLib.StandardFonts.HelveticaBold)]).then(function(f){
+      var R=f[0],B=f[1],rgb=PDFLib.rgb,W=595,H=842,page=pdf.addPage([W,H]),y=H-50;
+      var limpio=function(t){return String(t).replace(/[−–]/g,'-').replace(/[→]/g,'->').replace(/[^\x20-\x7E\xA0-\xFF]/g,'')};
+      var nueva=function(){if(y<70){page=pdf.addPage([W,H]);y=H-50}};
+      var api={
+        titulo:function(t){page.drawText(limpio(t),{x:40,y:y,size:17,font:B,color:rgb(0.12,0.23,0.37)});y-=18},
+        sub:function(t){page.drawText(limpio(t),{x:40,y:y,size:9,font:R,color:rgb(0.45,0.45,0.45)});y-=16},
+        seccion:function(t){nueva();y-=6;page.drawRectangle({x:38,y:y-6,width:519,height:20,color:rgb(0.12,0.23,0.37)});page.drawText(limpio(t),{x:46,y:y,size:11,font:B,color:rgb(1,1,1)});y-=24},
+        fila:function(t,v,neg){nueva();t=limpio(t);v=limpio(v);page.drawText(t,{x:44,y:y,size:10,font:R,color:rgb(0.35,0.35,0.35)});
+          var w=B.widthOfTextAtSize(v,10);page.drawText(v,{x:551-w,y:y,size:10,font:B,color:neg?rgb(0.75,0.12,0.12):rgb(0.1,0.1,0.1)});
+          page.drawLine({start:{x:44,y:y-5},end:{x:551,y:y-5},thickness:0.3,color:rgb(0.85,0.85,0.85)});y-=17},
+        parrafo:function(t){var pal=limpio(t).split(' '),lin='';pal.forEach(function(w){var prueba=lin?lin+' '+w:w;if(R.widthOfTextAtSize(prueba,8.5)>507){page.drawText(lin,{x:44,y:y,size:8.5,font:R,color:rgb(0.4,0.4,0.4)});y-=12;lin=w}else lin=prueba});if(lin){page.drawText(lin,{x:44,y:y,size:8.5,font:R,color:rgb(0.4,0.4,0.4)});y-=12}}
+      };
+      y-=0;arma(api);
+      return pdf.save();
+    });
+  });
+}
+function bajarArchivo(bytes,nombre){
+  var blob=new Blob([bytes],{type:'application/pdf'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=nombre;document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(url);a.remove()},4000);
+}
+function hoyTxt(off){var d=new Date(Date.now()+(off||0)*86400000);return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear()}
+$('bpdf').onclick=function(){
+  calcEstrategia(); var e=EST.ult; if(!e||!e.d.c){return}
+  var d=e.d, P=SPROD||{};
+  $('epdfmsg').textContent='Armando la propuesta…';
+  var datos={codigo:P.codigo||'',producto:P.producto||'Producto sin elegir',costo:d.c,cantidad:d.q||0,precioSinOferta:e.reg,precioConOferta:e.of,
+    ofertaPct:Math.round(e.pct*100),margen:Math.round(e.m*1000)/10,gananciaUnidad:Math.round(e.gan),objetivo:e.objU,dias:e.dias,
+    ventaMensual:Math.round(e.vm*10)/10,aumento:Math.round(e.aum*100),proyeccion:Math.round(e.proy*10)/10,gananciaProyectada:Math.round(e.ganProy)};
+  var guardar=(d.q>0)?api('guardar_propuesta',{datos:JSON.stringify(datos)}).then(function(r){return r&&r.id}).catch(function(){return ''}):Promise.resolve('');
+  var nombre='propuesta_'+((P.codigo||'producto')+'_'+hoyTxt().replace(/\//g,'-'))+'.pdf';
+  Promise.all([guardar,cargarLibPDF()]).then(function(res){
+    var id=res[0];
+    var $f=function(n){return '$ '+Math.round(n||0).toLocaleString('es-AR')};
+    var pc=function(n){return (n*100).toFixed(1).replace('.',',')+'%'};
+    return armarPDF(res[1],function(D){
+      D.titulo('Sasha · Propuesta de compra y oferta');
+      D.sub('Simulación (no es una orden real) · '+hoyTxt()+(id?' · ID '+id:''));
+      D.seccion('Producto');D.fila('Producto',(P.producto||'Sin elegir').slice(0,60));D.fila('Código interno',P.codigo||'-');D.fila('Proveedor actual',P.proveedor||'-');
+      if(P.costo)D.fila('Costo de hoy · stock · vende por mes',$f(P.costo)+' · '+(P.stock||0)+' u. · '+(P.ventaMensual||0).toFixed(1).replace('.',',')+' u.');
+      D.seccion('Compra');D.fila('Costo por unidad',$f(d.c));D.fila('Cantidad',(d.q||0)+' u.');D.fila('Inversión',$f(d.c*(d.q||0)));
+      D.seccion('Precios para cargar en el sistema');D.fila('Precio sin oferta',$f(e.reg));
+      D.fila('Precio con oferta (llamador)',$f(e.of)+(e.pct>0.004?'  (-'+Math.round(e.pct*100)+'%)':''));
+      D.fila('Vigencia de la oferta',hoyTxt()+' al '+hoyTxt(e.dias));D.fila('Margen con oferta',pc(e.m),e.m<d.mn);
+      D.fila('Ganancia por unidad (después de comisiones)',$f(e.gan),e.gan<0);D.fila('Precio mínimo del local / de objetivo',$f(d.pMin)+' / '+$f(d.pObj));
+      D.seccion('Objetivo y proyección');D.fila('Objetivo',e.objU+' u. en '+e.dias+' días (hasta '+hoyTxt(e.dias)+')');
+      if(e.vm>0){D.fila('Venta base por mes',e.vm.toFixed(1).replace('.',',')+' u.');D.fila('Ventas extra esperadas por la oferta','+'+Math.round(e.aum*100)+'%');
+        D.fila('Proyección de ventas',e.proy.toFixed(1).replace('.',',')+' u.');D.fila('Ganancia proyectada',$f(e.ganProy),e.ganProy<0);
+        var falta=Math.max(0,e.objU-e.proy);D.fila('¿Se cumple el objetivo?',falta>0?'NO: faltan '+Math.ceil(falta)+' u.':'SÍ',falta>0);
+        if(falta>0)D.fila('Plata parada si no se vende',$f(falta*d.c),true);}
+      D.sub('');D.parrafo('Seguimiento: '+(id?'ECHU compara esta propuesta con las ventas reales (solapa PROPUESTAS y "Mis propuestas" en la app) y marca si se cumplió el objetivo.':'para seguirla, elegí un producto y una cantidad antes de bajarla.'));
+    }).then(function(bytes){
+      bajarArchivo(bytes,nombre);
+      $('epdfmsg').innerHTML='Listo: se bajó <b>'+esc(nombre)+'</b>'+(id?' y quedó guardada para el seguimiento.':(d.q>0?' (no se pudo guardar en ECHU: actualizá ECHU a la 5.13).':'.'));
+      cargarPropuestas();
+    });
+  }).catch(function(err){$('epdfmsg').innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
+};
+
+function cargarPropuestas(){
+  if(!CFG.token)return;
+  api('propuestas').then(function(l){
+    if(!l||!l.length){$('lprop').innerHTML='Todavía no hay propuestas. Bajá una en PDF y queda guardada acá.';return}
+    $('lprop').innerHTML=l.slice(0,20).map(function(x){
+      var ch=/CUMPLIDO/.test(x.estado)?'v':(/NO SE/.test(x.estado)?'r':'a');
+      return '<div style="padding:8px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(x.producto)+'</b><span class="chip '+ch+'">'+esc(x.estado)+'</span></div>'+
+        '<div>'+esc(x.fecha)+' → '+esc(x.hasta)+' · oferta '+pesos(x.precioConOferta)+' · objetivo '+$$(x.objetivo)+' u.</div>'+
+        '<div class="bar"><i style="width:'+Math.min(100,(x.avance||0)*100)+'%;background:'+(ch==='v'?'var(--verde)':ch==='r'?'var(--rojo)':'var(--azul2)')+'"></i></div>'+
+        '<div>Vendidas '+$$(x.vendidas)+' de '+$$(x.objetivo)+' ('+pct(x.avance||0,0)+')'+(x.margenReal!==null?' · margen real '+pct(x.margenReal):'')+(x.parada?' · <b class="neg">plata parada '+pesos(x.parada)+'</b>':'')+'</div></div>';
+    }).join('');
+  }).catch(function(){$('lprop').innerHTML='Para ver el seguimiento, actualizá ECHU a la versión 5.13.'});
+}
+document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',cargarPropuestas);
 </script>
 </body>
 </html>
