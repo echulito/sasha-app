@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=7;
+var APP_V=8;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -364,6 +364,29 @@ function verProducto(c){
       '<div class="eval '+nivel+'">'+esc(txtNivel)+'</div>'+aviso+
       (cs&&cl&&Math.abs(cl-cs)>1?'<div class="row" style="margin-top:8px"><span>Costo en el sistema · en la lista</span><span>'+pesos(cs)+' · '+pesos(cl)+'</span></div>':'')+
       (p.precioSugerido?'<div class="note">Precio sugerido este mes: <b>'+pesos(p.precioSugerido)+'</b></div>':'')+'</div>';
+    // Ventas: a qué precio, con qué oferta, a qué costo y con qué margen se vendió.
+    var vt=p.ventas||{meses:[],ultimas:[]};
+    if((vt.meses&&vt.meses.length)||(vt.ultimas&&vt.ultimas.length)){
+      var hv='<div class="card" style="margin-top:12px"><h2>Ventas: precio, oferta y margen</h2>';
+      if(vt.ultimas&&vt.ultimas.length){
+        hv+='<div class="note" style="margin-top:0">Últimas ventas (de control de cajas)</div><table><tr><th>Día</th><th>U.</th><th>Cobrado</th><th>Costo</th><th>Margen</th></tr>';
+        vt.ultimas.forEach(function(x){
+          hv+='<tr><td>'+esc(x.fecha.slice(0,5))+(x.oferta?'<br><span class="chip a" style="font-size:10px">'+esc(x.oferta)+'</span>':'')+'</td><td>'+$$(x.unidades)+'</td>'+
+            '<td>'+pesos(x.cobrado)+(x.oferta&&x.lista>x.cobrado?'<br><s class="note" style="margin:0">'+pesos(x.lista)+'</s>':'')+'</td>'+
+            '<td>'+(x.costo?pesos(x.costo):'-')+'</td><td class="'+(x.margen===null?'':(x.margen<(p.minimo||0)?'neg':'pos'))+'">'+(x.margen===null?'-':pct(x.margen))+'</td></tr>';
+        });
+        hv+='</table>';
+      }
+      if(vt.meses&&vt.meses.length){
+        hv+='<div class="note">Por mes (archivos de VENTAS: precio y costo promedio de lo vendido)</div><table><tr><th>Mes</th><th>U.</th><th>Precio prom.</th><th>Costo prom.</th><th>Margen</th></tr>';
+        vt.meses.forEach(function(x){
+          hv+='<tr><td>'+esc(x.mes)+'</td><td>'+$$(x.unidades)+'</td><td>'+pesos(x.precio)+'</td><td>'+(x.costo?pesos(x.costo):'-')+'</td><td class="'+(x.margen===null?'':(x.margen<(p.minimo||0)?'neg':'pos'))+'">'+(x.margen===null?'-':pct(x.margen))+'</td></tr>';
+        });
+        hv+='</table>';
+      }
+      hv+='<div class="note">Margen en rojo = por debajo del mínimo del local ('+pct(p.minimo,0)+'). Las ventas con etiqueta amarilla tuvieron oferta o descuento.</div></div>';
+      window.__ventasHtml=hv;
+    } else { window.__ventasHtml=''; }
     var dias=p.diasStock, colorD=dias===null?'':(dias<7?'neg':(dias<20?'warn':'pos'));
     h+='<div class="card"><h2>Stock</h2>'+
       '<div class="row"><span>Stock actual</span><span class="'+(p.stock<=0?'neg':'')+'">'+$$(p.stock)+' u.</span></div>'+
@@ -384,7 +407,7 @@ function verProducto(c){
       (p.mejorCosto?'<div class="eval bien">Más barato en '+esc(p.mejorDonde)+': '+pesos(p.mejorCosto)+' ('+pct(1-p.mejorCosto/p.costo,0)+' menos). Con ese costo el margen sería '+pct(p.precio?(p.precio-p.mejorCosto)/p.precio:null)+'.</div>':'<div class="note">No hay un costo más barato en otra lista vigente.</div>')+
       (f.recomendacion?'<div class="note"><b>'+esc(f.recomendacion)+'</b></div>':'')+
       '<div class="btns"><button class="btn" id="bsim">Simular una compra de este producto</button></div></div>';
-    h+='</div>';
+    h+='</div>'+(window.__ventasHtml||'');
     $('detalle').innerHTML=h;
     $('bsim').onclick=function(){elegirSim(p);irA('simulador')};
   }).catch(function(e){$('detalle').innerHTML=err(e)});
