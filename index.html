@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=5;
+var APP_V=6;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -323,7 +323,7 @@ function buscador(input,cont,alElegir){
       api('buscar',{q:q}).then(function(r){
         if(q!==ult)return;
         if(!r.length){cont.innerHTML='<div class="note">No encontré nada.</div>';return}
-        cont.innerHTML=r.map(function(p){return '<div class="item" data-c="'+esc(p.codigo)+'"><div class="dot '+(p.descontinuado?'D':'A')+'">'+(p.descontinuado?'D':'A')+'</div><div class="n"><div>'+esc(p.producto)+'</div><div>'+esc(p.codigo)+' · '+esc(p.proveedor)+(p.precio?' · '+pesos(p.precio):'')+'</div></div></div>'}).join('');
+        cont.innerHTML=r.map(function(p){return '<div class="item" data-c="'+esc(p.codigo)+'"><div class="dot '+(p.descontinuado?'D':'A')+'">'+(p.descontinuado?'D':'A')+'</div><div class="n"><div>'+esc(p.producto)+'</div><div><b style="color:#000">'+esc(p.codigo)+'</b> · '+esc(p.proveedor)+(p.precio?' · '+pesos(p.precio):'')+'</div></div></div>'}).join('');
         cont.querySelectorAll('.item').forEach(function(el){el.onclick=function(){cont.innerHTML='';alElegir(el.dataset.c)}});
       }).catch(function(e){cont.innerHTML=err(e)});
     },350);
@@ -337,16 +337,30 @@ function verProducto(c){
     if(!p){$('detalle').innerHTML='<div class="card">No encontré ese producto.</div>';return}
     var f=p.ficha||{}, h='';
     h+='<div class="card"><div style="display:flex;gap:10px;align-items:center"><div class="dot '+(p.descontinuado?'D':'A')+'" style="width:32px;height:32px;font-size:14px">'+(p.descontinuado?'D':'A')+'</div>'+
-      '<div><div class="mid">'+esc(p.producto)+'</div><div class="note" style="margin:0">'+esc(p.codigo)+' · '+(p.descontinuado?'<b class="neg">DESCONTINUADO</b>':'<b class="pos">ACTIVO</b>')+(p.barras?' · '+esc(p.barras):'')+'</div></div></div>'+
+      '<div><div class="mid">'+esc(p.producto)+'</div><div class="note" style="margin:0"><b style="color:#000;font-size:16px">'+esc(p.codigo)+'</b> · '+(p.descontinuado?'<b class="neg">DESCONTINUADO</b>':'<b class="pos">ACTIVO</b>')+(p.barras?' · '+esc(p.barras):'')+'</div></div></div>'+
       (f.clase?'<div style="margin-top:8px"><span class="chip '+({ESTRELLA:'v',VOLUMEN:'c',NICHO:'a',REVISAR:'a',PIERDE:'r'}[f.clase]||'c')+'">'+(f.clase==='ESTRELLA'?'⭐ ':'')+esc(f.clase)+'</span> <span class="note">puesto '+f.puesto+' en contribución · deja '+pesos(f.contribucionMes)+' por mes</span></div>':'')+
       '</div>';
     h+='<div class="grid" style="margin-top:12px">';
+    // Margen con el costo del sistema (lo que figura hoy) y con el de la lista vigente (al reponer).
+    var cs=p.costoSistema||0, cl=p.costoLista||0, pv=p.precio||0, pv2=p.porVenta||0;
+    var mS=pv&&cs?(pv-cs)/pv:null, mL=pv&&cl?(pv-cl)/pv:null;
+    var cBase=cs||cl, mBase=cs?mS:mL, gBase=pv&&cBase?pv-cBase:null;
+    var nivel=mBase===null?'sin':(mBase<pv2?'mal':(mBase<p.minimo?'bajo':(p.objetivo&&mBase<p.objetivo?'ok':'bien')));
+    var txtNivel={sin:'Sin costo cargado: no se puede calcular el margen.',mal:'MAL: con las comisiones, cada venta pierde plata.',
+      bajo:'BAJO: no llega al margen mínimo del local ('+pct(p.minimo,0)+') para cubrir los gastos fijos.',
+      ok:'ACEPTABLE: cubre los gastos, pero está debajo del objetivo ('+pct(p.objetivo,0)+').',bien:'BIEN: llega al objetivo de margen.'}[nivel];
     h+='<div class="card"><h2>Precio y margen</h2>'+
-      '<div class="row"><span>Precio de venta</span><span>'+pesos(p.precio)+'</span></div>'+
-      '<div class="row"><span>Costo'+(p.costoLista?' (lista vigente)':' (sistema)')+'</span><span>'+pesos(p.costo)+'</span></div>'+
-      (p.costoLista&&p.costoSistema&&Math.abs(p.costoLista-p.costoSistema)>1?'<div class="row"><span>Costo en el sistema</span><span>'+pesos(p.costoSistema)+'</span></div>':'')+
-      '<div class="row"><span>Margen</span><span>'+pct(p.margen)+' · '+pesos(p.margenPesos)+'</span></div>'+
-      '<div class="eval '+p.evaluacion.nivel+'">'+esc(p.evaluacion.texto)+'</div>'+
+      '<div class="row"><span>Precio de venta</span><span>'+pesos(pv)+'</span></div>'+
+      (cs?'<div class="row"><span>Costo en el sistema</span><span>'+pesos(cs)+'</span></div>'+
+        '<div class="row"><span><b>Ganancia por unidad</b> (precio − costo)</span><span class="'+(gBase>=0?'pos':'neg')+'"><b>'+pesos(gBase)+'</b></span></div>'+
+        '<div class="row"><span><b>Margen</b></span><span><b>'+pct(mS)+'</b></span></div>':'')+
+      (!cs&&cl?'<div class="row"><span>Costo (lista vigente)</span><span>'+pesos(cl)+'</span></div>'+
+        '<div class="row"><span><b>Ganancia por unidad</b> (precio − costo)</span><span><b>'+pesos(pv-cl)+'</b></span></div>'+
+        '<div class="row"><span><b>Margen</b></span><span><b>'+pct(mL)+'</b></span></div>':'')+
+      '<div class="eval '+nivel+'">'+esc(txtNivel)+'</div>'+
+      (cs&&cl&&Math.abs(cl-cs)>1?'<div class="row" style="margin-top:8px"><span>Costo en la lista vigente (al reponer)</span><span>'+pesos(cl)+'</span></div>'+
+        '<div class="row"><span>Ganancia y margen al reponer</span><span class="'+(cl<cs?'pos':'neg')+'">'+pesos(pv-cl)+' · '+pct(mL)+'</span></div>'+
+        '<div class="note">'+(cl<cs?'La lista está más barata que el costo cargado en el sistema: actualizá el costo en Civil System (tarea CAMBIAR COSTO).':'La lista está más cara que el costo del sistema: al reponer vas a ganar menos.')+'</div>':'')+
       (p.precioSugerido?'<div class="note">Precio sugerido este mes: <b>'+pesos(p.precioSugerido)+'</b></div>':'')+'</div>';
     var dias=p.diasStock, colorD=dias===null?'':(dias<7?'neg':(dias<20?'warn':'pos'));
     h+='<div class="card"><h2>Stock</h2>'+
