@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=15;
+var APP_V=16;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -147,6 +147,14 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
         <div><label>Costo por unidad ($)</label><input id="scosto" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0"></div>
         <div><label>Cantidad que comprarías</label><input id="scant" type="number" inputmode="numeric" min="0"></div>
       </div>
+      <label>¿Dónde lo comprarías?</label>
+      <div class="seg" id="dprov" style="margin-top:0">
+        <button data-t="L" class="on">De mis listas</button>
+        <button data-t="F">Fuera de las listas</button>
+      </div>
+      <select id="sprov"></select>
+      <input id="sprovf" class="oculto" placeholder="Nombre del proveedor (no está en tus listas)" autocomplete="off">
+      <div id="sprovinfo" class="note"></div>
       <label>Precio de venta ($)</label>
       <input id="sprecio" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0">
       <input id="sslider" class="slider" type="range" min="0" max="100" step="1">
@@ -179,12 +187,13 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       </div>
       <div class="btns">
         <button class="btn" id="bpdf">⬇ Bajar propuesta (PDF) · Opción 1</button>
+        <button class="btn sec" id="bguardar">Guardar simulación (sin PDF)</button>
       </div>
       <div id="epdfmsg" class="note"></div>
     </div>
     <div class="card" id="sprop" style="margin-top:12px">
       <h2>Mis propuestas (seguimiento)</h2>
-      <div id="lprop" class="note" style="margin-top:0">Las propuestas que bajás en PDF quedan guardadas acá y en ECHU (solapa PROPUESTAS). Se compara con lo vendido de verdad.</div>
+      <div id="lprop" class="note" style="margin-top:0">Cada simulación que guardás (o bajás en PDF) queda en la planilla <b>Gestión de Compras 2026</b>. Cuando la pidas, tildá <b>“¿Se pidió?”</b> (última columna): desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.</div>
     </div>
   </section>
 </main>
@@ -286,7 +295,7 @@ function formatearMientrasEscribe(e){
 /* ---------------- RESUMEN ---------------- */
 function cargar(){
   $('sub').textContent='Cargando…';
-  api('resumen').then(function(d){D=d;ADMIN=d.admin;pintarResumen(d);recalcular()})
+  api('resumen').then(function(d){D=d;ADMIN=d.admin;PROV.lista=d.proveedores||[];pintarProveedores();pintarResumen(d);recalcular()})
     .catch(function(e){$('resumen').innerHTML=err(e);$('sub').textContent='No se pudo cargar'});
 }
 $('lbtn').onclick=entrar;
@@ -494,6 +503,8 @@ function elegirSim(p){
   SPROD=p;$('sq').value='';
   EST.t1=EST.t2=EST.tObj=false;EST.lista2=0;$('eobj').value='';
   pintarSprod();
+  PROV.modo='L';PROV.sel=p?(((p.bultos||[]).filter(function(x){return x.actual})[0]||{}).proveedor||p.proveedor||''):PROV.sel;
+  pintarProveedores();
   if(p){
     if(!$('scosto').value&&p.costo)ponerPesos('scosto',Math.round(p.costo));
     if(p.precio)ponerPesos('sprecio',Math.round(p.precio));
@@ -672,7 +683,12 @@ function mantenerPrecio(){
 }
 var _recalcOrig=recalcular;
 recalcular=function(o){_recalcOrig(o);try{calcEstrategia()}catch(e){}};
-function bultoPrincipal(){var b=(SPROD&&SPROD.bultos)||[];return b.filter(function(x){return x.unidades>1})[0]||null}
+function bultoPrincipal(){
+  if(PROV.modo==='F')return null;
+  var b=((SPROD&&SPROD.bultos)||[]).filter(function(x){return x.unidades>1});
+  if(PROV.sel){var e=b.filter(function(x){return normProv(x.proveedor)===normProv(PROV.sel)})[0];return e||null}
+  return b[0]||null;
+}
 function textoBultos(q,u){if(!u||u<=1||!q)return '';var n=Math.floor(q/u),r=q-n*u;return n&&!r?n+' bulto'+(n>1?'s':'')+' de '+u:(n?n+' bulto'+(n>1?'s':'')+' de '+u+' + '+r+' sueltas':'surtido / por unidad ('+q+' u.)')}
 // El bulto se informa dentro de "¿Cuántos comprar?": cuánto trae, cuánto te dura y si conviene.
 function htmlBulto(c,q,vm,minimo){
@@ -691,7 +707,7 @@ var ESTADO_K='sasha_estado', NO_GUARDAR=false;
 function estadoActual(){
   var t=document.querySelector('nav button.on');
   return {t:Date.now(),tab:t?t.dataset.tab:'resumen',q:$('q').value,det:DETCOD||'',sprod:SPROD,
-    scosto:$('scosto').value,scant:$('scant').value,sprecio:$('sprecio').value,
+    scosto:$('scosto').value,scant:$('scant').value,sprecio:$('sprecio').value,prov:{modo:PROV.modo,sel:PROV.sel,fuera:$('sprovf').value},
     e:{op:EST.op,lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,tObj:EST.tObj,vm:EST.vm,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,edias:$('edias').value,eobj:$('eobj').value},
     y:window.scrollY};
 }
@@ -710,6 +726,8 @@ function restaurarEstado(){
   var s=leerEstado(); if(!s)return;
   $('q').value=s.q||'';
   SPROD=s.sprod||null; pintarSprod();
+  if(s.prov){PROV.modo=s.prov.modo||'L';PROV.sel=s.prov.sel||'';$('sprovf').value=s.prov.fuera||''}
+  pintarProveedores();
   $('scosto').value=s.scosto||'';$('scant').value=s.scant||'';$('sprecio').value=s.sprecio||'';
   var e=s.e||{};
   ['e1pre','epre','epct','eaum','edias','eobj'].forEach(function(id){if(e[id]!==undefined)$(id).value=e[id]});
@@ -762,12 +780,9 @@ function bajarArchivo(bytes,nombre){
 function hoyTxt(off){var d=new Date(Date.now()+(off||0)*86400000);return ('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2)+'/'+d.getFullYear()}
 $('bpdf').onclick=function(){
   calcEstrategia(); var e=EST.ult; if(!e||!e.d.c||!e.P){$('epdfmsg').innerHTML='<b class="neg">Falta el precio de la opción elegida.</b>';return}
-  var d=e.d, P=SPROD||{}, op2=e.op===2&&e.desc>0;
+  var d=e.d, P=SPROD||{}, op2=e.op===2&&e.desc>0, pv=proveedorElegido();
   $('epdfmsg').textContent='Armando la propuesta…';
-  var datos={codigo:P.codigo||'',producto:P.producto||'Producto sin elegir',costo:d.c,cantidad:d.q||0,precioSinOferta:e.lista,precioConOferta:e.P,
-    ofertaPct:op2?Math.round(e.desc*100):0,margen:Math.round(e.m*1000)/10,gananciaUnidad:Math.round(e.gan),objetivo:e.objU,dias:e.dias,
-    ventaMensual:Math.round(e.vm*10)/10,aumento:Math.round(e.aum*100),proyeccion:Math.round(e.proy*10)/10,gananciaProyectada:Math.round(e.ganProy)};
-  var guardar=(d.q>0)?api('guardar_propuesta',{datos:JSON.stringify(datos)}).then(function(r){return r&&r.id}).catch(function(){return ''}):Promise.resolve('');
+  var guardar=(d.q>0)?guardarSimulacion(e).catch(function(){return ''}):Promise.resolve('');
   var nombre='propuesta_'+((P.codigo||'producto')+'_'+(op2?'con-oferta':'sin-oferta')+'_'+hoyTxt().replace(/\//g,'-'))+'.pdf';
   Promise.all([guardar,cargarLibPDF()]).then(function(res){
     var id=res[0];
@@ -778,7 +793,7 @@ $('bpdf').onclick=function(){
       D.sub('Opción '+e.op+': '+(op2?'con oferta (llamador)':'sin oferta')+' · simulación, no es una orden real · '+hoyTxt()+(id?' · ID '+id:''));
       D.seccion('Producto');D.fila('Producto',(P.producto||'Sin elegir').slice(0,60));D.fila('Código interno',P.codigo||'-');D.fila('Proveedor actual',P.proveedor||'-');
       if(P.costo)D.fila('Costo de hoy · stock · vende por mes',$f(P.costo)+' · '+(P.stock||0)+' u. · '+(P.ventaMensual||0).toFixed(1).replace('.',',')+' u.');
-      D.seccion('Compra');D.fila('Costo por unidad',$f(d.c));var bp=bultoPrincipal();if(bp){D.fila('Bulto ('+bp.proveedor+')',bp.unidades+' u. · '+$f(d.c*bp.unidades)+' el bulto');D.fila('Cantidad',(d.q||0)+' u. = '+textoBultos(d.q||0,bp.unidades));}else D.fila('Cantidad',(d.q||0)+' u. (sin bulto informado)');D.fila('Inversión',$f(d.c*(d.q||0)));
+      D.seccion('Compra');D.fila('Dónde comprar',pv.nombre?pv.nombre.slice(0,40)+(pv.fuera?' (fuera de las listas)':' (de mis listas)'):'sin elegir');D.fila('Costo por unidad',$f(d.c));var bp=bultoPrincipal();if(bp){D.fila('Bulto ('+bp.proveedor+')',bp.unidades+' u. · '+$f(d.c*bp.unidades)+' el bulto');D.fila('Cantidad',(d.q||0)+' u. = '+textoBultos(d.q||0,bp.unidades));}else D.fila('Cantidad',(d.q||0)+' u. (sin bulto informado)');D.fila('Inversión',$f(d.c*(d.q||0)));
       D.seccion('Para cargar en el sistema');
       if(op2){D.fila('Precio de venta (lista)',$f(e.lista));D.fila('Bonificación',Math.round(e.desc*100)+'%');D.fila('Se cobra',$f(e.P));D.fila('Vigencia de la oferta',hoyTxt()+' al '+hoyTxt(e.dias));}
       else D.fila('Precio de venta',$f(e.P));
@@ -788,28 +803,99 @@ $('bpdf').onclick=function(){
         D.fila('Proyección de ventas',e.proy.toFixed(1).replace('.',',')+' u.');D.fila('Ganancia proyectada',$f(e.ganProy),e.ganProy<0);
         var falta=Math.max(0,e.objU-e.proy);D.fila('¿Se cumple el objetivo?',falta>0?'NO: faltan '+Math.ceil(falta)+' u.':'SÍ',falta>0);
         if(falta>0)D.fila('Plata parada si no se vende',$f(falta*d.c),true);}
-      D.sub('');D.parrafo('Seguimiento: '+(id?'ECHU compara esta propuesta con las ventas reales (solapa PROPUESTAS y "Mis propuestas" en la app) y marca si se cumplió el objetivo.':'para seguirla, elegí un producto y una cantidad antes de bajarla.'));
+      D.sub('');D.parrafo('Seguimiento: '+(id?'quedó en Gestión de Compras 2026. Cuando la pidas, tildá "¿Se pidió?": desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.':'para seguirla, elegí un producto y una cantidad antes de bajarla.'));
     }).then(function(bytes){
       bajarArchivo(bytes,nombre);
-      $('epdfmsg').innerHTML='Listo: se bajó <b>'+esc(nombre)+'</b>'+(id?' y quedó guardada para el seguimiento.':(d.q>0?' (no se pudo guardar en ECHU: actualizá ECHU a la 5.13).':'.'));
+      $('epdfmsg').innerHTML='Listo: se bajó <b>'+esc(nombre)+'</b>'+(id?' y quedó guardada en Gestión de Compras 2026. Cuando la pidas, tildá “¿Se pidió?”.':(d.q>0?' (no se pudo guardar: actualizá ECHU a la 5.17).':'. Para guardarla, poné la cantidad.'));
       cargarPropuestas();
     });
+  }).catch(function(err){$('epdfmsg').innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
+};
+
+/* ---------------- ¿DÓNDE LO COMPRARÍAS? (proveedor de mis listas o de afuera) ---------------- */
+var PROV={modo:'L',sel:'',lista:[]};
+function normProv(t){return String(t||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]/g,'')}
+function proveedorElegido(){return PROV.modo==='F'?{nombre:$('sprovf').value.trim(),fuera:true}:{nombre:PROV.sel,fuera:false}}
+function listasDelProducto(){return ((SPROD&&SPROD.bultos)||[]).filter(function(x){return x.proveedor})}
+function pintarProveedores(){
+  document.querySelectorAll('#dprov button').forEach(function(b){b.classList.toggle('on',b.dataset.t===PROV.modo)});
+  $('sprov').classList.toggle('oculto',PROV.modo!=='L');
+  $('sprovf').classList.toggle('oculto',PROV.modo!=='F');
+  var conProd=listasDelProducto(), vistos={}, h='<option value="">Elegí el proveedor…</option>';
+  if(conProd.length){
+    h+='<optgroup label="Tienen este producto en la lista">';
+    conProd.forEach(function(x){var k=normProv(x.proveedor);if(vistos[k])return;vistos[k]=1;
+      h+='<option value="'+esc(x.proveedor)+'">'+esc(x.proveedor)+(x.costo?' · '+pesos(x.costo)+' c/u':'')+(x.unidades>1?' · bulto '+x.unidades:'')+(x.actual?' (el de hoy)':'')+'</option>'});
+    h+='</optgroup><optgroup label="Otros proveedores cargados">';
+  }
+  var resto=(PROV.lista||[]).filter(function(n){return !vistos[normProv(n)]});
+  if(PROV.sel&&!vistos[normProv(PROV.sel)]&&resto.map(normProv).indexOf(normProv(PROV.sel))<0)resto.unshift(PROV.sel);
+  resto.forEach(function(n){h+='<option value="'+esc(n)+'">'+esc(n)+'</option>'});
+  if(conProd.length)h+='</optgroup>';
+  $('sprov').innerHTML=h;
+  var op=Array.prototype.filter.call($('sprov').options,function(o){return o.value&&normProv(o.value)===normProv(PROV.sel)})[0];
+  $('sprov').value=op?op.value:'';
+  infoProveedor();
+}
+function infoProveedor(){
+  var t='';
+  if(PROV.modo==='F')t='Proveedor que no está en tus listas: el costo es el que cargás arriba.';
+  else if(PROV.sel){
+    var e=listasDelProducto().filter(function(x){return normProv(x.proveedor)===normProv(PROV.sel)})[0];
+    t=e?'En la lista de '+esc(e.proveedor)+': '+pesos(e.costo)+' c/u'+(e.unidades>1?' · bulto de '+e.unidades+' u':'')+'.':
+      (SPROD?'Este producto no figura en la lista de '+esc(PROV.sel)+': cargá arriba el costo que te pasaron.':'');
+  }
+  $('sprovinfo').innerHTML=t;
+}
+document.querySelectorAll('#dprov button').forEach(function(b){b.onclick=function(){PROV.modo=b.dataset.t;pintarProveedores();recalcular();guardarEstadoPronto()}});
+$('sprov').addEventListener('change',function(){
+  PROV.sel=$('sprov').value;
+  // Si ese proveedor tiene el producto en la lista, se usa su costo.
+  var e=listasDelProducto().filter(function(x){return normProv(x.proveedor)===normProv(PROV.sel)})[0];
+  if(e&&e.costo>0)ponerPesos('scosto',Math.round(e.costo*100)/100);
+  infoProveedor();recalcular();guardarEstadoPronto();
+});
+
+/* ---------------- GUARDAR LA SIMULACIÓN (planilla Gestión de Compras 2026) ---------------- */
+function datosSimulacion(e){
+  var d=e.d, P=SPROD||{}, op2=e.op===2&&e.desc>0, pv=proveedorElegido();
+  return {codigo:P.codigo||'',producto:P.producto||'Producto sin elegir',proveedor:pv.nombre,fueraDeLista:pv.fuera,
+    costo:d.c,cantidad:d.q||0,precioSinOferta:e.lista,precioConOferta:e.P,
+    ofertaPct:op2?Math.round(e.desc*100):0,margen:Math.round(e.m*1000)/10,gananciaUnidad:Math.round(e.gan),objetivo:e.objU,dias:e.dias,
+    ventaMensual:Math.round(e.vm*10)/10,aumento:Math.round(e.aum*100),proyeccion:Math.round(e.proy*10)/10,gananciaProyectada:Math.round(e.ganProy)};
+}
+function guardarSimulacion(e){return api('guardar_propuesta',{datos:JSON.stringify(datosSimulacion(e))}).then(function(r){return r&&r.id})}
+$('bguardar').onclick=function(){
+  calcEstrategia(); var e=EST.ult;
+  if(!e||!e.d.c||!e.P){$('epdfmsg').innerHTML='<b class="neg">Falta el costo o el precio.</b>';return}
+  if(!e.d.q){$('epdfmsg').innerHTML='<b class="neg">Poné la cantidad que comprarías para guardarla.</b>';return}
+  $('epdfmsg').textContent='Guardando…';
+  guardarSimulacion(e).then(function(id){
+    $('epdfmsg').innerHTML='Listo: quedó en <b>Gestión de Compras 2026</b>'+(id?' ('+esc(id)+')':'')+'. Cuando la pidas, tildá <b>“¿Se pidió?”</b>.';
+    cargarPropuestas();
   }).catch(function(err){$('epdfmsg').innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
 };
 
 function cargarPropuestas(){
   if(!CFG.token)return;
   api('propuestas').then(function(l){
-    if(!l||!l.length){$('lprop').innerHTML='Todavía no hay propuestas. Bajá una en PDF y queda guardada acá.';return}
+    if(!l||!l.length){$('lprop').innerHTML='Todavía no hay simulaciones guardadas. Guardá una (o bajala en PDF) y queda acá.';return}
     $('lprop').innerHTML=l.slice(0,20).map(function(x){
-      var ch=/CUMPLIDO/.test(x.estado)?'v':(/NO SE/.test(x.estado)?'r':'a');
-      return '<div style="padding:8px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(x.producto)+'</b><span class="chip '+ch+'">'+esc(x.estado)+'</span></div>'+
-        '<div>'+esc(x.fecha)+' → '+esc(x.hasta)+' · '+(x.precioSinOferta>x.precioConOferta?'con oferta: '+pesos(x.precioSinOferta)+' → '+pesos(x.precioConOferta):'sin oferta: '+pesos(x.precioConOferta))+' · objetivo '+$$(x.objetivo)+' u.</div>'+
-        '<div class="bar"><i style="width:'+Math.min(100,(x.avance||0)*100)+'%;background:'+(ch==='v'?'var(--verde)':ch==='r'?'var(--rojo)':'var(--azul2)')+'"></i></div>'+
-        '<div>Vendidas '+$$(x.vendidas)+' de '+$$(x.objetivo)+' ('+pct(x.avance||0,0)+')'+(x.margenReal!==null?' · margen real '+pct(x.margenReal):'')+(x.parada?' · <b class="neg">plata parada '+pesos(x.parada)+'</b>':'')+'</div></div>';
+      var est=x.estado||'', ch=/✔/.test(est)?'v':(/NO LLEG/.test(est)?'r':(/PEDIDA|VENDIENDO/.test(est)?'c':'a'));
+      var h='<div style="padding:8px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(x.producto)+'</b><span class="chip '+ch+'">'+(x.pedido?'pedida':'sin pedir')+'</span></div>'+
+        '<div>'+esc(x.fecha)+' · '+(x.proveedor?esc(x.proveedor)+(x.fueraDeLista?' (fuera de las listas)':''):'proveedor sin elegir')+' · '+$$(x.cantidad)+' u. a '+pesos(x.costo)+'</div>'+
+        '<div>'+(x.precioSinOferta>x.precioConOferta+1?'con oferta: '+pesos(x.precioSinOferta)+' → '+pesos(x.precioConOferta):'sin oferta: '+pesos(x.precioConOferta))+' · objetivo '+$$(x.objetivo)+' u. en '+$$(x.dias)+' días</div>';
+      if(x.llego){
+        h+='<div class="bar"><i style="width:'+Math.min(100,(x.avance||0)*100)+'%;background:'+(ch==='v'?'var(--verde)':ch==='r'?'var(--rojo)':'var(--azul2)')+'"></i></div>'+
+          '<div>Llegó el '+esc(x.llego)+(x.entraron?' ('+$$(x.entraron)+' u.)':'')+' · vendidas <b>'+$$(x.vendidas)+'</b> en '+$$(x.diasDesde)+' días'+(x.ritmo!==null?' · '+String(Math.round(x.ritmo*10)/10).replace('.',',')+' por mes':'')+
+          (typeof x.resto==='number'&&x.resto>0?' · lo que queda se vende en ~'+$$(x.resto)+' días':'')+'</div>';
+      }
+      h+='<div class="note" style="margin-top:4px"><b class="'+(ch==='v'?'pos':ch==='r'?'neg':'')+'">'+esc(est)+'</b></div></div>';
+      return h;
     }).join('');
-  }).catch(function(){$('lprop').innerHTML='Para ver el seguimiento, actualizá ECHU a la versión 5.13.'});
+  }).catch(function(){$('lprop').innerHTML='Para ver el seguimiento, actualizá ECHU a la versión 5.17.'});
 }
+
 document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',cargarPropuestas);
 </script>
 </body>
