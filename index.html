@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=25;
+var APP_V=26;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -544,15 +544,16 @@ function evaluarRotacion(p,costo){
     var n0=m<p.minimo?'bajo':'bien';
     return {nivel:n0,texto:n0==='bajo'?'BAJO: no llega al margen mínimo del local ('+pct(p.minimo,0)+').':'BIEN: cubre el margen mínimo del local.',filas:''};
   }
+  var PG=cg.etapa===2?'su parte de los gastos y de la ganancia':'su parte de los gastos';
   var k=cg.porVenta||0, fijo=cg.porProducto, parte=fijo+k*vm*pv, deja=gan*vm;
   var porUnidadLibre=gan-k*pv;                       // lo que le queda por unidad después de su % de gastos
   var necesita=porUnidadLibre>0?fijo/porUnidadLibre:null;
   var pNec=precioParaParte(cg,vm,costo,com), mNec=pNec?1-costo/pNec:null;
   var pMinimo=Math.ceil(costo/Math.max(0.01,1-com-k)/10)*10;  // debajo de esto no llega aunque venda mucho
   var nivel, texto;
-  if(necesita===null){nivel='mal';texto='NO LLEGA: con este precio no paga su parte de los gastos aunque venda mucho. Tendría que costar más de '+pesos(pMinimo)+(pNec?' (con lo que vende, '+pesos(pNec)+')':'')+'.'}
-  else if(vm<=0){nivel='bajo';texto='SIN VENTAS en los últimos 3 meses: no paga su parte de los gastos. Con este precio tendría que vender '+u(necesita)+' u. por mes.'}
-  else if(deja>=parte){nivel='bien';texto='BIEN: vende '+u(vm)+' u. por mes y le alcanza con '+u(necesita)+' para pagar su parte de los gastos.'+
+  if(necesita===null){nivel='mal';texto='NO LLEGA: con este precio no paga '+PG+' aunque venda mucho. Tendría que costar más de '+pesos(pMinimo)+(pNec?' (con lo que vende, '+pesos(pNec)+')':'')+'.'}
+  else if(vm<=0){nivel='bajo';texto='SIN VENTAS en los últimos 3 meses: no paga '+PG+'. Con este precio tendría que vender '+u(necesita)+' u. por mes.'}
+  else if(deja>=parte){nivel='bien';texto='BIEN: vende '+u(vm)+' u. por mes y le alcanza con '+u(necesita)+' para pagar '+PG+'.'+
     (m<p.minimo?' Aunque el margen ('+pct(m,0)+') sea menor que el promedio del local ('+pct(p.minimo,0)+'), con lo que vende ya paga su parte.':'')}
   else if(deja>=parte*0.75){nivel='ok';texto='CASI: tiene que vender '+u(necesita)+' u. por mes y vende '+u(vm)+'.'+(pNec&&pNec>pv?' O el precio tendría que ser '+pesos(pNec)+' (margen '+pct(mNec,0)+').':'')}
   else {nivel='bajo';texto='BAJO: tiene que vender '+u(necesita)+' u. por mes y vende '+u(vm)+'.'+(pNec&&pNec>pv?' Con lo que vende, el precio tendría que ser '+pesos(pNec)+' (margen '+pct(mNec,0)+').':'')}
@@ -560,10 +561,10 @@ function evaluarRotacion(p,costo){
   var filas='<div class="row" style="margin-top:8px"><span>Vende por mes (venta real)</span><span>'+u(vm)+' u.</span></div>'+
     (reg!==null&&reg!==undefined&&vm>reg*1.1?'<div class="note" style="margin-top:0">Registradas: '+u(reg)+' u. por mes. Estuvo días sin stock, por eso se calcula con lo que vende cuando hay.</div>':'')+
     '<div class="row"><span>Deja por mes</span><span class="'+(deja>=parte?'pos':'neg')+'">'+pesos(deja)+'</span></div>'+
-    '<div class="row"><span>Su parte de los gastos</span><span>'+pesos(parte)+' por mes</span></div>'+
+    '<div class="row"><span>'+(cg.etapa===2?'Su parte de gastos y ganancia':'Su parte de los gastos')+'</span><span>'+pesos(parte)+' por mes</span></div>'+
     '<div class="row"><span>Tiene que vender (con este precio)</span><span>'+(necesita===null?'<b class="neg">no llega</b>':u(necesita)+' u. por mes')+'</span></div>'+
     (mNec!==null?'<div class="row"><span>Margen que necesita (vendiendo '+u(vm)+' u.)</span><span>'+pct(mNec,0)+' · '+pesos(pNec)+'</span></div>':'')+
-    '<div class="note">Su parte = '+pesos(fijo)+' por tenerlo en el local + '+pct(k,1)+' de lo que vende. Los gastos fijos ('+pesos(cg.fijos)+') se reparten mitad entre los '+$$(cg.n)+' productos que se venden y mitad según lo que vende cada uno: los masivos pueden ir con menos margen y los de nicho necesitan más.</div>';
+    '<div class="note">'+(cg.etapa===2?'<b>Etapa 2 · ganar plata</b>: el local ya cubre los gastos, ahora se suma la ganancia que buscás ('+pesos(cg.ganancia)+' por mes). ':'<b>Etapa 1 · no perder plata</b>: primero que cada producto cubra su parte de los gastos; cuando el local los cubra, se suma la ganancia que buscás. ')+'Su parte = '+pesos(fijo)+' por tenerlo en el local + '+pct(k,1)+' de lo que vende. '+(cg.etapa===2?'Gastos y ganancia ('+pesos(cg.monto)+')':'Los gastos fijos ('+pesos(cg.fijos)+')')+' se reparten mitad entre los '+$$(cg.n)+' productos que se venden y mitad según lo que vende cada uno: los masivos pueden ir con menos margen y los de nicho necesitan más.</div>';
   return {nivel:nivel,texto:texto,filas:filas};
 }
 function verProducto(c){
