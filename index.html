@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=19;
+var APP_V=20;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -33,7 +33,7 @@ header{background:var(--azul);color:#fff;padding:calc(14px + env(safe-area-inset
 header h1{margin:0;font-size:19px;font-weight:600}
 header .sub{font-size:12px;opacity:.75;margin-top:2px}
 nav{display:flex;gap:4px;margin-top:10px}
-nav button{flex:1;background:transparent;border:0;color:#cfd8e3;padding:10px 4px;font-size:14px;font-weight:600;border-bottom:3px solid transparent;cursor:pointer}
+nav button{flex:1;white-space:nowrap;background:transparent;border:0;color:#cfd8e3;padding:10px 4px;font-size:14px;font-weight:600;border-bottom:3px solid transparent;cursor:pointer}
 nav button.on{color:#fff;border-bottom-color:#8ab4f8}
 main{max-width:980px;margin:0 auto;padding:14px 16px 40px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
@@ -123,6 +123,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
     <button class="on" data-tab="resumen">Resumen</button>
     <button data-tab="productos">Productos</button>
     <button data-tab="simulador">Simular compra</button>
+    <button data-tab="ajustes" style="flex:0 0 auto;padding:10px 8px" aria-label="Ajustes">⚙</button>
   </nav>
 </header>
 <div id="estado" class="estado oculto"></div>
@@ -212,6 +213,19 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <div id="lprop" class="note" style="margin-top:0">Cada simulación que guardás (o bajás en PDF) queda en la planilla <b>Gestión de Compras 2026</b>. Cuando la pidas, tildá <b>“¿Se pidió?”</b> (última columna): desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.</div>
     </div>
   </section>
+
+  <section id="ajustes" class="oculto">
+    <div class="card">
+      <h2>Productos que no cuentan en las estadísticas</h2>
+      <div class="note" style="margin-top:0">Bolsas, regalos o insumos que registrás solo para controlar el stock. No cuentan en contribución, rankings, márgenes ni en las tareas de margen o precio. Siguen en stock y compras.</div>
+      <label>Agregar un producto</label>
+      <input id="aq" placeholder="Nombre, código o código de barras" autocomplete="off">
+      <div class="lista" id="aresultados"></div>
+      <div id="amsg" class="note"></div>
+      <div id="alista" class="lista"><div class="note">Cargando…</div></div>
+      <div class="note">Los rankings se corrigen enseguida. Lo demás (contribución, márgenes y tareas) en el próximo Actualizar de ECHU.</div>
+    </div>
+  </section>
 </main>
 </div>
 
@@ -261,7 +275,7 @@ function entrar(){
   api('login',{pin:$('lpin').value.trim()}).then(function(j){CFG.token=j.token;guardarCfg();$('lpin').value='';arrancar()})
    .catch(function(e){$('lerr').textContent=/Failed to fetch|RED|no respondió/.test(e.message)?'No se pudo conectar con ECHU. Revisá la dirección y que esté publicada para "Cualquier persona".':e.message;$('campoUrl').style.display=''});
 }
-function arrancar(){$('login').classList.add('oculto');$('app').classList.remove('oculto');try{restaurarEstado()}catch(e){}cargar()}
+function arrancar(){$('login').classList.add('oculto');$('app').classList.remove('oculto');try{restaurarEstado()}catch(e){}cargar();setTimeout(function(){cargarSinEst()},1500)}
 
 var DETCOD='', D=null, ADMIN={porVenta:0.03,minimo:0.5,deseado:0.6,fijos:0}, SPROD=null;
 function $(id){return document.getElementById(id)}
@@ -274,7 +288,7 @@ function err(e){return '<div class="card"><b class="neg">Error:</b> '+esc(e&&e.m
 
 document.querySelectorAll('nav button').forEach(function(b){b.onclick=function(){
   document.querySelectorAll('nav button').forEach(function(x){x.classList.toggle('on',x===b)});
-  ['resumen','productos','simulador'].forEach(function(t){$(t).classList.toggle('oculto',t!==b.dataset.tab)});
+  ['resumen','productos','simulador','ajustes'].forEach(function(t){$(t).classList.toggle('oculto',t!==b.dataset.tab)});
   window.scrollTo(0,0);
 }});
 function irA(tab){document.querySelector('nav button[data-tab="'+tab+'"]').click()}
@@ -414,7 +428,7 @@ function buscador(input,cont,alElegir){
         if(q!==ult)return;
         if(!r.length){cont.innerHTML='<div class="note">No encontré nada.</div>';return}
         cont.innerHTML=r.map(function(p){return '<div class="item" data-c="'+esc(p.codigo)+'"><div class="dot '+(p.descontinuado?'D':'A')+'">'+(p.descontinuado?'D':'A')+'</div><div class="n"><div>'+esc(p.producto)+'</div><div><b style="color:#000">'+esc(p.codigo)+'</b> · '+esc(p.proveedor)+(p.precio?' · '+pesos(p.precio):'')+'</div></div></div>'}).join('');
-        cont.querySelectorAll('.item').forEach(function(el){el.onclick=function(){cont.innerHTML='';alElegir(el.dataset.c)}});
+        cont.querySelectorAll('.item').forEach(function(el){el.onclick=function(){var nom=(el.querySelector('.n div')||{}).textContent||'';cont.innerHTML='';alElegir(el.dataset.c,nom)}});
       }).catch(function(e){cont.innerHTML=err(e)});
     },350);
   });
@@ -498,10 +512,12 @@ function verProducto(c){
       ((p.bultos||[]).filter(function(x){return x.unidades>1}).slice(0,1).map(function(x){return '<div class="row"><span>Bulto ('+esc(x.proveedor)+')</span><span>'+x.unidades+' u. · '+pesos(x.costo*x.unidades)+'</span></div>'}).join(''))+
       (p.mejorCosto?'<div class="eval bien">Más barato en '+esc(p.mejorDonde)+': '+pesos(p.mejorCosto)+' ('+pct(1-p.mejorCosto/p.costo,0)+' menos). Con ese costo el margen sería '+pct(p.precio?(p.precio-p.mejorCosto)/p.precio:null)+'.</div>':'<div class="note">No hay un costo más barato en otra lista vigente.</div>')+
       (f.recomendacion?'<div class="note"><b>'+esc(f.recomendacion)+'</b></div>':'')+
-      '<div class="btns"><button class="btn" id="bsim">Simular una compra de este producto</button></div></div>';
+      '<div class="btns"><button class="btn" id="bsim">Simular una compra de este producto</button></div>'+
+      '<div class="btns"><button class="btn sec" id="bsinest"></button></div><div class="note" id="sinestmsg"></div></div>';
     h+='</div>'+(window.__ventasHtml||'');
     $('detalle').innerHTML=h;
     $('bsim').onclick=function(){elegirSim(p);irA('simulador')};
+    pintarBotonSinEst(p);
   }).catch(function(e){$('detalle').innerHTML=err(e)});
 }
 
@@ -1047,6 +1063,46 @@ function pintarRanking(){
 document.querySelectorAll('#rseg button').forEach(function(b){b.onclick=function(){RTAB=b.dataset.r;RVER=20;pintarRanking();guardarEstadoPronto()}});
 $('rmas').onclick=function(){RVER+=30;pintarRanking()};
 document.querySelector('nav button[data-tab="productos"]').addEventListener('click',cargarRanking);
+
+/* ---------------- PRODUCTOS SIN ESTADÍSTICA (Ajustes y ficha del producto) ---------------- */
+var SINEST=null;
+function esSinEst(c){return (SINEST||[]).some(function(x){return String(x.codigo)===String(c)})}
+function cargarSinEst(){
+  if(!CFG.token)return Promise.resolve();
+  return api('sin_estadistica').then(function(l){SINEST=l||[];pintarSinEst()})
+    .catch(function(e){$('alista').innerHTML=/Acci/i.test(e.message)?'<div class="note">Para usar esto, actualizá ECHU a la versión 5.22 (Nueva versión).</div>':err(e)});
+}
+function pintarSinEst(){
+  if(!SINEST){return}
+  $('alista').innerHTML=SINEST.length?SINEST.map(function(x,i){
+    return '<div class="item" style="cursor:default"><div class="n" style="flex:1"><div style="font-weight:600">'+esc(x.producto||'(sin nombre)')+'</div>'+
+      '<div class="rk"><b style="color:#000">'+esc(x.codigo)+'</b>'+(x.desde?' · desde el '+esc(x.desde):'')+'</div></div>'+
+      '<button class="btn sec" style="flex:none;padding:8px 10px;font-size:13px" onclick="marcarSinEst(\''+esc(x.codigo)+'\',false,\'\',this)">Volver a contar</button></div>';
+  }).join(''):'<div class="note">Todavía no excluiste ningún producto.</div>';
+}
+function marcarSinEst(codigo,excluir,nombre,btn){
+  if(btn)btn.disabled=true;
+  var msg=$('amsg');msg.textContent=excluir?'Excluyendo…':'Volviendo a contar…';
+  return api('sin_estadistica',{codigo:codigo,excluir:excluir?1:0,producto:nombre||''}).then(function(l){
+    SINEST=l||[];pintarSinEst();RANK=null;
+    msg.innerHTML=excluir?'Listo: <b>'+esc(nombre||codigo)+'</b> ya no cuenta en las estadísticas.':'Listo: vuelve a contar en las estadísticas.';
+    if(!$('productos').classList.contains('oculto'))cargarRanking();
+    return l;
+  }).catch(function(e){msg.innerHTML='<b class="neg">'+esc(e.message)+'</b>';if(btn)btn.disabled=false});
+}
+function pintarBotonSinEst(p){
+  var b=$('bsinest'); if(!b)return;
+  if(!SINEST){b.textContent='…';cargarSinEst().then(function(){if(SINEST)pintarBotonSinEst(p)});return}
+  var fuera=esSinEst(p.codigo);
+  b.textContent=fuera?'Volver a contarlo en las estadísticas':'No contarlo en las estadísticas (bolsas, regalos…)';
+  $('sinestmsg').innerHTML=fuera?'Este producto <b>no cuenta</b> en contribución, rankings ni márgenes.':'';
+  b.onclick=function(){
+    b.disabled=true;
+    marcarSinEst(p.codigo,!fuera,p.producto).then(function(){b.disabled=false;pintarBotonSinEst(p)});
+  };
+}
+buscador($('aq'),$('aresultados'),function(c,nombre){$('aq').value='';marcarSinEst(c,true,nombre)});
+document.querySelector('nav button[data-tab="ajustes"]').addEventListener('click',function(){if(!SINEST)cargarSinEst()});
 </script>
 </body>
 </html>
