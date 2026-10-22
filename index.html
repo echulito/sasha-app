@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=18;
+var APP_V=19;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -63,6 +63,9 @@ input,select{font:inherit;padding:11px 12px;border:1px solid #c7ccd1;border-radi
 input:focus{outline:2px solid var(--azul2);border-color:transparent}
 label{font-size:12px;color:var(--gris);font-weight:600;display:block;margin:10px 0 4px}
 .lista{margin-top:10px}
+.seg4{flex-wrap:wrap}.seg4 button{flex:1 1 45%}
+.rk{font-size:12px;color:var(--gris);margin-top:2px}.rk b{color:var(--txt)}
+.num{width:28px;height:28px;border-radius:50%;background:var(--celeste);color:var(--azul2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
 .item{background:#fff;border:1px solid var(--linea);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;gap:10px;align-items:center}
 .item:hover{border-color:var(--azul2)}
 .item .n{flex:1}.item .n div:first-child{font-weight:600}.item .n div:last-child{font-size:12px;color:var(--gris)}
@@ -133,6 +136,18 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <div class="lista" id="resultados"></div>
     </div>
     <div id="detalle" style="margin-top:12px"></div>
+    <div class="card" id="rank" style="margin-top:12px">
+      <h2>Rankings (últimos 90 días, promedio por mes)</h2>
+      <div class="seg seg4" id="rseg" style="margin-top:0">
+        <button data-r="vendidos" class="on">Más vendidos</button>
+        <button data-r="contribuyen">Más contribuyen</button>
+        <button data-r="facturan">Más facturan</button>
+        <button data-r="pierden">Pierden plata</button>
+      </div>
+      <div id="rnota" class="note"></div>
+      <div id="rlista" class="lista"><div class="note">Cargando…</div></div>
+      <div class="btns"><button class="btn sec oculto" id="rmas">Ver más</button></div>
+    </div>
   </section>
 
   <section id="simulador" class="oculto">
@@ -710,7 +725,7 @@ function estadoActual(){
   return {t:Date.now(),tab:t?t.dataset.tab:'resumen',q:$('q').value,det:DETCOD||'',sprod:SPROD,
     scosto:$('scosto').value,scant:$('scant').value,sprecio:$('sprecio').value,prov:{modo:PROV.modo,sel:PROV.sel,fuera:$('sprovf').value},
     e:{op:EST.op,editId:EST.editId||'',lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,tObj:EST.tObj,vm:EST.vm,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,edias:$('edias').value,eobj:$('eobj').value},
-    y:window.scrollY};
+    rtab:RTAB,y:window.scrollY};
 }
 function guardarEstado(){if(NO_GUARDAR||$('app').classList.contains('oculto'))return;try{var s=JSON.stringify(estadoActual());sessionStorage.setItem(ESTADO_K,s);localStorage.setItem(ESTADO_K,s)}catch(e){}}
 var _tGuardar=null;
@@ -734,6 +749,7 @@ function restaurarEstado(){
   ['e1pre','epre','epct','eaum','edias','eobj'].forEach(function(id){if(e[id]!==undefined)$(id).value=e[id]});
   EST.t1=!!e.t1;EST.t2=!!e.t2;EST.lista2=e.lista2||0;EST.editId=e.editId||'';pintarEdicion();EST.tObj=!!e.tObj;EST.vm=e.vm||0;
   elegirOpcion(e.op===2?2:1);
+  if(s.rtab)RTAB=s.rtab;
   if(s.det)verProducto(s.det);
   if(s.tab&&s.tab!=='resumen')irA(s.tab);
   recalcular();
@@ -987,6 +1003,50 @@ function cargarPropuestas(){
 }
 
 document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',function(){cargarPropuestas();cargarLibPDF().catch(function(){})});
+
+/* ---------------- RANKINGS (solapa Productos) ---------------- */
+var RANK=null, RTAB='vendidos', RVER=20, RCARGANDO=false;
+var RTXT={vendidos:'Los que más unidades venden.',contribuyen:'Los que más plata te dejan (venta − costo de reponer − comisiones). Son los que no pueden faltar.',
+  facturan:'Los que más facturan (no siempre son los que más dejan).',pierden:'Venden por debajo de lo que cuesta reponerlos más comisiones: cada venta te hace perder.'};
+function cargarRanking(){
+  if(RANK||RCARGANDO||!CFG.token)return;
+  RCARGANDO=true;$('rlista').innerHTML='<div class="note">Cargando…</div>';
+  api('ranking').then(function(r){RCARGANDO=false;RANK=r||{};pintarRanking()})
+    .catch(function(e){RCARGANDO=false;$('rlista').innerHTML=/accion|Acci/i.test(e.message)?'<div class="note">Para ver los rankings, actualizá ECHU a la versión 5.21 (Nueva versión).</div>':err(e)});
+}
+function pintarRanking(){
+  document.querySelectorAll('#rseg button').forEach(function(b){b.classList.toggle('on',b.dataset.r===RTAB)});
+  if(!RANK)return;
+  if(!RANK.listas){$('rlista').innerHTML='<div class="note">'+esc(RANK.mensaje||'Sin datos.')+'</div>';$('rmas').classList.add('oculto');return}
+  var l=RANK.listas[RTAB]||[], tc=RANK.totalContribMes||0;
+  $('rnota').innerHTML=esc(RTXT[RTAB])+' Tocá uno para ver su ficha.';
+  if(!l.length){$('rlista').innerHTML='<div class="note">'+(RTAB==='pierden'?'Ningún producto pierde plata.':'Sin datos.')+'</div>';$('rmas').classList.add('oculto');return}
+  var u=function(x){return String(Math.round(x*10)/10).replace('.',',')};
+  var clase={ESTRELLA:'v',VOLUMEN:'c',NICHO:'a',REVISAR:'a',PIERDE:'r'};
+  $('rlista').innerHTML=l.slice(0,RVER).map(function(x,i){
+    var dato={
+      vendidos:'<b>'+u(x.unidadesMes)+' u. por mes</b> · factura '+pesos(x.factMes)+' · deja '+pesos(x.contribMes),
+      contribuyen:'<b>deja '+pesos(x.contribMes)+' por mes</b>'+(tc>0&&x.contribMes>0?' ('+pct(x.contribMes/tc)+' del total)':'')+' · '+u(x.unidadesMes)+' u. · margen '+pct(x.margen,0),
+      facturan:'<b>'+pesos(x.factMes)+' por mes</b> · '+u(x.unidadesMes)+' u. · deja '+pesos(x.contribMes),
+      pierden:'<b class="neg">pierde '+pesos(-x.contribMes)+' por mes</b> · '+pesos(x.porUnidad)+' por unidad · '+u(x.unidadesMes)+' u.'
+    }[RTAB];
+    return '<div class="item" data-c="'+esc(x.codigo)+'"><div class="num">'+(i+1)+'</div><div class="n" style="flex:1">'+
+      '<div style="font-weight:600">'+esc(x.producto)+'</div>'+
+      '<div class="rk"><b style="color:#000">'+esc(x.codigo)+'</b> · '+esc(x.proveedor||'-')+
+      (x.clase?' <span class="chip '+(clase[x.clase]||'c')+'" style="font-size:10px;padding:1px 6px">'+(x.clase==='ESTRELLA'?'⭐ ':'')+esc(x.clase)+'</span>':'')+
+      (x.stock!==null&&x.stock<=0?' <span class="chip r" style="font-size:10px;padding:1px 6px">SIN STOCK</span>':'')+'</div>'+
+      '<div class="rk">'+dato+'</div></div></div>';
+  }).join('');
+  $('rmas').classList.toggle('oculto',l.length<=RVER);
+  $('rlista').querySelectorAll('.item').forEach(function(el){el.onclick=function(){
+    verProducto(el.dataset.c);
+    var alto=(document.querySelector('header')||{}).offsetHeight||0;
+    window.scrollTo({top:$('detalle').getBoundingClientRect().top+window.scrollY-alto-10,behavior:'smooth'});
+  }});
+}
+document.querySelectorAll('#rseg button').forEach(function(b){b.onclick=function(){RTAB=b.dataset.r;RVER=20;pintarRanking();guardarEstadoPronto()}});
+$('rmas').onclick=function(){RVER+=30;pintarRanking()};
+document.querySelector('nav button[data-tab="productos"]').addEventListener('click',cargarRanking);
 </script>
 </body>
 </html>
