@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=24;
+var APP_V=25;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -524,6 +524,10 @@ window.addEventListener('popstate',function(){cerrarFicha(true)});
    Su parte = una cuota fija por tenerlo (la mitad de los gastos ÷ productos que se venden) + un % de lo que
    vende (la otra mitad, según su venta). Masivo: carga poco por unidad y puede ir con menos margen.
    Nicho: necesita más margen. La venta es la REAL (sin contar los días que estuvo sin stock). */
+function precioParteSim(c){
+  if(!SPROD||!SPROD.cuotaGastos||!SPROD.cuotaGastos.porProducto||!((SPROD.ventaMensual||0)>0)||SPROD.sinEstadistica)return null;
+  return precioParaParte(SPROD.cuotaGastos,SPROD.ventaMensual,c,ADMIN.porVenta||0);
+}
 function precioParaParte(cg,vm,costo,com){
   if(!cg||!cg.porProducto||!(vm>0))return null;
   var den=1-com-(cg.porVenta||0); if(den<=0)return null;
@@ -678,17 +682,20 @@ function recalcular(origen){
   var c=num('scosto')||0, q=+$('scant').value||0, P=num('sprecio')||0;
   var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=objetivoSim();
   if(!c){$('sres').innerHTML='<div class="card note">Cargá el costo por unidad para empezar.</div>';$('smarcas').innerHTML='';return}
-  var pNoPerder=precioPara(c,pv), pMin=precioPara(c,mn), pObj=precioPara(c,obj);
+  var pNoPerder=precioPara(c,pv), pMin=precioPara(c,mn), pObj=precioPara(c,obj), mnLocal=mn;
+  // Con el producto elegido, el "mínimo" es el precio para pagar SU parte de los gastos (según lo que vende).
+  var pParte=precioParteSim(c);
+  if(pParte){pMin=pParte;mn=Math.max(0,1-c/pParte)}
   if(!P){P=pObj;if(document.activeElement!==$('sprecio'))ponerPesos('sprecio',P)}
   var m=P>0?(P-c)/P:0;
   if(origen!=='slider')$('sslider').value=Math.max(0,Math.min(90,Math.round(m*100)));
   $('sslider').max=90;
   var marca=function(v,t){return '<span style="left:'+(v/90*100)+'%">'+t+'</span>'};
-  $('smarcas').innerHTML=marca(pv*100,'▲ no perder')+marca(mn*100,'▲ mínimo')+marca(Math.min(89,obj*100),'<span style="position:relative;top:12px">▲ deseado</span>');
+  $('smarcas').innerHTML=marca(pv*100,'▲ no perder')+marca(mn*100,pParte?'▲ su parte':'▲ mínimo')+marca(Math.min(89,obj*100),'<span style="position:relative;top:12px">▲ deseado</span>');
   var ganU=P*(1-pv)-c, nivel=m<pv?'mal':(m<mn?'bajo':(m<obj?'ok':'bien'));
   var txt={mal:'PERDÉS PLATA en cada venta.',bajo:'Ganás algo, pero no cubre los gastos del local.',ok:'Cubre los gastos del local. Todavía podés sacarle más.',bien:'Llega a tu margen deseado.'}[nivel];
   // Con el producto elegido: se juzga por rotación (lo que deja por mes contra su parte de los gastos).
-  var evR=SPROD&&SPROD.cuotaGastos&&SPROD.cuotaGastos.porProducto&&(SPROD.ventaMensual||0)>0?evaluarRotacion({precio:P,porVenta:pv,ventaMensual:SPROD.ventaMensual,ventaRegistradaMes:SPROD.ventaRegistradaMes,cuotaGastos:SPROD.cuotaGastos,minimo:mn,sinEstadistica:SPROD.sinEstadistica},c):null;
+  var evR=SPROD&&SPROD.cuotaGastos&&SPROD.cuotaGastos.porProducto&&(SPROD.ventaMensual||0)>0?evaluarRotacion({precio:P,porVenta:pv,ventaMensual:SPROD.ventaMensual,ventaRegistradaMes:SPROD.ventaRegistradaMes,cuotaGastos:SPROD.cuotaGastos,minimo:mnLocal,sinEstadistica:SPROD.sinEstadistica},c):null;
   if(evR&&evR.nivel!=='sin'){nivel=evR.nivel==='mal'?'mal':evR.nivel;txt=evR.texto}
   var colorM={mal:'var(--rojo)',bajo:'var(--rojo)',ok:'var(--amar)',bien:'var(--verde)'}[nivel];
   var h='<div class="grid">';
@@ -697,10 +704,10 @@ function recalcular(origen){
     '<div class="row"><span>Ganancia por unidad (después de comisiones)</span><span class="'+(ganU>=0?'pos':'neg')+'">'+pesos(ganU)+'</span></div></div>';
   h+='<div class="card"><h2>¿A cuánto venderlo?</h2>'+
     '<div class="row"><span>Para no perder (costo + comisiones)</span><span>'+pesos(pNoPerder)+'</span></div>'+
-    '<div class="row"><span>Para cubrir los gastos del local ('+pct(mn,0)+')</span><span>'+pesos(pMin)+'</span></div>'+
-    (evR&&precioParaParte(SPROD.cuotaGastos,SPROD.ventaMensual,c,pv)?'<div class="row"><span>Para pagar su parte de los gastos vendiendo '+(Math.round(SPROD.ventaMensual*10)/10).toLocaleString('es-AR')+' u. por mes</span><span>'+pesos(precioParaParte(SPROD.cuotaGastos,SPROD.ventaMensual,c,pv))+'</span></div>':'')+
+    (pParte?'<div class="row"><span>Para pagar su parte de los gastos vendiendo '+(Math.round(SPROD.ventaMensual*10)/10).toLocaleString('es-AR')+' u. por mes ('+pct(mn,0)+')</span><span>'+pesos(pParte)+'</span></div>'
+      :'<div class="row"><span>Para cubrir los gastos del local ('+pct(mn,0)+', promedio)</span><span>'+pesos(pMin)+'</span></div>')+
     '<div class="row"><span>Para llegar a tu margen deseado ('+pct(obj,0)+')</span><span class="pos">'+pesos(pObj)+'</span></div>'+
-    '<div class="btns"><button class="btn sec" onclick="setPrecio('+pMin+')">Usar mínimo</button><button class="btn" onclick="setPrecio('+pObj+')">Usar deseado</button></div></div>';
+    '<div class="btns"><button class="btn sec" onclick="setPrecio('+pMin+')">'+(pParte?'Usar su parte':'Usar mínimo')+'</button><button class="btn" onclick="setPrecio('+pObj+')">Usar deseado</button></div></div>';
   if(q>0){
     var inv=q*c, recup=P*(1-pv)>0?Math.ceil(inv/(P*(1-pv))):null, cubre=(1-mn)>0&&P>0?Math.ceil(inv/(P*(1-mn))):null;
     var vm=SPROD?SPROD.ventaMensual:0;
@@ -752,7 +759,8 @@ function objetivoSim(){return ADMIN.deseado||(SPROD&&SPROD.objetivo)||0}
 function datosSim(){
   var c=num('scosto')||0, q=+$('scant').value||0;
   var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=objetivoSim();
-  return {c:c,q:q,pv:pv,mn:mn,obj:obj,pMin:precioPara(c,mn),pObj:precioPara(c,obj)};
+  var pParte=precioParteSim(c);
+  return {c:c,q:q,pv:pv,mn:pParte?Math.max(0,1-c/pParte):mn,obj:obj,pMin:pParte||precioPara(c,mn),pObj:precioPara(c,obj),parte:!!pParte};
 }
 function elegirOpcion(o){
   EST.op=o;
@@ -792,7 +800,7 @@ function htmlOpcion(e){
       (e.objU>0?(falta<=0?'<div class="eval bien">Cumple el objetivo de '+$$(e.objU)+' u.</div>'
         :'<div class="eval bajo">No llega al objetivo: faltan '+Math.ceil(falta)+' u. Si no se venden, quedan '+pesos(falta*d.c)+' de plata parada.</div>'):'');
   }
-  if(e.P<d.pMin)h+='<div class="eval mal">Queda debajo del mínimo del local ('+pesos(d.pMin)+'): no cubre los gastos.</div>';
+  if(e.P<d.pMin)h+='<div class="eval mal">'+(d.parte?'No paga su parte de los gastos: con lo que vende necesita '+pesos(d.pMin)+'.':'Queda debajo del mínimo del local ('+pesos(d.pMin)+'): no cubre los gastos.')+'</div>';
   h+='<div style="margin-top:8px;padding:8px 10px;border:1px dashed var(--azul2);border-radius:10px"><b>Para cargar en el sistema</b>'+
     (of?'<div class="row"><span>Precio de venta (lista)</span><span>'+pesos(e.lista)+'</span></div><div class="row"><span>Bonificación</span><span>'+pct(e.desc,0)+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(e.P)+'</b></span></div>'
        :'<div class="row"><span>Precio de venta</span><span><b>'+pesos(e.P)+'</b></span></div>')+'</div>';
