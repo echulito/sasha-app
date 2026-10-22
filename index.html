@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=22;
+var APP_V=23;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -426,57 +426,77 @@ function pintarResumen(d){
 var IDX=null, IDX_K='sasha_indice';
 function normBus(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim()}
 function prepararIndice(d){
-  if(!d||!d.p)return null;
+  if(!d||!d.p||d.formato!==2)return null;
   return {version:d.version||'',items:d.p.map(function(r){
-    var prov=d.provs[r[2]]||'';
-    return {codigo:r[0],producto:r[1],proveedor:prov,barras:r[3],codProv:r[4],descontinuado:!!r[5],precio:r[6],u:r[7],
-      nom:' '+normBus(r[1])+' ',txt:normBus([r[0],r[1],prov,r[3],r[4]].join(' '))};
+    var prov=d.provs[r[2]]||'', rubro=(d.rubros||[])[r[8]]||'', cat=(d.cats||[])[r[9]]||'';
+    return {codigo:r[0],producto:r[1],proveedor:prov,barras:r[3],codProv:r[4],descontinuado:!!r[5],precio:r[6],u:r[7],rubro:rubro,cat:cat,
+      nom:' '+normBus(r[1])+' ',rub:' '+normBus(rubro+' '+cat)+' ',otros:' '+normBus([r[0],prov,r[3],r[4]].join(' '))+' '};
   })};
 }
 function cargarIndice(version){
   if(IDX&&(!version||IDX.version===version))return;
-  try{var g=JSON.parse(localStorage.getItem(IDX_K)||'null');if(g&&(!version||g.version===version)){IDX=prepararIndice(g);if(IDX)return}}catch(e){}
+  try{var g=JSON.parse(localStorage.getItem(IDX_K)||'null');if(g&&g.formato===2&&(!version||g.version===version)){IDX=prepararIndice(g);if(IDX)return}}catch(e){}
   api('indice').then(function(d){
-    IDX=prepararIndice(d);
+    var x=prepararIndice(d); if(!x)return;
+    IDX=x;
     try{localStorage.setItem(IDX_K,JSON.stringify(d))}catch(e){}
   }).catch(function(){});
 }
+// Buscador inteligente: cada palabra que escribís tiene que aparecer en la descripción, el rubro, el proveedor,
+// el código o el código de barras. Primero los que COINCIDEN EN LA DESCRIPCIÓN (los que empiezan con lo que
+// escribiste, arriba de todo), después los que coinciden por rubro, proveedor o código. Se agrupan por rubro.
 function buscarLocal(q){
-  var palabras=normBus(q).split(' ').filter(Boolean); if(!palabras.length)return [];
-  var res=[];
+  var palabras=normBus(q).split(' ').filter(Boolean); if(!palabras.length)return {lista:[],total:0};
+  var frase=normBus(q), qq=q.trim(), res=[];
   IDX.items.forEach(function(p){
-    var pts=0;
+    var enDesc=0, inicioDesc=0;
     for(var i=0;i<palabras.length;i++){
-      var w=palabras[i];
-      if(p.nom.indexOf(' '+w)>=0)pts+=3;          // empieza una palabra del nombre
-      else if(w.length>=3&&p.txt.indexOf(w)>=0)pts+=1;  // está en el código, barras, proveedor o en medio
-      else if(w.length<3&&(' '+p.txt).indexOf(' '+w)>=0)pts+=1;
-      else return;
+      var w=palabras[i], corto=w.length<3;
+      if(p.nom.indexOf(' '+w)>=0){enDesc++;inicioDesc++;continue}
+      if(!corto&&p.nom.indexOf(w)>=0){enDesc++;continue}
+      if(p.rub.indexOf(' '+w)>=0||p.otros.indexOf(' '+w)>=0)continue;
+      if(!corto&&(p.rub.indexOf(w)>=0||p.otros.indexOf(w)>=0))continue;
+      return;
     }
-    if(p.codigo===q.trim()||p.barras===q.trim())pts+=100;
-    if(p.nom.indexOf(' '+normBus(q))===0)pts+=5;   // el nombre empieza con lo que escribiste
-    res.push({p:p,pts:pts});
+    var nivel;
+    if(p.codigo===qq||p.barras===qq||p.codProv===qq)nivel=0;                 // código exacto
+    else if(p.nom.indexOf(' '+frase)===0)nivel=1;                             // la descripción empieza con lo escrito
+    else if(enDesc>0)nivel=2;                                                 // coincide en la descripción
+    else nivel=3;                                                             // solo por rubro, proveedor o código
+    // Dentro de la descripción, primero las que tienen todo al principio de una palabra.
+    res.push({p:p,n:nivel,f:inicioDesc===palabras.length?0:(enDesc===palabras.length?1:2)});
   });
-  res.sort(function(a,b){return (a.p.descontinuado-b.p.descontinuado)||(b.pts-a.pts)||(b.p.u-a.p.u)||a.p.producto.localeCompare(b.p.producto)});
-  return res.slice(0,15).map(function(x){return x.p});
+  res.sort(function(a,b){
+    return (a.p.descontinuado-b.p.descontinuado)||(a.n-b.n)||
+      (a.n>=2?String(a.p.rubro||'~').localeCompare(String(b.p.rubro||'~')):0)||(a.f-b.f)||a.p.producto.localeCompare(b.p.producto);
+  });
+  return {lista:res.slice(0,60).map(function(x){x.p.nivel=x.n;return x.p}),total:res.length,q:q.trim()};
 }
-function htmlResultados(r){
-  return r.map(function(p){return '<div class="item" data-c="'+esc(p.codigo)+'"><div class="dot '+(p.descontinuado?'D':'A')+'">'+(p.descontinuado?'D':'A')+'</div><div class="n"><div>'+esc(p.producto)+'</div><div><b style="color:#000">'+esc(p.codigo)+'</b> · '+esc(p.proveedor)+(p.precio?' · '+pesos(p.precio):'')+(p.u?' · '+Math.round(p.u/3)+' u./mes':'')+'</div></div></div>'}).join('');
+function htmlResultados(r,total,q){
+  var h='', grupo=null;
+  if(total&&total>r.length)h+='<div class="note" style="margin:0 0 6px">'+$$(total)+' productos. Seguí escribiendo para achicar la lista (se muestran '+r.length+').</div>';
+  r.forEach(function(p){
+    var g=p.descontinuado?'DESCONTINUADOS':(p.nivel===0?'CÓDIGO':(p.nivel===1?'EMPIEZAN CON «'+String(q||'').toUpperCase()+'»':
+      (p.nivel===3?'POR RUBRO, PROVEEDOR O CÓDIGO · ':'')+(p.rubro||'SIN RUBRO')));
+    if(p.rubro!==undefined&&g!==grupo){grupo=g;h+='<div class="rk" style="margin:10px 2px 4px;font-weight:700;letter-spacing:.3px;color:var(--azul2)">'+esc(g)+'</div>'}
+    h+='<div class="item" data-c="'+esc(p.codigo)+'"><div class="dot '+(p.descontinuado?'D':'A')+'">'+(p.descontinuado?'D':'A')+'</div><div class="n"><div>'+esc(p.producto)+'</div><div><b style="color:#000">'+esc(p.codigo)+'</b> · '+esc(p.proveedor)+(p.precio?' · '+pesos(p.precio):'')+(p.u?' · '+Math.round(p.u/3)+' u./mes':'')+'</div></div></div>';
+  });
+  return h;
 }
 function buscador(input,cont,alElegir){
   var t=null,ult='';
-  var pintar=function(r,q){
+  var pintar=function(r,q,total){
     if(!r.length){cont.innerHTML='<div class="note">No encontré nada con "'+esc(q)+'".</div>';return}
-    cont.innerHTML=htmlResultados(r);
+    cont.innerHTML=htmlResultados(r,total,q);
     cont.querySelectorAll('.item').forEach(function(el){el.onclick=function(){var nom=(el.querySelector('.n div')||{}).textContent||'';cont.innerHTML='';input.blur();alElegir(el.dataset.c,nom)}});
   };
   input.addEventListener('input',function(){
     clearTimeout(t);var q=input.value.trim();
-    if(IDX){if(!q){cont.innerHTML='';return}pintar(buscarLocal(q),q);return}
+    if(IDX){if(!q){cont.innerHTML='';return}var b=buscarLocal(q);pintar(b.lista,q,b.total);return}
     if(q.length<2){cont.innerHTML='';return}
     t=setTimeout(function(){
       ult=q;cont.innerHTML='<div class="note">Buscando…</div>';
-      api('buscar',{q:q}).then(function(r){if(q!==ult)return;pintar(r,q)}).catch(function(e){cont.innerHTML=err(e)});
+      api('buscar',{q:q}).then(function(r){if(q!==ult)return;pintar(r,q,0)}).catch(function(e){cont.innerHTML=err(e)});
     },350);
   });
 }
