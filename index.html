@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=20;
+var APP_V=21;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -63,6 +63,10 @@ input,select{font:inherit;padding:11px 12px;border:1px solid #c7ccd1;border-radi
 input:focus{outline:2px solid var(--azul2);border-color:transparent}
 label{font-size:12px;color:var(--gris);font-weight:600;display:block;margin:10px 0 4px}
 .lista{margin-top:10px}
+#fichaov{position:fixed;inset:0;background:var(--fondo);z-index:30;overflow-y:auto;-webkit-overflow-scrolling:touch}
+#fichaov .barra{position:sticky;top:0;z-index:2;background:var(--azul);color:#fff;padding:calc(10px + env(safe-area-inset-top)) 12px 10px;display:flex;align-items:center;gap:10px}
+#fichaov .barra button{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:10px;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer}
+#fichaov .cuerpo{max-width:980px;margin:0 auto;padding:12px 16px 40px}
 .seg4{flex-wrap:wrap}.seg4 button{flex:1 1 45%}
 .rk{font-size:12px;color:var(--gris);margin-top:2px}.rk b{color:var(--txt)}
 .num{width:28px;height:28px;border-radius:50%;background:var(--celeste);color:var(--azul2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
@@ -127,6 +131,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
   </nav>
 </header>
 <div id="estado" class="estado oculto"></div>
+<div id="fichaov" class="oculto"><div class="barra"><button onclick="cerrarFicha()">← Volver</button><b style="font-size:16px">Ficha del producto</b></div><div class="cuerpo"><div id="detalle"></div></div></div>
 <main>
   <section id="resumen"><div class="cargando">Cargando el tablero…</div></section>
 
@@ -136,7 +141,6 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <input id="q" placeholder="Nombre, código, código de barras o proveedor" autocomplete="off">
       <div class="lista" id="resultados"></div>
     </div>
-    <div id="detalle" style="margin-top:12px"></div>
     <div class="card" id="rank" style="margin-top:12px">
       <h2>Rankings (últimos 90 días, promedio por mes)</h2>
       <div class="seg seg4" id="rseg" style="margin-top:0">
@@ -325,7 +329,7 @@ function formatearMientrasEscribe(e){
 /* ---------------- RESUMEN ---------------- */
 function cargar(){
   $('sub').textContent='Cargando…';
-  api('resumen').then(function(d){D=d;ADMIN=d.admin;PROV.lista=d.proveedores||[];pintarProveedores();pintarResumen(d);recalcular()})
+  api('resumen').then(function(d){D=d;ADMIN=d.admin;setTimeout(function(){cargarIndice((d.datos||{}).completa||'')},800);PROV.lista=d.proveedores||[];pintarProveedores();pintarResumen(d);recalcular()})
     .catch(function(e){$('resumen').innerHTML=err(e);$('sub').textContent='No se pudo cargar'});
 }
 $('lbtn').onclick=entrar;
@@ -417,26 +421,87 @@ function pintarResumen(d){
 }
 
 /* ---------------- BUSCADOR ---------------- */
+/* ---------------- BUSCADOR QUE SUGIERE MIENTRAS ESCRIBÍS ---------------- */
+// Con el índice de productos en el celular se busca al instante (sin esperar a ECHU).
+var IDX=null, IDX_K='sasha_indice';
+function normBus(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim()}
+function prepararIndice(d){
+  if(!d||!d.p)return null;
+  return {version:d.version||'',items:d.p.map(function(r){
+    var prov=d.provs[r[2]]||'';
+    return {codigo:r[0],producto:r[1],proveedor:prov,barras:r[3],codProv:r[4],descontinuado:!!r[5],precio:r[6],u:r[7],
+      nom:' '+normBus(r[1])+' ',txt:normBus([r[0],r[1],prov,r[3],r[4]].join(' '))};
+  })};
+}
+function cargarIndice(version){
+  if(IDX&&(!version||IDX.version===version))return;
+  try{var g=JSON.parse(localStorage.getItem(IDX_K)||'null');if(g&&(!version||g.version===version)){IDX=prepararIndice(g);if(IDX)return}}catch(e){}
+  api('indice').then(function(d){
+    IDX=prepararIndice(d);
+    try{localStorage.setItem(IDX_K,JSON.stringify(d))}catch(e){}
+  }).catch(function(){});
+}
+function buscarLocal(q){
+  var palabras=normBus(q).split(' ').filter(Boolean); if(!palabras.length)return [];
+  var res=[];
+  IDX.items.forEach(function(p){
+    var pts=0;
+    for(var i=0;i<palabras.length;i++){
+      var w=palabras[i];
+      if(p.nom.indexOf(' '+w)>=0)pts+=3;          // empieza una palabra del nombre
+      else if(w.length>=3&&p.txt.indexOf(w)>=0)pts+=1;  // está en el código, barras, proveedor o en medio
+      else if(w.length<3&&(' '+p.txt).indexOf(' '+w)>=0)pts+=1;
+      else return;
+    }
+    if(p.codigo===q.trim()||p.barras===q.trim())pts+=100;
+    if(p.nom.indexOf(' '+normBus(q))===0)pts+=5;   // el nombre empieza con lo que escribiste
+    res.push({p:p,pts:pts});
+  });
+  res.sort(function(a,b){return (a.p.descontinuado-b.p.descontinuado)||(b.pts-a.pts)||(b.p.u-a.p.u)||a.p.producto.localeCompare(b.p.producto)});
+  return res.slice(0,15).map(function(x){return x.p});
+}
+function htmlResultados(r){
+  return r.map(function(p){return '<div class="item" data-c="'+esc(p.codigo)+'"><div class="dot '+(p.descontinuado?'D':'A')+'">'+(p.descontinuado?'D':'A')+'</div><div class="n"><div>'+esc(p.producto)+'</div><div><b style="color:#000">'+esc(p.codigo)+'</b> · '+esc(p.proveedor)+(p.precio?' · '+pesos(p.precio):'')+(p.u?' · '+Math.round(p.u/3)+' u./mes':'')+'</div></div></div>'}).join('');
+}
 function buscador(input,cont,alElegir){
   var t=null,ult='';
+  var pintar=function(r,q){
+    if(!r.length){cont.innerHTML='<div class="note">No encontré nada con "'+esc(q)+'".</div>';return}
+    cont.innerHTML=htmlResultados(r);
+    cont.querySelectorAll('.item').forEach(function(el){el.onclick=function(){var nom=(el.querySelector('.n div')||{}).textContent||'';cont.innerHTML='';input.blur();alElegir(el.dataset.c,nom)}});
+  };
   input.addEventListener('input',function(){
     clearTimeout(t);var q=input.value.trim();
+    if(IDX){if(!q){cont.innerHTML='';return}pintar(buscarLocal(q),q);return}
     if(q.length<2){cont.innerHTML='';return}
     t=setTimeout(function(){
       ult=q;cont.innerHTML='<div class="note">Buscando…</div>';
-      api('buscar',{q:q}).then(function(r){
-        if(q!==ult)return;
-        if(!r.length){cont.innerHTML='<div class="note">No encontré nada.</div>';return}
-        cont.innerHTML=r.map(function(p){return '<div class="item" data-c="'+esc(p.codigo)+'"><div class="dot '+(p.descontinuado?'D':'A')+'">'+(p.descontinuado?'D':'A')+'</div><div class="n"><div>'+esc(p.producto)+'</div><div><b style="color:#000">'+esc(p.codigo)+'</b> · '+esc(p.proveedor)+(p.precio?' · '+pesos(p.precio):'')+'</div></div></div>'}).join('');
-        cont.querySelectorAll('.item').forEach(function(el){el.onclick=function(){var nom=(el.querySelector('.n div')||{}).textContent||'';cont.innerHTML='';alElegir(el.dataset.c,nom)}});
-      }).catch(function(e){cont.innerHTML=err(e)});
+      api('buscar',{q:q}).then(function(r){if(q!==ult)return;pintar(r,q)}).catch(function(e){cont.innerHTML=err(e)});
     },350);
   });
 }
 buscador($('q'),$('resultados'),function(c){verProducto(c)});
 
+/* ---------------- FICHA DEL PRODUCTO EN PANTALLA COMPLETA (desde el buscador o los rankings) ---------------- */
+var FICHA_Y=0;
+function abrirFicha(){
+  if($('fichaov').classList.contains('oculto')){
+    FICHA_Y=window.scrollY;$('fichaov').classList.remove('oculto');document.body.style.overflow='hidden';
+    try{history.pushState({ficha:1},'')}catch(e){}
+  }
+  $('fichaov').scrollTop=0;
+}
+function cerrarFicha(desdeAtras){
+  if($('fichaov').classList.contains('oculto'))return;
+  $('fichaov').classList.add('oculto');document.body.style.overflow='';DETCOD='';guardarEstadoPronto();
+  window.scrollTo(0,FICHA_Y||0);
+  if(!desdeAtras&&history.state&&history.state.ficha){try{history.back()}catch(e){}}
+}
+window.addEventListener('popstate',function(){cerrarFicha(true)});
+
+
 function verProducto(c){
-  DETCOD=c;
+  DETCOD=c;abrirFicha();
   $('detalle').innerHTML='<div class="cargando">Cargando producto…</div>';
   api('producto',{codigo:c}).then(function(p){
     if(!p){$('detalle').innerHTML='<div class="card">No encontré ese producto.</div>';return}
@@ -516,7 +581,7 @@ function verProducto(c){
       '<div class="btns"><button class="btn sec" id="bsinest"></button></div><div class="note" id="sinestmsg"></div></div>';
     h+='</div>'+(window.__ventasHtml||'');
     $('detalle').innerHTML=h;
-    $('bsim').onclick=function(){elegirSim(p);irA('simulador')};
+    $('bsim').onclick=function(){cerrarFicha();elegirSim(p);irA('simulador')};
     pintarBotonSinEst(p);
   }).catch(function(e){$('detalle').innerHTML=err(e)});
 }
@@ -1056,8 +1121,6 @@ function pintarRanking(){
   $('rmas').classList.toggle('oculto',l.length<=RVER);
   $('rlista').querySelectorAll('.item').forEach(function(el){el.onclick=function(){
     verProducto(el.dataset.c);
-    var alto=(document.querySelector('header')||{}).offsetHeight||0;
-    window.scrollTo({top:$('detalle').getBoundingClientRect().top+window.scrollY-alto-10,behavior:'smooth'});
   }});
 }
 document.querySelectorAll('#rseg button').forEach(function(b){b.onclick=function(){RTAB=b.dataset.r;RVER=20;pintarRanking();guardarEstadoPronto()}});
