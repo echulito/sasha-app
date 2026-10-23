@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=29;
+var APP_V=30;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -354,7 +354,15 @@ function pintarResumen(d){
   // v28: mientras carga se muestra SOLO el porcentaje.
   var enProceso=dt.estado==='EN PROCESO'||dt.estado==='ERROR';
   $('estado').classList.toggle('oculto',!enProceso);
-  if(enProceso)$('estado').innerHTML=dt.estado==='ERROR'?'⚠ ERROR: '+esc(dt.detalle):'⟳ '+esc((String(dt.detalle||'').match(/\d{1,3}\s*%/)||[''])[0]||'…');
+  if(enProceso){
+    if(dt.estado==='ERROR')$('estado').innerHTML='⚠ ERROR: '+esc(dt.detalle);
+    else{
+      // v30: el % se ve grande y con barra. Acepta "47%" o 0,47 (si la planilla lo guardó como número).
+      var t=String(dt.detalle==null?'':dt.detalle).replace(',','.'), mm=t.match(/(\d{1,3})\s*%/), n=mm?Number(mm[1]):(/^\s*0?\.\d+\s*$/.test(t)?Math.round(Number(t)*100):(/^\s*1\s*$/.test(t)?100:null));
+      $('estado').innerHTML='<div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">⟳</span><b style="font-size:22px">'+(n===null?'…':n+'%')+'</b>'+
+        '<div class="bar" style="flex:1;margin:0"><i style="width:'+(n||0)+'%;background:var(--azul2)"></i></div></div>';
+    }
+  }
   var m=d.mes, h='';
   var avance=m.objetivo?Math.min(1,m.proyeccion/m.objetivo):0;
   var llega=m.proyeccion>=m.objetivo;
