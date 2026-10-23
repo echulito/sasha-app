@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=27;
+var APP_V=28;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -347,9 +347,10 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch
 function pintarResumen(d){
   var dt=d.datos||{};
   $('sub').textContent=dt.completa?'Datos del '+dt.completa+' (última actualización completa)':'Todavía no hay una actualización completa';
-  var enProceso=dt.estado&&dt.estado!=='COMPLETADA'&&dt.estado!=='LISTO';
+  // v28: mientras carga se muestra SOLO el porcentaje.
+  var enProceso=dt.estado==='EN PROCESO'||dt.estado==='ERROR';
   $('estado').classList.toggle('oculto',!enProceso);
-  if(enProceso)$('estado').innerHTML=(dt.estado==='ERROR'?'⚠ La última actualización terminó con ERROR: ':'⟳ ECHU se está actualizando ahora: ')+esc(dt.detalle)+'. Lo que ves es del '+esc(dt.completa||'-')+'.';
+  if(enProceso)$('estado').innerHTML=dt.estado==='ERROR'?'⚠ ERROR: '+esc(dt.detalle):'⟳ '+esc((String(dt.detalle||'').match(/\d{1,3}\s*%/)||[''])[0]||'…');
   var m=d.mes, h='';
   var avance=m.objetivo?Math.min(1,m.proyeccion/m.objetivo):0;
   var llega=m.proyeccion>=m.objetivo;
