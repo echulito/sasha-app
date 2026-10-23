@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=38;
+var APP_V=39;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -452,7 +452,7 @@ function prepararIndice(d){
   if(!d||!d.p||d.formato!==2)return null;
   return {version:d.version||'',items:d.p.map(function(r){
     var prov=d.provs[r[2]]||'', rubro=(d.rubros||[])[r[8]]||'', cat=(d.cats||[])[r[9]]||'';
-    return {codigo:r[0],producto:r[1],proveedor:prov,barras:r[3],codProv:r[4],descontinuado:!!r[5],precio:r[6],u:r[7],rubro:rubro,cat:cat,
+    return {codigo:r[0],producto:r[1],proveedor:prov,barras:r[3],codProv:r[4],descontinuado:!!r[5],precio:r[6],u:r[7],rubro:rubro,cat:cat,cab:r[10]||'',
       nom:' '+normBus(r[1])+' ',rub:' '+normBus(rubro+' '+cat)+' ',otros:' '+normBus([r[0],prov,r[3],r[4]].join(' '))+' '};
   })};
 }
@@ -502,7 +502,9 @@ function htmlResultados(r,total,q){
     var g=p.descontinuado?'DESCONTINUADOS':(p.nivel===0?'CÓDIGO':(p.nivel===1?'EMPIEZAN CON «'+String(q||'').toUpperCase()+'»':
       (p.nivel===3?'POR RUBRO, PROVEEDOR O CÓDIGO · ':'')+(p.rubro||'SIN RUBRO')));
     if(p.rubro!==undefined&&g!==grupo){grupo=g;h+='<div class="rk" style="margin:10px 2px 4px;font-weight:700;letter-spacing:.3px;color:var(--azul2)">'+esc(g)+'</div>'}
-    h+='<div class="item" data-c="'+esc(p.codigo)+'"><div class="dot '+(p.descontinuado?'D':'A')+'">'+(p.descontinuado?'D':'A')+'</div><div class="n"><div>'+esc(p.producto)+'</div><div><b style="color:#000">'+esc(p.codigo)+'</b> · '+esc(p.proveedor)+(p.precio?' · '+pesos(p.precio):'')+(p.u?' · '+Math.round(p.u/3)+' u./mes':'')+'</div></div></div>';
+    h+='<div class="item" data-c="'+esc(p.codigo)+'"><div class="dot '+(p.descontinuado?'D':'A')+'">'+(p.descontinuado?'D':'A')+'</div><div class="n"><div>'+esc(p.producto)+'</div><div><b style="color:#000">'+esc(p.codigo)+'</b> · '+esc(p.proveedor)+(p.precio?' · '+pesos(p.precio):'')+(p.u?' · '+Math.round(p.u/3)+' u./mes':'')+
+      // v39: artículo de cabecera
+      (p.cab?(String(p.cab)===String(p.codigo)?' <span class="chip c" style="font-size:10px;padding:1px 6px">CABECERA</span>':' <span class="chip a" style="font-size:10px;padding:1px 6px">cab. '+esc(p.cab)+'</span>'):'')+'</div></div></div>';
   });
   return h;
 }
@@ -658,6 +660,15 @@ function verProducto(c){
       '<div class="row"><span>Peor período sin stock</span><span class="'+(f.peorQuiebre?'neg':'pos')+'">'+(f.peorQuiebre?f.peorQuiebre.dias+' días ('+esc(f.peorQuiebre.desde)+(f.peorQuiebre.sigue?' y sigue':' al '+esc(f.peorQuiebre.hasta))+')':'nunca se quedó sin stock')+'</span></div>'+
       (f.quiebres?'<div class="row"><span>Veces que se agotó</span><span>'+f.quiebres+'</span></div>':'')+
       (f.movimientos?'<div class="note">'+esc(f.movimientos)+'</div>':'')+'</div>';
+    // v39: artículo de cabecera (el precio y el costo se cambian en la cabecera y se cambia toda la gama).
+    if(p.cabecera){var cb=p.cabecera;
+      h+='<div class="card"><h2>Artículo de cabecera</h2>'+
+        (cb.esCabecera?'<div class="eval ok">Este <b>es el artículo de cabecera</b> de una gama de <b>'+cb.cantidad+' productos</b>: si cambiás el precio o el costo acá, cambia toda la gama.</div>'
+          :'<div class="eval ok">Pertenece a la gama de <a href="#" onclick="verProducto(\''+esc(cb.codigo)+'\');return false"><b>'+esc(cb.codigo)+' · '+esc(cb.producto)+'</b></a> ('+cb.cantidad+' productos). El precio y el costo se cambian en la cabecera.</div>')+
+        '<details style="margin-top:6px"><summary class="note" style="cursor:pointer">Ver los '+cb.cantidad+' productos de la gama</summary>'+
+        (cb.miembros||[]).map(function(x){return '<div class="row"><span><a href="#" onclick="verProducto(\''+esc(x.codigo)+'\');return false">'+esc(x.codigo)+'</a>'+(x.codigo===cb.codigo?' <span class="chip c" style="font-size:10px;padding:1px 6px">CABECERA</span>':'')+'</span><span style="text-align:right">'+esc(x.producto)+'</span></div>'}).join('')+
+        '</details></div>';
+    }
     h+='<div class="card"><h2>Proveedor</h2>'+
       '<div class="row"><span>Proveedor</span><span>'+esc(p.proveedor||'-')+'</span></div>'+
       '<div class="row"><span>Código de proveedor</span><span>'+esc(p.codigoProveedor||'-')+'</span></div>'+
@@ -1344,7 +1355,9 @@ function pintarOportunidades(){
       ' <span class="chip v" style="font-size:10px;padding:1px 6px">'+x.menos+'% más barato</span></div>'+
       '<div class="rk"><b>'+esc(x.proveedor)+': '+pesos2(x.costo)+'</b>'+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+
       ' · sistema '+pesos(x.costoSistema)+(x.costoListaActual?' · '+esc(x.proveedorActual||'lista actual')+' '+pesos(x.costoListaActual):'')+
-      (x.ahorroMes>0?' · ahorrás ~'+pesos(x.ahorroMes)+' por mes':'')+'</div></div></div>';
+      (x.ahorroMes>0?' · ahorrás ~'+pesos(x.ahorroMes)+' por mes':'')+'</div>'+
+      (x.cabecera?'<div class="rk"><span class="chip c" style="font-size:10px;padding:1px 6px">'+(String(x.cabecera)===String(x.codigo)?'CABECERA':'cab. '+esc(x.cabecera))+'</span> '+
+        (x.gamaCantidad>1?'<b>'+x.gamaCantidad+' de la gama</b> con esta oferta':'gama de '+esc(x.cabeceraProducto||x.cabecera))+(x.gamaTotal?' ('+x.gamaTotal+' productos)':'')+'</div>':'')+'</div></div>';
   }).join('');
   $('opmas').classList.toggle('oculto',l.length<=OPVER);
   $('oplista').querySelectorAll('.item').forEach(function(el){el.onclick=function(){
