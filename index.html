@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=34;
+var APP_V=35;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -184,6 +184,8 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       </div>
       <select id="sprov"></select>
       <input id="sprovf" class="oculto" placeholder="Nombre del proveedor (no está en tus listas)" autocomplete="off">
+      <label>Código del producto en ese proveedor</label>
+      <input id="sprovcod" placeholder="Ej.: 93 (se completa solo si está en la lista)" autocomplete="off">
       <div id="sprovinfo" class="note"></div>
       <label>Precio de venta ($)</label>
       <input id="sprecio" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0">
@@ -295,6 +297,8 @@ var DETCOD='', D=null, ADMIN={porVenta:0.03,minimo:0.5,deseado:0.6,fijos:0}, SPR
 function $(id){return document.getElementById(id)}
 function $$(n){return Math.round(n||0).toLocaleString('es-AR')}
 function pesos(n){if(n===null||n===undefined||isNaN(n))return '-';return (n<0?'-$ ':'$ ')+$$(Math.abs(n))}
+// v35: con centavos (el costo completo, para cargarlo tal cual en el sistema).
+function pesos2(n){if(n===null||n===undefined||isNaN(n))return '-';return (n<0?'-$ ':'$ ')+Math.abs(n).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function pct(n,d){if(n===null||n===undefined||isNaN(n))return '-';return (n*100).toFixed(d===undefined?1:d).replace('.',',')+'%'}
 function esc(s){return String(s===undefined||s===null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
 function variacion(a,b){if(!b)return '';var v=a/b-1;return '<span class="'+(v>=0?'pos':'neg')+'">'+(v>=0?'▲ ':'▼ ')+pct(Math.abs(v),0)+'</span>'}
@@ -700,6 +704,7 @@ function elegirSim(p){
   pintarSprod();
   PROV.modo='L';PROV.sel=p?(((p.bultos||[]).filter(function(x){return x.actual})[0]||{}).proveedor||p.proveedor||''):PROV.sel;
   pintarProveedores();
+  if(p)$('sprovcod').value=codigoEnProveedor(PROV.sel);
   if(p){
     if(!$('scosto').value&&p.costo)ponerPesos('scosto',Math.round(p.costo));
     if(p.precio)ponerPesos('sprecio',Math.round(p.precio));
@@ -910,7 +915,7 @@ var ESTADO_K='sasha_estado', NO_GUARDAR=false;
 function estadoActual(){
   var t=document.querySelector('nav button.on');
   return {t:Date.now(),tab:t?t.dataset.tab:'resumen',q:$('q').value,det:DETCOD||'',sprod:SPROD,
-    scosto:$('scosto').value,scant:$('scant').value,sprecio:$('sprecio').value,prov:{modo:PROV.modo,sel:PROV.sel,fuera:$('sprovf').value},
+    scosto:$('scosto').value,scant:$('scant').value,sprecio:$('sprecio').value,prov:{modo:PROV.modo,sel:PROV.sel,fuera:$('sprovf').value,cod:$('sprovcod').value},
     e:{op:EST.op,editId:EST.editId||'',lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,tObj:EST.tObj,vm:EST.vm,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,edias:$('edias').value,eobj:$('eobj').value},
     rtab:RTAB,y:window.scrollY};
 }
@@ -929,7 +934,7 @@ function restaurarEstado(){
   var s=leerEstado(); if(!s)return;
   $('q').value=s.q||'';
   SPROD=s.sprod||null; pintarSprod();
-  if(s.prov){PROV.modo=s.prov.modo||'L';PROV.sel=s.prov.sel||'';$('sprovf').value=s.prov.fuera||''}
+  if(s.prov){PROV.modo=s.prov.modo||'L';PROV.sel=s.prov.sel||'';$('sprovf').value=s.prov.fuera||'';$('sprovcod').value=s.prov.cod||''}
   pintarProveedores();
   $('scosto').value=s.scosto||'';$('scant').value=s.scant||'';$('sprecio').value=s.sprecio||'';
   var e=s.e||{};
@@ -994,7 +999,14 @@ function hoyTxt(off){var d=new Date(Date.now()+(off||0)*86400000);return ('0'+d.
 /* ---------------- ¿DÓNDE LO COMPRARÍAS? (proveedor de mis listas o de afuera) ---------------- */
 var PROV={modo:'L',sel:'',lista:[]};
 function normProv(t){return String(t||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]/g,'')}
-function proveedorElegido(){return PROV.modo==='F'?{nombre:$('sprovf').value.trim(),fuera:true}:{nombre:PROV.sel,fuera:false}}
+function proveedorElegido(){var cod=$('sprovcod').value.trim();return PROV.modo==='F'?{nombre:$('sprovf').value.trim(),fuera:true,codigo:cod}:{nombre:PROV.sel,fuera:false,codigo:cod}}
+// El código del producto en el proveedor elegido (de la lista, si figura).
+function codigoEnProveedor(nombre){
+  var e=listasDelProducto().filter(function(x){return normProv(x.proveedor)===normProv(nombre)})[0];
+  if(e&&e.codigo)return e.codigo;
+  if(SPROD&&normProv(SPROD.proveedor)===normProv(nombre))return SPROD.codigoProveedor||'';
+  return '';
+}
 function listasDelProducto(){return ((SPROD&&SPROD.bultos)||[]).filter(function(x){return x.proveedor})}
 function pintarProveedores(){
   document.querySelectorAll('#dprov button').forEach(function(b){b.classList.toggle('on',b.dataset.t===PROV.modo)});
@@ -1032,21 +1044,23 @@ $('sprov').addEventListener('change',function(){
   // Si ese proveedor tiene el producto en la lista, se usa su costo.
   var e=listasDelProducto().filter(function(x){return normProv(x.proveedor)===normProv(PROV.sel)})[0];
   if(e&&e.costo>0)ponerPesos('scosto',Math.round(e.costo*100)/100);
+  $('sprovcod').value=codigoEnProveedor(PROV.sel);
   infoProveedor();recalcular();guardarEstadoPronto();
 });
+$('sprovcod').addEventListener('input',guardarEstadoPronto);
 
 /* ---------------- PDF DE LA PROPUESTA (se arma desde una "foto" de la simulación: sirve para volver a bajarlo) ---------------- */
 function fotoPDF(e){
   var d=e.d, P=SPROD||{}, bp=bultoPrincipal(), pv=proveedorElegido();
   return {op:e.op,of:e.op===2&&e.desc>0,lista:e.lista,desc:e.desc,P:e.P,m:e.m,gan:e.gan,dias:e.dias,aum:e.aum,vm:e.vm,proy:e.proy,objU:e.objU,ganProy:e.ganProy,
     c:d.c,q:d.q||0,mn:d.mn,fecha:hoyTxt(),hora:(function(x){return ('0'+x.getHours()).slice(-2)+':'+('0'+x.getMinutes()).slice(-2)})(new Date()),hasta:hoyTxt(e.dias),prov:pv,bulto:bp?{proveedor:bp.proveedor,unidades:bp.unidades}:null,
-    prod:{codigo:P.codigo||'',producto:P.producto||'',proveedor:P.proveedor||'',costo:P.costo||0,stock:P.stock||0,ventaMensual:P.ventaMensual||0}};
+    prod:{codigo:P.codigo||'',producto:P.producto||'',proveedor:P.proveedor||'',codigoProveedor:P.codigoProveedor||'',costo:P.costoSistema||P.costo||0,stock:P.stock||0,ventaMensual:P.ventaMensual||0}};
 }
 // Para simulaciones viejas (sin foto guardada): se arma con lo que quedó en la planilla.
 function fotoDesdeFila(x){
   var of=x.precioSinOferta>x.precioConOferta+1, P=x.precioConOferta||0, pv=ADMIN.porVenta||0;
   return {op:of?2:1,of:of,lista:x.precioSinOferta||P,desc:of?1-P/x.precioSinOferta:0,P:P,m:P?(P-x.costo)/P:0,gan:P*(1-pv)-x.costo,dias:x.dias||30,aum:0,vm:0,proy:0,
-    objU:x.objetivo||0,ganProy:0,c:x.costo,q:x.cantidad,mn:ADMIN.minimo||0,fecha:x.fecha,hasta:'',prov:{nombre:x.proveedor||'',fuera:!!x.fueraDeLista},bulto:null,
+    objU:x.objetivo||0,ganProy:0,c:x.costo,q:x.cantidad,mn:ADMIN.minimo||0,fecha:x.fecha,hasta:'',prov:{nombre:x.proveedor||'',fuera:!!x.fueraDeLista,codigo:x.codigoProveedor||''},bulto:null,
     prod:{codigo:x.codigo||'',producto:x.producto||'',proveedor:'',costo:0,stock:0,ventaMensual:0}};
 }
 // v34: el nombre lleva la hora: si no, el celular abría el PDF viejo que tenía el mismo nombre.
@@ -1056,18 +1070,22 @@ function armarPDFDesde(f,id){
   return cargarLibPDF().then(function(lib){
     var $f=function(n){return '$ '+Math.round(n||0).toLocaleString('es-AR')};
     var pc=function(n){return (n*100).toFixed(1).replace('.',',')+'%'};
+    var $c=function(n){return '$ '+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})};
     var P=f.prod;
     return armarPDF(lib,function(D){
       D.titulo('Sasha · Propuesta de compra');
       D.sub('Opción '+f.op+': '+(f.of?'con oferta (llamador)':'sin oferta')+' · simulación, no es una orden real · '+f.fecha+(f.hora?' '+f.hora:'')+(id?' · ID '+id:''));
-      D.seccion('Producto');D.fila('Producto',(P.producto||'Sin elegir').slice(0,60));D.fila('Código interno',P.codigo||'-');if(P.proveedor)D.fila('Proveedor actual',P.proveedor);
-      if(P.costo)D.fila('Costo de hoy · stock · vende por mes',$f(P.costo)+' · '+(P.stock||0)+' u. · '+(P.ventaMensual||0).toFixed(1).replace('.',',')+' u.');
+      D.seccion('Producto');D.fila('Producto',(P.producto||'Sin elegir').slice(0,60));D.fila('Código interno',P.codigo||'-');if(P.proveedor)D.fila('Proveedor actual',P.proveedor+(P.codigoProveedor?' · código '+P.codigoProveedor:''));
+      if(P.costo)D.fila('Costo de hoy en el sistema · stock · vende por mes',$c(P.costo)+' · '+(P.stock||0)+' u. · '+(P.ventaMensual||0).toFixed(1).replace('.',',')+' u.');
       D.seccion('Compra');D.fila('Dónde comprar',f.prov&&f.prov.nombre?f.prov.nombre.slice(0,40)+(f.prov.fuera?' (fuera de las listas)':' (de mis listas)'):'sin elegir');
-      D.fila('Costo por unidad',$f(f.c));
+      if(f.prov&&f.prov.codigo)D.fila('Código del producto en ese proveedor',String(f.prov.codigo));
+      D.fila('Costo por unidad (exacto)',$c(f.c));
       if(f.bulto){D.fila('Bulto ('+f.bulto.proveedor+')',f.bulto.unidades+' u. · '+$f(f.c*f.bulto.unidades)+' el bulto');D.fila('Cantidad',f.q+' u. = '+textoBultos(f.q,f.bulto.unidades));}
       else D.fila('Cantidad',f.q+' u.');
       D.fila('Inversión',$f(f.c*f.q));
       D.seccion('Para cargar en el sistema');
+      if(f.prov&&f.prov.nombre){D.fila('Proveedor',f.prov.nombre.slice(0,40)+(f.prov.codigo?' · código '+f.prov.codigo:''));
+        D.fila('Costo nuevo por unidad',$c(f.c)+(P.costo&&Math.abs(P.costo-f.c)>0.005?' (hoy '+$c(P.costo)+(P.proveedor&&P.proveedor!==f.prov.nombre?' en '+P.proveedor.slice(0,25):'')+')':''));}
       if(f.of){D.fila('Precio de venta (lista)',$f(f.lista));D.fila('Bonificación',Math.round(f.desc*100)+'%');D.fila('Se cobra',$f(f.P));if(f.hasta)D.fila('Vigencia de la oferta',f.fecha+' al '+f.hasta);}
       else D.fila('Precio de venta',$f(f.P));
       D.fila('Margen',pc(f.m),f.m<f.mn);D.fila('Ganancia por unidad (después de comisiones)',$f(f.gan),f.gan<0);
@@ -1100,7 +1118,7 @@ $('bpdf').onclick=function(){
 /* ---------------- GUARDAR / EDITAR / BORRAR SIMULACIONES (planilla Gestión de Compras 2026) ---------------- */
 function datosSimulacion(e){
   var d=e.d, P=SPROD||{}, op2=e.op===2&&e.desc>0, pv=proveedorElegido();
-  return {id:EST.editId||'',codigo:P.codigo||'',producto:P.producto||'Producto sin elegir',proveedor:pv.nombre,fueraDeLista:pv.fuera,
+  return {id:EST.editId||'',codigo:P.codigo||'',producto:P.producto||'Producto sin elegir',proveedor:pv.nombre,codigoProveedor:pv.codigo||'',fueraDeLista:pv.fuera,
     costo:d.c,cantidad:d.q||0,precioSinOferta:e.lista,precioConOferta:e.P,
     ofertaPct:op2?Math.round(e.desc*100):0,margen:Math.round(e.m*1000)/10,gananciaUnidad:Math.round(e.gan),objetivo:e.objU,dias:e.dias,
     ventaMensual:Math.round(e.vm*10)/10,aumento:Math.round(e.aum*100),proyeccion:Math.round(e.proy*10)/10,gananciaProyectada:Math.round(e.ganProy),
@@ -1156,6 +1174,7 @@ function editarPropuesta(i){
     elegirSim(p);
     ponerPesos('scosto',x.costo);$('scant').value=x.cantidad||'';
     PROV.modo=x.fueraDeLista?'F':'L';PROV.sel=x.fueraDeLista?'':(x.proveedor||'');$('sprovf').value=x.fueraDeLista?(x.proveedor||''):'';pintarProveedores();
+    $('sprovcod').value=x.codigoProveedor||(x.datos&&x.datos.codigoProveedor)||(x.fueraDeLista?'':codigoEnProveedor(x.proveedor));
     if(ed.sprecio)$('sprecio').value=ed.sprecio;
     if(ed.e1pre){$('e1pre').value=ed.e1pre;EST.t1=!!ed.t1}
     if(op===2){ponerPesos('epre',x.precioConOferta);EST.t2=true;$('epct').value=ed.epct||Math.round((1-x.precioConOferta/x.precioSinOferta)*100);EST.lista2=ed.lista2||0;if(ed.eaum!==undefined)$('eaum').value=ed.eaum}
@@ -1183,7 +1202,7 @@ function cargarPropuestas(){
     $('lprop').innerHTML=PROPS.map(function(x,i){
       var est=x.estado||'', ch=/✔/.test(est)?'v':(/NO LLEG/.test(est)?'r':(/PEDIDA|VENDIENDO/.test(est)?'c':'a'));
       var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(x.producto)+'</b><span class="chip '+ch+'">'+(x.pedido?'pedida':'sin pedir')+'</span></div>'+
-        '<div>'+esc(x.fecha)+' · '+(x.proveedor?esc(x.proveedor)+(x.fueraDeLista?' (fuera de las listas)':''):'proveedor sin elegir')+' · '+$$(x.cantidad)+' u. a '+pesos(x.costo)+'</div>'+
+        '<div>'+esc(x.fecha)+' · '+(x.proveedor?esc(x.proveedor)+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+(x.fueraDeLista?' (fuera de las listas)':''):'proveedor sin elegir')+' · '+$$(x.cantidad)+' u. a <b>'+pesos2(x.costo)+'</b></div>'+
         '<div>'+(x.precioSinOferta>x.precioConOferta+1?'con oferta: '+pesos(x.precioSinOferta)+' → '+pesos(x.precioConOferta):'sin oferta: '+pesos(x.precioConOferta))+' · objetivo '+$$(x.objetivo)+' u. en '+$$(x.dias)+' días</div>';
       if(x.llego){
         h+='<div class="bar"><i style="width:'+Math.min(100,(x.avance||0)*100)+'%;background:'+(ch==='v'?'var(--verde)':ch==='r'?'var(--rojo)':'var(--azul2)')+'"></i></div>'+
@@ -1260,6 +1279,7 @@ function abrirOportunidadEnSim(x){
     elegirSim(p);
     // Se compra en el proveedor de la oportunidad, a ese costo.
     PROV.modo='L';PROV.sel=x.proveedor;pintarProveedores();
+    $('sprovcod').value=x.codigoProveedor||codigoEnProveedor(x.proveedor);
     ponerPesos('scosto',Math.round(x.costo*100)/100);
     $('sprovinfo').innerHTML='Oportunidad: en la lista de <b>'+esc(x.proveedor)+'</b> está a <b>'+pesos(x.costo)+'</b> ('+x.menos+'% menos que el sistema, '+pesos(x.costoSistema)+'). Elegí cuántas comprar y la estrategia, y guardala.';
     recalcular();guardarEstadoPronto();
@@ -1291,7 +1311,7 @@ function pintarOportunidades(){
       '<div style="font-weight:600">'+esc(x.producto)+'</div>'+
       '<div class="rk"><b style="color:#000">'+esc(x.codigo)+'</b> · '+(x.ventaMensual>0?u(x.ventaMensual)+' u. por mes':'sin ventas')+
       ' <span class="chip v" style="font-size:10px;padding:1px 6px">'+x.menos+'% más barato</span></div>'+
-      '<div class="rk"><b>'+esc(x.proveedor)+': '+pesos(x.costo)+'</b>'+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+
+      '<div class="rk"><b>'+esc(x.proveedor)+': '+pesos2(x.costo)+'</b>'+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+
       ' · sistema '+pesos(x.costoSistema)+(x.costoListaActual?' · '+esc(x.proveedorActual||'lista actual')+' '+pesos(x.costoListaActual):'')+
       (x.ahorroMes>0?' · ahorrás ~'+pesos(x.ahorroMes)+' por mes':'')+'</div></div></div>';
   }).join('');
