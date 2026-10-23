@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=37;
+var APP_V=38;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -1104,6 +1104,7 @@ function armarPDFDesde(f,id){
       if(f.bulto){D.fila('Bulto ('+f.bulto.proveedor+')',f.bulto.unidades+' u. · '+$f(f.c*f.bulto.unidades)+' el bulto');D.fila('Cantidad',f.q+' u. = '+textoBultos(f.q,f.bulto.unidades));}
       else D.fila('Cantidad',f.q+' u.');
       D.fila('Inversión',$f(f.c*f.q));
+      if(f.q>0)D.fila('Ganancia si se vende todo (después de comisiones)',$f(f.gan*f.q),f.gan<0);
       D.seccion('Para cargar en el sistema');
       if(f.prov&&f.prov.nombre){D.fila('Proveedor',f.prov.nombre.slice(0,40)+(f.prov.codigo?' · código '+f.prov.codigo:''));
         D.fila('Costo nuevo por unidad',$c(f.c)+(P.costo&&Math.abs(P.costo-f.c)>0.005?' (hoy '+$c(P.costo)+(P.proveedor&&P.proveedor!==f.prov.nombre?' en '+P.proveedor.slice(0,25):'')+')':''));}
@@ -1228,6 +1229,8 @@ function cargarPropuestas(){
           (function(){var cs=x.masBarato!==null&&x.masBarato!==undefined&&x.masBarato<1?x.costo/(1-x.masBarato):((x.datos&&x.datos.costoSistema)||(x.datos&&x.datos.pdf&&x.datos.pdf.prod&&x.datos.pdf.prod.costo)); if(!cs||!x.costo||Math.abs(cs-x.costo)<0.005)return '';
             var d=1-x.costo/cs; return ' <span class="chip '+(d>0?'v':'r')+'" style="font-size:10px;padding:1px 6px">'+Math.round(Math.abs(d)*100)+'% '+(d>0?'más barato':'más caro')+' que el sistema ('+pesos2(cs)+')</span>'})()+'</div>'+
         '<div>'+(x.precioSinOferta>x.precioConOferta+1?'con oferta: '+pesos(x.precioSinOferta)+' → '+pesos(x.precioConOferta):'sin oferta: '+pesos(x.precioConOferta))+' · objetivo '+$$(x.objetivo)+' u. en '+$$(x.dias)+' días</div>';
+      // v38: lo que se gana si se vende toda la compra.
+      if(x.gananciaTotal!==null&&x.gananciaTotal!==undefined)h+='<div>Inversión '+pesos(x.costo*x.cantidad)+' · si vendés todo ganás <b class="'+(x.gananciaTotal>=0?'pos':'neg')+'">'+pesos(x.gananciaTotal)+'</b></div>';
       if(x.margenHoy!==null&&x.margenHoy!==undefined&&x.margen){
         var dm=x.margen-x.margenHoy;
         h+='<div>Margen: hoy <b>'+pct(x.margenHoy)+'</b> → con la propuesta <b>'+pct(x.margen)+'</b> <span class="chip '+(dm>=0?'v':'r')+'" style="font-size:10px;padding:1px 6px">'+(dm>=0?'+':'−')+(Math.abs(dm)*100).toFixed(1).replace('.',',')+' pts</span></div>';
