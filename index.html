@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=33;
+var APP_V=34;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -1039,7 +1039,7 @@ $('sprov').addEventListener('change',function(){
 function fotoPDF(e){
   var d=e.d, P=SPROD||{}, bp=bultoPrincipal(), pv=proveedorElegido();
   return {op:e.op,of:e.op===2&&e.desc>0,lista:e.lista,desc:e.desc,P:e.P,m:e.m,gan:e.gan,dias:e.dias,aum:e.aum,vm:e.vm,proy:e.proy,objU:e.objU,ganProy:e.ganProy,
-    c:d.c,q:d.q||0,mn:d.mn,fecha:hoyTxt(),hasta:hoyTxt(e.dias),prov:pv,bulto:bp?{proveedor:bp.proveedor,unidades:bp.unidades}:null,
+    c:d.c,q:d.q||0,mn:d.mn,fecha:hoyTxt(),hora:(function(x){return ('0'+x.getHours()).slice(-2)+':'+('0'+x.getMinutes()).slice(-2)})(new Date()),hasta:hoyTxt(e.dias),prov:pv,bulto:bp?{proveedor:bp.proveedor,unidades:bp.unidades}:null,
     prod:{codigo:P.codigo||'',producto:P.producto||'',proveedor:P.proveedor||'',costo:P.costo||0,stock:P.stock||0,ventaMensual:P.ventaMensual||0}};
 }
 // Para simulaciones viejas (sin foto guardada): se arma con lo que quedó en la planilla.
@@ -1049,7 +1049,9 @@ function fotoDesdeFila(x){
     objU:x.objetivo||0,ganProy:0,c:x.costo,q:x.cantidad,mn:ADMIN.minimo||0,fecha:x.fecha,hasta:'',prov:{nombre:x.proveedor||'',fuera:!!x.fueraDeLista},bulto:null,
     prod:{codigo:x.codigo||'',producto:x.producto||'',proveedor:'',costo:0,stock:0,ventaMensual:0}};
 }
-function nombrePDF(f){return 'propuesta_'+((f.prod.codigo||'producto')+'_'+(f.of?'con-oferta':'sin-oferta')+'_'+String(f.fecha||hoyTxt()).replace(/\//g,'-'))+'.pdf'}
+// v34: el nombre lleva la hora: si no, el celular abría el PDF viejo que tenía el mismo nombre.
+function nombrePDF(f){var d=new Date(),h=('0'+d.getHours()).slice(-2)+'h'+('0'+d.getMinutes()).slice(-2)+'m'+('0'+d.getSeconds()).slice(-2)+'s';
+  return 'propuesta_'+((f.prod.codigo||'producto')+'_'+(f.of?'con-oferta':'sin-oferta')+'_'+String(f.fecha||hoyTxt()).replace(/\//g,'-'))+'_'+h+'.pdf'}
 function armarPDFDesde(f,id){
   return cargarLibPDF().then(function(lib){
     var $f=function(n){return '$ '+Math.round(n||0).toLocaleString('es-AR')};
@@ -1057,7 +1059,7 @@ function armarPDFDesde(f,id){
     var P=f.prod;
     return armarPDF(lib,function(D){
       D.titulo('Sasha · Propuesta de compra');
-      D.sub('Opción '+f.op+': '+(f.of?'con oferta (llamador)':'sin oferta')+' · simulación, no es una orden real · '+f.fecha+(id?' · ID '+id:''));
+      D.sub('Opción '+f.op+': '+(f.of?'con oferta (llamador)':'sin oferta')+' · simulación, no es una orden real · '+f.fecha+(f.hora?' '+f.hora:'')+(id?' · ID '+id:''));
       D.seccion('Producto');D.fila('Producto',(P.producto||'Sin elegir').slice(0,60));D.fila('Código interno',P.codigo||'-');if(P.proveedor)D.fila('Proveedor actual',P.proveedor);
       if(P.costo)D.fila('Costo de hoy · stock · vende por mes',$f(P.costo)+' · '+(P.stock||0)+' u. · '+(P.ventaMensual||0).toFixed(1).replace('.',',')+' u.');
       D.seccion('Compra');D.fila('Dónde comprar',f.prov&&f.prov.nombre?f.prov.nombre.slice(0,40)+(f.prov.fuera?' (fuera de las listas)':' (de mis listas)'):'sin elegir');
