@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=31;
+var APP_V=32;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -676,7 +676,22 @@ buscador($('sq'),$('sresultados'),function(c){
 });
 function pintarSprod(){
   var p=SPROD;
-  $('sprod').innerHTML=p?'<b>'+esc(p.producto)+'</b> · hoy: costo '+pesos(p.costo)+', precio '+pesos(p.precio)+', margen '+pct(p.margen)+', stock '+$$(p.stock)+', vende '+(p.ventaMensual||0).toFixed(1).replace('.',',')+' por mes. <a href="#" id="squitar">quitar</a>':'';
+  // v32: lo que hay HOY en el sistema (proveedor, costo y precio cargados), para comparar con la simulación de abajo.
+  if(!p){$('sprod').innerHTML='';return}
+  var cs=p.costoSistema||p.costo||0, act=((p.bultos||[]).filter(function(x){return x.actual})[0])||null;
+  var cl=act&&act.costo?act.costo:0;
+  var mHoy=p.precio&&cs?(p.precio-cs)/p.precio:null, fila=function(a,b){return '<div class="row"><span>'+a+'</span><span>'+b+'</span></div>'};
+  $('sprod').innerHTML='<div style="border:1px solid var(--linea);border-radius:10px;padding:8px 12px;margin-top:6px;background:#fafbfc">'+
+    '<div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(p.producto)+'</b><a href="#" id="squitar">quitar</a></div>'+
+    '<div class="note" style="margin:2px 0 4px"><b>HOY EN EL SISTEMA</b> (para comparar con la simulación)</div>'+
+    fila('Proveedor',esc(p.proveedor||'-')+(p.codigoProveedor?' · cód. '+esc(p.codigoProveedor):''))+
+    fila('Costo en el sistema','<b>'+pesos(cs)+'</b>')+
+    (cl?fila('Costo en su lista ('+esc(act&&act.proveedor||p.proveedor||'actual')+')',pesos(cl)):'')+
+    fila('Precio de venta','<b>'+pesos(p.precio)+'</b>')+
+    fila('Margen hoy',mHoy===null?'-':'<b>'+pct(mHoy)+'</b>')+
+    fila('Stock',$$(p.stock)+' u.')+
+    fila('Vende por mes',(p.ventaMensual||0).toFixed(1).replace('.',',')+' u.')+
+    '</div>';
   if(p)$('squitar').onclick=function(e){e.preventDefault();elegirSim(null)};
 }
 function elegirSim(p){
