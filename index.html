@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=28;
+var APP_V=29;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -143,6 +143,10 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
     </div>
     <div class="card" id="opcard" style="margin-top:12px">
       <h2>Oportunidades sin stock</h2>
+      <div class="seg" id="opseg" style="margin-top:0">
+        <button data-v="1" class="on">Con ventas</button>
+        <button data-v="0">Todos</button>
+      </div>
       <div id="opnota" class="note">Productos que hoy no tenés y que están bastante más baratos en otra lista (no la de su proveedor).</div>
       <div id="oplista" class="lista"><div class="note">Cargando…</div></div>
       <div class="btns"><button class="btn sec oculto" id="opmas">Ver más</button></div>
@@ -1208,10 +1212,10 @@ document.querySelector('nav button[data-tab="productos"]').addEventListener('cli
 
 /* ---------------- OPORTUNIDADES SIN STOCK (solapa Productos) ---------------- */
 var OPS=null, OPVER=15, OPCARGANDO=false;
-function cargarOportunidades(){
-  if(OPS||OPCARGANDO||!CFG.token)return;
-  OPCARGANDO=true;$('oplista').innerHTML='<div class="note">Cargando…</div>';
-  api('oportunidades').then(function(r){OPCARGANDO=false;OPS=r||{};pintarOportunidades()})
+function cargarOportunidades(conVentas){
+  if((OPS&&conVentas===undefined)||OPCARGANDO||!CFG.token)return;
+  OPCARGANDO=true;OPVER=15;$('oplista').innerHTML='<div class="note">Cargando…</div>';
+  api('oportunidades',conVentas===undefined?{}:{conVentas:conVentas?1:0}).then(function(r){OPCARGANDO=false;OPS=r||{};pintarOportunidades()})
     .catch(function(e){OPCARGANDO=false;$('oplista').innerHTML=/accion|Acci/i.test(e.message)?'<div class="note">Para ver las oportunidades, actualizá ECHU a la versión 5.36 (Nueva versión).</div>':err(e)});
 }
 function opDescontinuado(c){
@@ -1221,10 +1225,12 @@ function opDescontinuado(c){
 }
 function pintarOportunidades(){
   if(!OPS)return;
+  var cv=OPS.soloConVentas!==false;
+  document.querySelectorAll('#opseg button').forEach(function(b){b.classList.toggle('on',(b.dataset.v==='1')===cv)});
   var l=(OPS.lista||[]).filter(function(x){return !opDescontinuado(x.codigo)});
-  $('opnota').innerHTML='Productos que hoy <b>no tenés en stock</b> y que en otra lista (no la de su proveedor) están <b>'+(OPS.pct||20)+
+  $('opnota').innerHTML='Productos que hoy <b>no tenés en stock</b>'+(cv?' y que <b>se vendieron este mes, el pasado o el anterior</b>':'')+', que en otra lista (no la de su proveedor) están <b>'+(OPS.pct||20)+
     '% o más</b> más baratos que el costo del sistema y que su lista actual. Primero los que más se venden. Tocá uno para ver su ficha.';
-  if(!l.length){$('oplista').innerHTML='<div class="note">'+esc(OPS.mensaje||'Hoy no hay oportunidades en productos sin stock.')+'</div>';$('opmas').classList.add('oculto');return}
+  if(!l.length){$('oplista').innerHTML='<div class="note">'+esc(OPS.mensaje||(cv?'Hoy no hay oportunidades en productos sin stock que se hayan vendido en los últimos 3 meses.':'Hoy no hay oportunidades en productos sin stock.'))+'</div>';$('opmas').classList.add('oculto');return}
   var u=function(x){return String(Math.round(x*10)/10).replace('.',',')};
   $('oplista').innerHTML=l.slice(0,OPVER).map(function(x){
     return '<div class="item" data-c="'+esc(x.codigo)+'"><div class="n" style="flex:1">'+
@@ -1239,6 +1245,12 @@ function pintarOportunidades(){
   $('oplista').querySelectorAll('.item').forEach(function(el){el.onclick=function(){verProducto(el.dataset.c)}});
 }
 $('opmas').onclick=function(){OPVER+=20;pintarOportunidades()};
+// v29: "Con ventas" (por defecto) o "Todos". Queda guardado en ECHU (CONFIGURACIÓN).
+document.querySelectorAll('#opseg button').forEach(function(b){b.onclick=function(){
+  var cv=b.dataset.v==='1'; if(OPS&&(OPS.soloConVentas!==false)===cv)return;
+  document.querySelectorAll('#opseg button').forEach(function(x){x.classList.toggle('on',x===b)});
+  cargarOportunidades(cv);
+}});
 document.querySelector('nav button[data-tab="productos"]').addEventListener('click',cargarOportunidades);
 
 /* ---------------- PRODUCTOS SIN ESTADÍSTICA (Ajustes y ficha del producto) ---------------- */
