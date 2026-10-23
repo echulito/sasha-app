@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=26;
+var APP_V=27;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -140,6 +140,12 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <h2>Buscar producto</h2>
       <input id="q" placeholder="Nombre, código, código de barras o proveedor" autocomplete="off">
       <div class="lista" id="resultados"></div>
+    </div>
+    <div class="card" id="opcard" style="margin-top:12px">
+      <h2>Oportunidades sin stock</h2>
+      <div id="opnota" class="note">Productos que hoy no tenés y que están bastante más baratos en otra lista (no la de su proveedor).</div>
+      <div id="oplista" class="lista"><div class="note">Cargando…</div></div>
+      <div class="btns"><button class="btn sec oculto" id="opmas">Ver más</button></div>
     </div>
     <div class="card" id="rank" style="margin-top:12px">
       <h2>Rankings (últimos 90 días, promedio por mes)</h2>
@@ -1198,6 +1204,41 @@ function pintarRanking(){
 document.querySelectorAll('#rseg button').forEach(function(b){b.onclick=function(){RTAB=b.dataset.r;RVER=20;pintarRanking();guardarEstadoPronto()}});
 $('rmas').onclick=function(){RVER+=30;pintarRanking()};
 document.querySelector('nav button[data-tab="productos"]').addEventListener('click',cargarRanking);
+
+/* ---------------- OPORTUNIDADES SIN STOCK (solapa Productos) ---------------- */
+var OPS=null, OPVER=15, OPCARGANDO=false;
+function cargarOportunidades(){
+  if(OPS||OPCARGANDO||!CFG.token)return;
+  OPCARGANDO=true;$('oplista').innerHTML='<div class="note">Cargando…</div>';
+  api('oportunidades').then(function(r){OPCARGANDO=false;OPS=r||{};pintarOportunidades()})
+    .catch(function(e){OPCARGANDO=false;$('oplista').innerHTML=/accion|Acci/i.test(e.message)?'<div class="note">Para ver las oportunidades, actualizá ECHU a la versión 5.36 (Nueva versión).</div>':err(e)});
+}
+function opDescontinuado(c){
+  if(!IDX)return false;
+  for(var i=0;i<IDX.items.length;i++){if(String(IDX.items[i].codigo)===String(c))return IDX.items[i].descontinuado}
+  return false;
+}
+function pintarOportunidades(){
+  if(!OPS)return;
+  var l=(OPS.lista||[]).filter(function(x){return !opDescontinuado(x.codigo)});
+  $('opnota').innerHTML='Productos que hoy <b>no tenés en stock</b> y que en otra lista (no la de su proveedor) están <b>'+(OPS.pct||20)+
+    '% o más</b> más baratos que el costo del sistema y que su lista actual. Primero los que más se venden. Tocá uno para ver su ficha.';
+  if(!l.length){$('oplista').innerHTML='<div class="note">'+esc(OPS.mensaje||'Hoy no hay oportunidades en productos sin stock.')+'</div>';$('opmas').classList.add('oculto');return}
+  var u=function(x){return String(Math.round(x*10)/10).replace('.',',')};
+  $('oplista').innerHTML=l.slice(0,OPVER).map(function(x){
+    return '<div class="item" data-c="'+esc(x.codigo)+'"><div class="n" style="flex:1">'+
+      '<div style="font-weight:600">'+esc(x.producto)+'</div>'+
+      '<div class="rk"><b style="color:#000">'+esc(x.codigo)+'</b> · '+(x.ventaMensual>0?u(x.ventaMensual)+' u. por mes':'sin ventas')+
+      ' <span class="chip v" style="font-size:10px;padding:1px 6px">'+x.menos+'% más barato</span></div>'+
+      '<div class="rk"><b>'+esc(x.proveedor)+': '+pesos(x.costo)+'</b>'+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+
+      ' · sistema '+pesos(x.costoSistema)+(x.costoListaActual?' · '+esc(x.proveedorActual||'lista actual')+' '+pesos(x.costoListaActual):'')+
+      (x.ahorroMes>0?' · ahorrás ~'+pesos(x.ahorroMes)+' por mes':'')+'</div></div></div>';
+  }).join('');
+  $('opmas').classList.toggle('oculto',l.length<=OPVER);
+  $('oplista').querySelectorAll('.item').forEach(function(el){el.onclick=function(){verProducto(el.dataset.c)}});
+}
+$('opmas').onclick=function(){OPVER+=20;pintarOportunidades()};
+document.querySelector('nav button[data-tab="productos"]').addEventListener('click',cargarOportunidades);
 
 /* ---------------- PRODUCTOS SIN ESTADÍSTICA (Ajustes y ficha del producto) ---------------- */
 var SINEST=null;
