@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=30;
+var APP_V=31;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -1154,6 +1154,7 @@ function borrarPropuesta(i,btn){
 function cargarPropuestas(){
   if(!CFG.token)return;
   api('propuestas').then(function(l){
+    marcarPropuestas(l);
     PROPS=(l||[]).slice(0,20);
     if(!PROPS.length){$('lprop').innerHTML='Todavía no hay simulaciones guardadas. Guardá una (o bajala en PDF) y queda acá.';return}
     $('lprop').innerHTML=PROPS.map(function(x,i){
@@ -1219,10 +1220,32 @@ $('rmas').onclick=function(){RVER+=30;pintarRanking()};
 document.querySelector('nav button[data-tab="productos"]').addEventListener('click',cargarRanking);
 
 /* ---------------- OPORTUNIDADES SIN STOCK (solapa Productos) ---------------- */
-var OPS=null, OPVER=15, OPCARGANDO=false;
+var OPS=null, OPVER=15, OPCARGANDO=false, PROPCOD=null;
+// v31: las que ya tienen una simulación guardada (últimos 60 días) no aparecen: ya están en tu lista de compra.
+function marcarPropuestas(l){
+  PROPCOD={}; var lim=Date.now()-60*864e5;
+  (l||[]).forEach(function(x){
+    var m=String(x.fecha||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/), t=m?new Date(+m[3],+m[2]-1,+m[1]).getTime():Date.now();
+    if(t>=lim&&x.codigo)PROPCOD[String(x.codigo)]=1;
+  });
+  if(OPS)pintarOportunidades();
+}
+function abrirOportunidadEnSim(x){
+  irA('simulador');try{window.scrollTo(0,0)}catch(e){}
+  $('sprod').textContent='Cargando…';
+  api('producto',{codigo:x.codigo}).then(function(p){
+    elegirSim(p);
+    // Se compra en el proveedor de la oportunidad, a ese costo.
+    PROV.modo='L';PROV.sel=x.proveedor;pintarProveedores();
+    ponerPesos('scosto',Math.round(x.costo*100)/100);
+    $('sprovinfo').innerHTML='Oportunidad: en la lista de <b>'+esc(x.proveedor)+'</b> está a <b>'+pesos(x.costo)+'</b> ('+x.menos+'% menos que el sistema, '+pesos(x.costoSistema)+'). Elegí cuántas comprar y la estrategia, y guardala.';
+    recalcular();guardarEstadoPronto();
+  }).catch(function(e){$('sprod').innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
+}
 function cargarOportunidades(conVentas){
   if((OPS&&conVentas===undefined)||OPCARGANDO||!CFG.token)return;
   OPCARGANDO=true;OPVER=15;$('oplista').innerHTML='<div class="note">Cargando…</div>';
+  if(PROPCOD===null)api('propuestas').then(marcarPropuestas).catch(function(){PROPCOD={}});
   api('oportunidades',conVentas===undefined?{}:{conVentas:conVentas?1:0}).then(function(r){OPCARGANDO=false;OPS=r||{};pintarOportunidades()})
     .catch(function(e){OPCARGANDO=false;$('oplista').innerHTML=/accion|Acci/i.test(e.message)?'<div class="note">Para ver las oportunidades, actualizá ECHU a la versión 5.36 (Nueva versión).</div>':err(e)});
 }
@@ -1235,9 +1258,9 @@ function pintarOportunidades(){
   if(!OPS)return;
   var cv=OPS.soloConVentas!==false;
   document.querySelectorAll('#opseg button').forEach(function(b){b.classList.toggle('on',(b.dataset.v==='1')===cv)});
-  var l=(OPS.lista||[]).filter(function(x){return !opDescontinuado(x.codigo)});
+  var l=(OPS.lista||[]).filter(function(x){return !opDescontinuado(x.codigo)&&!(PROPCOD&&PROPCOD[String(x.codigo)])});
   $('opnota').innerHTML='Productos que hoy <b>no tenés en stock</b>'+(cv?' y que <b>se vendieron este mes, el pasado o el anterior</b>':'')+', que en otra lista (no la de su proveedor) están <b>'+(OPS.pct||20)+
-    '% o más</b> más baratos que el costo del sistema y que su lista actual. Primero los que más se venden. Tocá uno para ver su ficha.';
+    '% o más</b> más baratos que el costo del sistema y que su lista actual. Primero los que más se venden. <b>Tocá uno para simular la compra</b> en ese proveedor; cuando la guardás, sale de esta lista.';
   if(!l.length){$('oplista').innerHTML='<div class="note">'+esc(OPS.mensaje||(cv?'Hoy no hay oportunidades en productos sin stock que se hayan vendido en los últimos 3 meses.':'Hoy no hay oportunidades en productos sin stock.'))+'</div>';$('opmas').classList.add('oculto');return}
   var u=function(x){return String(Math.round(x*10)/10).replace('.',',')};
   $('oplista').innerHTML=l.slice(0,OPVER).map(function(x){
@@ -1250,7 +1273,9 @@ function pintarOportunidades(){
       (x.ahorroMes>0?' · ahorrás ~'+pesos(x.ahorroMes)+' por mes':'')+'</div></div></div>';
   }).join('');
   $('opmas').classList.toggle('oculto',l.length<=OPVER);
-  $('oplista').querySelectorAll('.item').forEach(function(el){el.onclick=function(){verProducto(el.dataset.c)}});
+  $('oplista').querySelectorAll('.item').forEach(function(el){el.onclick=function(){
+    var x=l.filter(function(y){return String(y.codigo)===el.dataset.c})[0]; if(x)abrirOportunidadEnSim(x);
+  }});
 }
 $('opmas').onclick=function(){OPVER+=20;pintarOportunidades()};
 // v29: "Con ventas" (por defecto) o "Todos". Queda guardado en ECHU (CONFIGURACIÓN).
