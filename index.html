@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=32;
+var APP_V=33;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -1132,11 +1132,17 @@ $('bguardar').onclick=function(){
 var PROPS=[];
 function bajarPDFPropuesta(i,btn){
   var x=PROPS[i]; if(!x)return;
-  var f=x.datos&&x.datos.pdf?x.datos.pdf:fotoDesdeFila(x), nombre=nombrePDF(f), msg=$('pmsg'+i);
+  var msg=$('pmsg'+i), e=null;
+  // v33: si es la que estás editando en el simulador, el PDF sale CON TUS CAMBIOS (y los guarda en esa misma fila).
+  if(EST.editId&&EST.editId===x.id){try{calcEstrategia();e=EST.ult}catch(er){e=null}if(!(e&&e.d&&e.d.c&&e.P&&e.d.q))e=null}
+  var f=e?fotoPDF(e):(x.datos&&x.datos.pdf?x.datos.pdf:fotoDesdeFila(x)), nombre=nombrePDF(f);
   msg.textContent='Armando el PDF…';
   armarPDFDesde(f,x.id).then(function(bytes){
     ULT_PDF={bytes:bytes,nombre:nombre};bajarArchivo(bytes,nombre);
-    msg.innerHTML='PDF listo: <b>'+esc(nombre)+'</b>. Si no lo ves en Descargas, tocá:'+BOTON_COMPARTIR;
+    var base='PDF listo'+(e?' con los cambios':'')+': <b>'+esc(nombre)+'</b>. Si no lo ves en Descargas, tocá:'+BOTON_COMPARTIR;
+    msg.innerHTML=base+(e?'Guardando los cambios…':'');
+    if(e)guardarSimulacion(e).then(function(r){msg.innerHTML=base+mensajeGuardado(r);setTimeout(cargarPropuestas,1500)})
+      .catch(function(err){msg.innerHTML=base+'<b class="neg">No se pudieron guardar los cambios: '+esc(err.message)+'</b>'});
   }).catch(function(err){msg.innerHTML='<b class="neg">'+esc(err.message)+'</b>'});
 }
 function editarPropuesta(i){
