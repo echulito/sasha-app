@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=41;
+var APP_V=42;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -673,7 +673,16 @@ function verProducto(c){
       '<div class="row"><span>Vendés por mes</span><span>'+(p.ventaMensual?(p.ventaMensual).toFixed(1).replace('.',','):'0')+' u.</span></div>'+
       '<div class="row"><span>Te alcanza para</span><span class="'+colorD+'">'+(dias===null?'sin ventas':(p.stock<=0?'SIN STOCK':Math.floor(dias)+' días'))+'</span></div>'+
       (f.sinStockDesde?'<div class="row"><span>Sin stock desde</span><span class="neg">'+esc(f.sinStockDesde)+'</span></div>':'')+
-      (f.ultimaCompra?'<div class="row"><span>Última compra</span><span>'+esc(f.ultimaCompra)+'</span></div>':'')+'</div>';
+      (f.ultimaCompra?'<div class="row"><span>Última compra</span><span>'+esc(f.ultimaCompra)+'</span></div>':'')+
+      // v42: este mes, día por día, y cuánto se vendería en lo que queda del mes si comprás hoy.
+      (function(ma){if(!ma)return '';var u=function(x){return String(Math.round(x*10)/10).replace('.',',')};
+        var r='<div class="row" style="margin-top:6px"><span><b>'+esc(ma.mes.charAt(0).toUpperCase()+ma.mes.slice(1))+'</b> (hasta el '+esc(ma.hasta)+')</span><span><b>'+$$(ma.vendidas)+' u.</b> vendidas</span></div>'+
+          '<div class="row"><span>Días con stock este mes</span><span class="'+(ma.diasConStock<ma.diasTranscurridos?'neg':'')+'">'+ma.diasConStock+' de '+ma.diasTranscurridos+(ma.agotadoDesde?' · sin stock desde el '+esc(ma.agotadoDesde):'')+'</span></div>'+
+          '<div class="row"><span>Un mes normal (sin quedarse sin stock)</span><span>~'+u(ma.normal)+' u.</span></div>';
+        if(ma.diasQuedan>0)r+='<div class="row"><span>Si comprás hoy, en lo que queda de '+esc(ma.mes.split(' ')[0])+' ('+ma.diasQuedan+' días)</span><span><b>'+(ma.restoMes.min===ma.restoMes.max?ma.restoMes.max:ma.restoMes.min+' a '+ma.restoMes.max)+' u.</b></span></div>';
+        r+='<div class="row"><span>Para llegar a fin de '+esc(ma.mesQueViene)+' (menos lo que tenés)</span><span><b>~'+ma.comprarHastaFinMesQueViene+' u.</b></span></div>'+
+          '<div class="note">'+(ma.agotadoDesde?'Este mes vendió '+$$(ma.vendidas)+' en '+ma.diasConStock+' días con stock: ':'')+'en un mes normal vende ~'+u(ma.normal)+'. Lo que queda del mes se calcula al ritmo normal y sin pasarse de un mes normal.</div>';
+        return r;})(p.mesActual)+'</div>';
     h+='<div class="card"><h2>Historial</h2>'+
       (f.mejorMes?'<div class="row"><span>Mejor mes</span><span class="pos">'+esc(f.mejorMes.mes)+' · '+$$(f.mejorMes.unidades)+' u.'+(f.mejorMes.precio?' a '+pesos(f.mejorMes.precio):'')+'</span></div>':'<div class="note">Sin historial de ventas.</div>')+
       (f.peorMes?'<div class="row"><span>Peor mes</span><span>'+esc(f.peorMes.mes)+' · '+$$(f.peorMes.unidades)+' u.</span></div>':'')+
