@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=42;
+var APP_V=43;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -88,7 +88,7 @@ label{font-size:12px;color:var(--gris);font-weight:600;display:block;margin:10px
 .marcas{position:relative;height:28px;font-size:10px;color:var(--gris)}
 .marcas span{position:absolute;transform:translateX(-50%);white-space:nowrap}
 .oculto{display:none}
-.opc{border:2px solid var(--linea);border-radius:12px;padding:10px 12px;margin-top:12px;cursor:pointer;transition:background .4s}.opc.on{border-color:var(--azul2);background:#f8fbff}.opc-h{display:flex;justify-content:space-between;align-items:center;gap:8px}.opc-h b{font-size:15px}.opc .tick{font-size:12px;font-weight:700;color:var(--gris)}.opc.on .tick{color:var(--azul2)}.opc.flash{background:#fff3c4}
+.opc{border:2px solid var(--linea);border-radius:12px;padding:10px 12px;margin-top:12px;cursor:pointer;transition:background .4s}.opc.on{border-color:var(--azul2);background:#f8fbff}.opc-h{display:flex;justify-content:space-between;align-items:center;gap:8px}.opc-h b{font-size:15px}.opc .tick{font-size:12px;font-weight:700;color:var(--gris)}.opc.on .tick{color:var(--azul2)}.opc.flash{background:#fff3c4}.opc.bloq{opacity:.55;cursor:not-allowed}input[readonly]{background:#f1f3f6;color:#555}
 .seg{display:flex;gap:6px;margin:10px 0 4px}.seg button{flex:1;border:2px solid var(--linea);background:#fff;border-radius:10px;padding:8px 4px;font-weight:700;color:var(--gris);cursor:pointer;font-size:13px}.seg button small{font-weight:600}.seg button.on{border-color:var(--azul2);background:var(--celeste);color:var(--azul2)}
 #login{max-width:420px;margin:40px auto;padding:0 16px}
 #login .logo{width:72px;height:72px;border-radius:18px;margin:0 auto 12px;display:block}
@@ -187,6 +187,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <input id="sprecio" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0">
       <input id="sslider" class="slider" type="range" min="0" max="100" step="1">
       <div class="marcas" id="smarcas"></div>
+      <div id="scabnota"></div>
     </div>
     <div id="sres" style="margin-top:12px"></div>
     <div class="card oculto" id="sest" style="margin-top:12px">
@@ -634,6 +635,11 @@ function verProducto(c){
       else if(cl<cs-1){cUso=cl;origen='de la lista, sin stock';aviso='<div class="note">Sin stock y la lista bajó: cambiá el costo a '+pesos(cl)+' (tarea CAMBIAR COSTO). En el sistema hoy figura '+pesos(cs)+'.</div>';}
       else {cUso=cs;origen='del sistema';}
     } else if(cs){cUso=cs;origen='del sistema';} else if(cl){cUso=cl;origen='de la lista';} else {cUso=0;origen='';}
+    // v43 REGLA UNIVERSAL: compra pedida y llegada a otro costo → hasta que se agote ese stock, se analiza con el costo de la compra.
+    var cc=p.compraEnCurso;
+    if(cc&&cc.costo>0){cUso=cc.costo;origen='de la compra ('+esc(cc.proveedor||'otro proveedor')+')';
+      aviso='<div class="eval ok" style="margin-top:8px">🛒 Comprado a <b>'+pesos2(cc.costo)+'</b>'+(cc.llego?' (llegó el '+esc(cc.llego)+')':'')+
+        '. Hasta que se vendan esas '+$$(cc.entraron||0)+' u.'+(cc.quedan!=null?' (quedan '+$$(cc.quedan)+')':'')+' la ganancia se calcula con este costo, aunque en el sistema figure '+pesos(cs)+'.</div>';}
     var mUso=pv&&cUso?(pv-cUso)/pv:null, gUso=pv&&cUso?pv-cUso:null;
     var ev=evaluarRotacion(p,cUso), nivel=ev.nivel, txtNivel=ev.texto;
     h+='<div class="card"><h2>Precio y margen</h2>'+
@@ -725,12 +731,13 @@ function pintarSprod(){
   if(!p){$('sprod').innerHTML='';return}
   var cs=p.costoSistema||p.costo||0, act=((p.bultos||[]).filter(function(x){return x.actual})[0])||null;
   var cl=act&&act.costo?act.costo:0;
-  var mHoy=p.precio&&cs?(p.precio-cs)/p.precio:null, fila=function(a,b){return '<div class="row"><span>'+a+'</span><span>'+b+'</span></div>'};
+  var cA=p.compraEnCurso&&p.compraEnCurso.costo>0?p.compraEnCurso.costo:cs, mHoy=p.precio&&cA?(p.precio-cA)/p.precio:null, fila=function(a,b){return '<div class="row"><span>'+a+'</span><span>'+b+'</span></div>'};
   $('sprod').innerHTML='<div style="border:1px solid var(--linea);border-radius:10px;padding:8px 12px;margin-top:6px;background:#fafbfc">'+
     '<div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(p.producto)+'</b><a href="#" id="squitar">quitar</a></div>'+
     '<div class="note" style="margin:2px 0 4px"><b>HOY EN EL SISTEMA</b> (para comparar con la simulación)</div>'+
     fila('Proveedor',esc(p.proveedor||'-')+(p.codigoProveedor?' · cód. '+esc(p.codigoProveedor):''))+
     fila('Costo en el sistema','<b>'+pesos(cs)+'</b>')+
+    (p.compraEnCurso&&p.compraEnCurso.costo>0?fila('🛒 Compra en curso ('+esc(p.compraEnCurso.proveedor||'')+')','<b>'+pesos2(p.compraEnCurso.costo)+'</b>'+(p.compraEnCurso.quedan!=null?' · quedan '+$$(p.compraEnCurso.quedan)+' u.':'')):'')+
     (cl?fila('Costo en su lista ('+esc(act&&act.proveedor||p.proveedor||'actual')+')',pesos(cl)):'')+
     fila('Precio de venta','<b>'+pesos(p.precio)+'</b>')+
     fila('Margen hoy',mHoy===null?'-':'<b>'+pct(mHoy)+'</b>')+
@@ -755,11 +762,29 @@ function elegirSim(p){
 }
 ['scosto','scant','sprecio'].forEach(function(id){$(id).addEventListener('input',function(){recalcular(id)})});
 $('sslider').addEventListener('input',function(){
-  var c=num('scosto')||0; if(!c)return;
+  var c=num('scosto')||0; if(!c||precioFijoCab())return;
   var m=+$('sslider').value/100; ponerPesos('sprecio',Math.round(c/(1-m))); recalcular('slider');
 });
 function precioPara(c,m){return m<1?Math.ceil(c/(1-m)/10)*10:0}
-function setPrecio(v){ponerPesos('sprecio',v);recalcular()}
+function setPrecio(v){if(precioFijoCab())return;ponerPesos('sprecio',v);recalcular()}
+// v43: si el producto está en una cabecera (o ES la cabecera), el precio de venta NO se toca en la simulación:
+// la compra es solo el costo de este producto; el precio es el de toda la gama.
+function precioFijoCab(){return SPROD&&SPROD.cabecera&&SPROD.precio>0?Math.round(SPROD.precio):0}
+function aplicarBloqueoCab(){
+  var f=precioFijoCab(), cb=SPROD&&SPROD.cabecera;
+  ['sprecio','e1pre','epre','epct','eaum'].forEach(function(id){$(id).readOnly=!!f});
+  $('sslider').disabled=!!f;
+  $('op2').classList.toggle('bloq',!!f);
+  if(f){
+    if(num('sprecio')!==f)ponerPesos('sprecio',f);
+    if(num('e1pre')!==f)ponerPesos('e1pre',f);
+    EST.t1=true;EST.lista2=0;
+    if(EST.op===2)elegirOpcion(1);
+  }
+  $('scabnota').innerHTML=f?'<div class="eval ok" style="margin-top:8px">🔒 <b>Precio fijo de cabecera: '+pesos(f)+'</b>. '+
+    (cb.esCabecera?'Este es el artículo de cabecera de '+cb.cantidad+' productos':'Pertenece a la gama de '+esc(cb.codigo)+' · '+esc(cb.producto))+
+    ': el precio es el de toda la gama y no se cambia por esta compra (el costo nuevo es solo de este producto). Se simula solo el costo.</div>':'';
+}
 // v36: lo que conseguiste contra lo de hoy (en el recuadro HOY EN EL SISTEMA).
 function pintarComparacion(){
   var el=$('scomp'), p=SPROD; if(!el)return;
@@ -770,6 +795,7 @@ function pintarComparacion(){
     (mN!==null?' · con el precio de hoy el margen sería <b>'+pct(mN)+'</b>':'')+'.</div>';
 }
 function recalcular(origen){
+  aplicarBloqueoCab();
   pintarComparacion();
   var c=num('scosto')||0, q=+$('scant').value||0, P=num('sprecio')||0;
   var pv=ADMIN.porVenta||0, mn=ADMIN.minimo||0, obj=objetivoSim();
@@ -799,7 +825,7 @@ function recalcular(origen){
     (pParte?'<div class="row"><span>Para pagar su parte de los gastos vendiendo '+(Math.round(SPROD.ventaMensual*10)/10).toLocaleString('es-AR')+' u. por mes ('+pct(mn,0)+')</span><span>'+pesos(pParte)+'</span></div>'
       :'<div class="row"><span>Para cubrir los gastos del local ('+pct(mn,0)+', promedio)</span><span>'+pesos(pMin)+'</span></div>')+
     '<div class="row"><span>Para llegar a tu margen deseado ('+pct(obj,0)+')</span><span class="pos">'+pesos(pObj)+'</span></div>'+
-    '<div class="btns"><button class="btn sec" onclick="setPrecio('+pMin+')">'+(pParte?'Usar su parte':'Usar mínimo')+'</button><button class="btn" onclick="setPrecio('+pObj+')">Usar deseado</button></div></div>';
+    (precioFijoCab()?'<div class="note">Precio de cabecera: no se cambia desde acá.</div>':'<div class="btns"><button class="btn sec" onclick="setPrecio('+pMin+')">'+(pParte?'Usar su parte':'Usar mínimo')+'</button><button class="btn" onclick="setPrecio('+pObj+')">Usar deseado</button></div>')+'</div>';
   if(q>0){
     var inv=q*c, recup=P*(1-pv)>0?Math.ceil(inv/(P*(1-pv))):null, cubre=(1-mn)>0&&P>0?Math.ceil(inv/(P*(1-mn))):null;
     var vm=SPROD?SPROD.ventaMensual:0;
@@ -826,7 +852,10 @@ function recalcular(origen){
       h+='<div class="card"><h2>Contra tu costo de hoy</h2>'+
         '<div class="row"><span>Costo de hoy</span><span>'+pesos(SPROD.costo)+'</span></div>'+
         '<div class="row"><span>Este costo es</span><span class="'+(ahorro>0?'pos':'neg')+'">'+(ahorro>=0?pct(ahorro,0)+' más barato':pct(-ahorro,0)+' más caro')+'</span></div>';
-      if(ahorro>0&&SPROD.precio>0&&SPROD.margen!==null){
+      if(ahorro>0&&SPROD.precio>0&&precioFijoCab()){
+        h+='<div class="row"><span>Con el precio de cabecera ('+pesos(SPROD.precio)+')</span><span class="pos">margen '+pct((SPROD.precio-c)/SPROD.precio)+'</span></div>'+
+          '<div class="note">Está en cabecera: no se puede hacer oferta con este producto solo. Ganás más margen mientras dure el stock comprado.</div>';
+      }else if(ahorro>0&&SPROD.precio>0&&SPROD.margen!==null){
         var pMismoMargen=precioPara(c,SPROD.margen), pOfMin=pMin;
         h+='<div class="row"><span>Oferta manteniendo tu margen de hoy ('+pct(SPROD.margen,0)+')</span><span class="pos">'+pesos(pMismoMargen)+' ('+pct(1-pMismoMargen/SPROD.precio,0)+' off)</span></div>'+
           '<div class="row"><span>Oferta más baja sin bajar del mínimo</span><span>'+pesos(pOfMin)+(pOfMin<SPROD.precio?' ('+pct(1-pOfMin/SPROD.precio,0)+' off)':'')+'</span></div>'+
@@ -861,7 +890,7 @@ function elegirOpcion(o){
   if(EST.r)EST.ult=EST.r[o];
 }
 $('op1').addEventListener('click',function(){if(EST.op!==1)elegirOpcion(1)});
-$('op2').addEventListener('click',function(){if(EST.op!==2)elegirOpcion(2)});
+$('op2').addEventListener('click',function(){if(EST.op!==2&&!precioFijoCab())elegirOpcion(2)});
 elegirOpcion(1);
 function calcOpcion(o,d,vm,dias,objU){
   var P=num(o===1?'e1pre':'epre')||0;
@@ -893,6 +922,7 @@ function htmlOpcion(e){
         :'<div class="eval bajo">No llega al objetivo: faltan '+Math.ceil(falta)+' u. Si no se venden, quedan '+pesos(falta*d.c)+' de plata parada.</div>'):'');
   }
   if(e.P<d.pMin)h+='<div class="eval mal">'+(d.parte?'No paga su parte de los gastos: con lo que vende necesita '+pesos(d.pMin)+'.':'Queda debajo del mínimo del local ('+pesos(d.pMin)+'): no cubre los gastos.')+'</div>';
+  if(precioFijoCab())return h+'<div class="note" style="margin-top:8px">Está en cabecera: <b>no se carga nada en el sistema</b> (ni costo ni precio). Solo se informa la compra.</div>';
   h+='<div style="margin-top:8px;padding:8px 10px;border:1px dashed var(--azul2);border-radius:10px"><b>Para cargar en el sistema</b>'+
     (of?'<div class="row"><span>Precio de venta (lista)</span><span>'+pesos(e.lista)+'</span></div><div class="row"><span>Bonificación</span><span>'+pct(e.desc,0)+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(e.P)+'</b></span></div>'
        :'<div class="row"><span>Precio de venta</span><span><b>'+pesos(e.P)+'</b></span></div>')+'</div>';
@@ -903,6 +933,7 @@ function calcEstrategia(){
   card.classList.toggle('oculto',!d.c);
   if(!d.c)return;
   // Se completa sola: opción 1 = el precio de arriba; opción 2 = cobrás lo mismo, con un precio de lista más alto y la bonificación.
+  aplicarBloqueoCab();
   var pArriba=num('sprecio')||d.pObj;
   if(!EST.t1&&document.activeElement!==$('e1pre'))ponerPesos('e1pre',pArriba);
   if(!EST.t2&&document.activeElement!==$('epre'))ponerPesos('epre',num('e1pre')||pArriba);
@@ -918,7 +949,7 @@ function calcEstrategia(){
   var objU=+$('eobj').value||0;
   var e1=calcOpcion(1,d,vm,dias,objU), e2=calcOpcion(2,d,vm,dias,objU);
   $('e1res').innerHTML=htmlOpcion(e1);
-  $('e2res').innerHTML=htmlOpcion(e2);
+  $('e2res').innerHTML=precioFijoCab()?'<div class="note">No disponible: el precio es de cabecera y no se puede hacer oferta con este producto solo.</div>':htmlOpcion(e2);
   EST.r={1:e1,2:e2};EST.ult=EST.r[EST.op];
 }
 [['e1pre','t1'],['epre','t2'],['eobj','tObj'],['edias',''],['epct',''],['eaum','']].forEach(function(x){
@@ -931,7 +962,7 @@ function irAEstrategia(o){
 }
 // Botones de "Contra tu costo de hoy": arman la estrategia y te llevan a verla.
 function usarOferta(p){
-  if(!SPROD||!SPROD.precio)return;
+  if(!SPROD||!SPROD.precio||precioFijoCab())return;
   ponerPesos('epre',p);EST.t2=true;EST.lista2=Math.round(SPROD.precio);
   $('epct').value=Math.max(1,Math.round((1-p/SPROD.precio)*100));
   calcEstrategia();elegirOpcion(2);irAEstrategia(2);guardarEstadoPronto();
@@ -1106,7 +1137,18 @@ function fotoPDF(e){
   var d=e.d, P=SPROD||{}, bp=bultoPrincipal(), pv=proveedorElegido();
   return {op:e.op,of:e.op===2&&e.desc>0,lista:e.lista,desc:e.desc,P:e.P,m:e.m,gan:e.gan,dias:e.dias,aum:e.aum,vm:e.vm,proy:e.proy,objU:e.objU,ganProy:e.ganProy,
     c:d.c,q:d.q||0,mn:d.mn,fecha:hoyTxt(),hora:(function(x){return ('0'+x.getHours()).slice(-2)+':'+('0'+x.getMinutes()).slice(-2)})(new Date()),hasta:hoyTxt(e.dias),prov:pv,bulto:bp?{proveedor:bp.proveedor,unidades:bp.unidades}:null,
-    prod:{codigo:P.codigo||'',producto:P.producto||'',proveedor:P.proveedor||'',codigoProveedor:P.codigoProveedor||'',costo:P.costoSistema||P.costo||0,precio:P.precio||0,stock:P.stock||0,ventaMensual:P.ventaMensual||0}};
+    prod:{codigo:P.codigo||'',producto:P.producto||'',proveedor:P.proveedor||'',codigoProveedor:P.codigoProveedor||'',costo:P.costoSistema||P.costo||0,precio:P.precio||0,stock:P.stock||0,ventaMensual:P.ventaMensual||0,
+      cab:P.cabecera?{codigo:P.cabecera.codigo||'',producto:P.cabecera.producto||'',esCabecera:!!P.cabecera.esCabecera,cantidad:P.cabecera.cantidad||0}:null}};
+}
+// v43: cabecera del producto para el PDF (de la foto; si es una propuesta vieja, del índice de productos).
+function cabDePDF(P){
+  if(P&&P.cab&&P.cab.codigo)return P.cab;
+  if(P&&P.cab===null)return null; // foto nueva: el producto no está en cabecera
+  if(!P||!P.codigo||!IDX||!IDX.items)return null;
+  var it=IDX.items.filter(function(x){return String(x.codigo)===String(P.codigo)})[0];
+  if(!it||!it.cab)return null;
+  var cp=IDX.items.filter(function(x){return String(x.codigo)===String(it.cab)})[0];
+  return {codigo:String(it.cab),producto:cp?cp.producto:'',esCabecera:String(it.cab)===String(P.codigo),cantidad:IDX.items.filter(function(x){return String(x.cab)===String(it.cab)}).length};
 }
 // Para simulaciones viejas (sin foto guardada): se arma con lo que quedó en la planilla.
 function fotoDesdeFila(x){
@@ -1123,11 +1165,15 @@ function armarPDFDesde(f,id){
     var $f=function(n){return '$ '+Math.round(n||0).toLocaleString('es-AR')};
     var pc=function(n){return (n*100).toFixed(1).replace('.',',')+'%'};
     var $c=function(n){return '$ '+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})};
-    var P=f.prod;
+    var P=f.prod, CB=cabDePDF(P);
     return armarPDF(lib,function(D){
       D.titulo('Sasha · Propuesta de compra');
       D.sub('Opción '+f.op+': '+(f.of?'con oferta (llamador)':'sin oferta')+' · simulación, no es una orden real · '+f.fecha+(f.hora?' '+f.hora:'')+(id?' · ID '+id:''));
       D.seccion('Producto');D.fila('Producto',(P.producto||'Sin elegir').slice(0,60));D.fila('Código interno',P.codigo||'-');if(P.proveedor)D.fila('Proveedor actual',P.proveedor+(P.codigoProveedor?' · código '+P.codigoProveedor:''));
+      if(CB){
+        if(CB.esCabecera)D.fila('Artículo de cabecera','ES LA CABECERA de '+(CB.cantidad||'')+' productos');
+        else{D.fila('Tiene artículo de cabecera','SÍ');D.fila('Cabecera · código interno',String(CB.codigo));if(CB.producto)D.fila('Cabecera · descripción',String(CB.producto).slice(0,55));}
+      }
       // v36: costo y margen de hoy, y entre paréntesis lo que se consiguió y cuánto más barato.
       if(P.costo){
         var dif=f.c>0?1-f.c/P.costo:0, txtDif=f.c>0&&Math.abs(f.c-P.costo)>0.005?(dif>0?' (se consiguió a '+$c(f.c)+': '+Math.round(dif*100)+'% más barato)':' (el nuevo es '+$c(f.c)+': '+Math.round(-dif*100)+'% más caro)'):'';
@@ -1146,12 +1192,21 @@ function armarPDFDesde(f,id){
       else D.fila('Cantidad',f.q+' u.');
       D.fila('Inversión',$f(f.c*f.q));
       if(f.q>0)D.fila('Ganancia si se vende todo (después de comisiones)',$f(f.gan*f.q),f.gan<0);
+      if(CB){
+        D.seccion('No se carga en el sistema');
+        D.parrafo((CB.esCabecera?'Este producto es el artículo de cabecera':'Este producto pertenece al artículo de cabecera '+CB.codigo+(CB.producto?' ('+CB.producto+')':''))+
+          ': el costo y el precio de venta los define la cabecera para toda la gama, así que NO se cambian en el sistema. Esta propuesta solo informa la compra (proveedor, costo y cantidad). '+
+          'Mientras dure este stock, ECHU calcula la ganancia de este producto con el costo de la compra.');
+        D.fila('Precio de venta (de la cabecera, no cambia)',$f(f.P));
+        D.fila('Margen con el costo de la compra',pc(f.m),f.m<f.mn);D.fila('Ganancia por unidad (después de comisiones)',$f(f.gan),f.gan<0);
+      }else{
       D.seccion('Para cargar en el sistema');
       if(f.prov&&f.prov.nombre){D.fila('Proveedor',f.prov.nombre.slice(0,40)+(f.prov.codigo?' · código '+f.prov.codigo:''));
         D.fila('Costo nuevo por unidad',$c(f.c)+(P.costo&&Math.abs(P.costo-f.c)>0.005?' (hoy '+$c(P.costo)+(P.proveedor&&P.proveedor!==f.prov.nombre?' en '+P.proveedor.slice(0,25):'')+')':''));}
       if(f.of){D.fila('Precio de venta (lista)',$f(f.lista));D.fila('Bonificación',Math.round(f.desc*100)+'%');D.fila('Se cobra',$f(f.P));if(f.hasta)D.fila('Vigencia de la oferta',f.fecha+' al '+f.hasta);}
       else D.fila('Precio de venta',$f(f.P));
       D.fila('Margen',pc(f.m),f.m<f.mn);D.fila('Ganancia por unidad (después de comisiones)',$f(f.gan),f.gan<0);
+      }
       D.seccion('Objetivo y proyección');D.fila('Objetivo',f.objU+' u. en '+f.dias+' días'+(f.hasta?' (hasta '+f.hasta+')':''));
       if(f.vm>0){D.fila('Venta base por mes',f.vm.toFixed(1).replace('.',',')+' u.');if(f.aum)D.fila('Ventas extra esperadas','+'+Math.round(f.aum*100)+'%');
         D.fila('Proyección de ventas',f.proy.toFixed(1).replace('.',',')+' u.');D.fila('Ganancia proyectada',$f(f.ganProy),f.ganProy<0);
