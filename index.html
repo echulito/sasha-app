@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=40;
+var APP_V=41;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -142,12 +142,8 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <div class="lista" id="resultados"></div>
     </div>
     <div class="card" id="opcard" style="margin-top:12px">
-      <h2>Oportunidades sin stock</h2>
-      <div class="seg" id="opseg" style="margin-top:0">
-        <button data-v="1" class="on">Con ventas</button>
-        <button data-v="0">Todos</button>
-      </div>
-      <div id="opnota" class="note">Productos que hoy no tenés y que están bastante más baratos en otra lista (no la de su proveedor).</div>
+      <h2>Sugerencias de compra</h2>
+      <div id="opnota" class="note" style="margin-top:0">Cargando…</div>
       <div id="oplista" class="lista"><div class="note">Cargando…</div></div>
       <div class="btns"><button class="btn sec oculto" id="opmas">Ver más</button></div>
     </div>
@@ -238,6 +234,25 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
 
   <section id="ajustes" class="oculto">
     <div class="card">
+      <h2>Sugerencias de compra</h2>
+      <div class="note" style="margin-top:0">Qué productos te sugiere comprar la solapa Productos.</div>
+      <label>¿Qué stock?</label>
+      <select id="cfmodo">
+        <option value="SIN STOCK">Sin stock</option>
+        <option value="SE AGOTA">Sin stock o que se agotan pronto</option>
+        <option value="CON STOCK">Con stock</option>
+        <option value="TODOS">Todos</option>
+      </select>
+      <div id="cfdiasbox"><label>Se agota dentro de (días)</label>
+      <input id="cfdias" type="number" inputmode="numeric" min="1" max="120" value="7"></div>
+      <label>Más barato en otra lista (al menos este %)</label>
+      <input id="cfpct" type="number" inputmode="numeric" min="0" max="90" value="20">
+      <div class="note" style="margin-top:2px">0 = muestra todos los que cumplen el stock (si hay una lista más barata, te la muestra igual).</div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input id="cfventas" type="checkbox" checked style="width:auto"> Solo productos que se vendieron este mes, el pasado o el anterior</label>
+      <div class="btns"><button class="btn" id="cfguardar">Guardar</button></div>
+      <div id="cfmsg" class="note"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
       <h2>Productos que no cuentan en las estadísticas</h2>
       <div class="note" style="margin-top:0">Bolsas, regalos o insumos que registrás solo para controlar el stock. No cuentan en contribución, rankings, márgenes ni en las tareas de margen o precio. Siguen en stock y compras.</div>
       <label>Agregar un producto</label>
@@ -1346,16 +1361,18 @@ function abrirOportunidadEnSim(x){
     PROV.modo='L';PROV.sel=x.proveedor;pintarProveedores();
     $('sprovcod').value=x.codigoProveedor||codigoEnProveedor(x.proveedor);
     ponerPesos('scosto',Math.round(x.costo*100)/100);
-    $('sprovinfo').innerHTML='Oportunidad: en la lista de <b>'+esc(x.proveedor)+'</b> está a <b>'+pesos(x.costo)+'</b> ('+x.menos+'% menos que el sistema, '+pesos(x.costoSistema)+'). Elegí cuántas comprar y la estrategia, y guardala.';
+    if(x.compraSugerida>0&&!$('scant').value)$('scant').value=x.compraSugerida;
+    $('sprovinfo').innerHTML=(x.menos>0?'Oportunidad: en la lista de <b>'+esc(x.proveedor)+'</b> está a <b>'+pesos2(x.costo)+'</b> ('+x.menos+'% menos que el sistema, '+pesos(x.costoSistema)+'). ':'Sugerencia de compra: en <b>'+esc(x.proveedor)+'</b> a <b>'+pesos2(x.costo)+'</b>. ')+
+      (x.compraSugerida>0?'ECHU sugiere comprar <b>'+x.compraSugerida+' u.</b> ':'')+'Elegí cuántas comprar y la estrategia, y guardala.';
     recalcular();guardarEstadoPronto();
   }).catch(function(e){$('sprod').innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
 }
-function cargarOportunidades(conVentas){
-  if((OPS&&conVentas===undefined)||OPCARGANDO||!CFG.token)return;
+function cargarOportunidades(params){
+  if((OPS&&!params)||OPCARGANDO||!CFG.token)return Promise.resolve();
   OPCARGANDO=true;OPVER=15;$('oplista').innerHTML='<div class="note">Cargando…</div>';
   if(PROPCOD===null)api('propuestas').then(marcarPropuestas).catch(function(){PROPCOD={}});
-  api('oportunidades',conVentas===undefined?{}:{conVentas:conVentas?1:0}).then(function(r){OPCARGANDO=false;OPS=r||{};pintarOportunidades()})
-    .catch(function(e){OPCARGANDO=false;$('oplista').innerHTML=/accion|Acci/i.test(e.message)?'<div class="note">Para ver las oportunidades, actualizá ECHU a la versión 5.36 (Nueva versión).</div>':err(e)});
+  return api('sugerencias',params||{}).then(function(r){OPCARGANDO=false;OPS=r||{};pintarOportunidades();pintarConfigSug()})
+    .catch(function(e){OPCARGANDO=false;$('oplista').innerHTML=/accion|Acci/i.test(e.message)?'<div class="note">Para ver las sugerencias de compra, actualizá ECHU a la versión 5.48 (Nueva versión).</div>':err(e)});
 }
 function opDescontinuado(c){
   if(!IDX)return false;
@@ -1364,20 +1381,24 @@ function opDescontinuado(c){
 }
 function pintarOportunidades(){
   if(!OPS)return;
-  var cv=OPS.soloConVentas!==false;
-  document.querySelectorAll('#opseg button').forEach(function(b){b.classList.toggle('on',(b.dataset.v==='1')===cv)});
+  var cv=OPS.soloConVentas!==false, modo=OPS.modo||'SIN STOCK', pc=OPS.pct===undefined?20:OPS.pct;
   var l=(OPS.lista||[]).filter(function(x){return !opDescontinuado(x.codigo)&&!(PROPCOD&&PROPCOD[String(x.codigo)])});
-  $('opnota').innerHTML='Productos que hoy <b>no tenés en stock</b>'+(cv?' y que <b>se vendieron este mes, el pasado o el anterior</b>':'')+', que en otra lista (no la de su proveedor) están <b>'+(OPS.pct||20)+
-    '% o más</b> más baratos que el costo del sistema y que su lista actual. Primero los que más se venden. <b>Tocá uno para simular la compra</b> en ese proveedor; cuando la guardás, sale de esta lista.';
-  if(!l.length){$('oplista').innerHTML='<div class="note">'+esc(OPS.mensaje||(cv?'Hoy no hay oportunidades en productos sin stock que se hayan vendido en los últimos 3 meses.':'Hoy no hay oportunidades en productos sin stock.'))+'</div>';$('opmas').classList.add('oculto');return}
+  var txtStock={'SIN STOCK':'que hoy <b>no tenés en stock</b>','SE AGOTA':'<b>sin stock o que se agotan en '+(OPS.dias||7)+' días</b> o menos','CON STOCK':'<b>con stock</b>','TODOS':'con o sin stock'}[modo]||'';
+  $('opnota').innerHTML='Productos '+txtStock+(cv?', que <b>se vendieron este mes, el pasado o el anterior</b>':'')+
+    (pc>0?', y que en otra lista están <b>'+pc+'% o más</b> más baratos que el costo del sistema':'')+'. '+
+    (modo==='SE AGOTA'?'Primero los que se agotan antes. ':'Primero los que más se venden. ')+
+    '<b>Tocá uno para simular la compra</b>; cuando la guardás, sale de esta lista. Lo cambiás en <a href="#" onclick="irA(\'ajustes\');return false">⚙ Ajustes</a>.';
+  if(!l.length){$('oplista').innerHTML='<div class="note">'+esc(OPS.mensaje||'Hoy no hay productos que cumplan lo que elegiste.')+'</div>';$('opmas').classList.add('oculto');return}
   var u=function(x){return String(Math.round(x*10)/10).replace('.',',')};
   $('oplista').innerHTML=l.slice(0,OPVER).map(function(x){
     return '<div class="item" data-c="'+esc(x.codigo)+'"><div class="n" style="flex:1">'+
       '<div style="font-weight:600">'+esc(x.producto)+'</div>'+
       '<div class="rk"><b style="color:#000">'+esc(x.codigo)+'</b> · '+(x.ventaMensual>0?u(x.ventaMensual)+' u. por mes':'sin ventas')+
-      ' <span class="chip v" style="font-size:10px;padding:1px 6px">'+x.menos+'% más barato</span></div>'+
+      (x.stock<=0?' <span class="chip r" style="font-size:10px;padding:1px 6px">SIN STOCK</span>':(x.dias!==null&&x.dias!==undefined?' <span class="chip a" style="font-size:10px;padding:1px 6px">'+x.stock+' u. · se agota en '+x.dias+' días</span>':' · stock '+x.stock))+
+      (x.menos>0?' <span class="chip v" style="font-size:10px;padding:1px 6px">'+x.menos+'% más barato</span>':'')+'</div>'+
       '<div class="rk"><b>'+esc(x.proveedor)+': '+pesos2(x.costo)+'</b>'+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+
-      ' · sistema '+pesos(x.costoSistema)+(x.costoListaActual?' · '+esc(x.proveedorActual||'lista actual')+' '+pesos(x.costoListaActual):'')+
+      (x.menos>0?' · sistema '+pesos(x.costoSistema)+(x.costoListaActual?' · '+esc(x.proveedorActual||'lista actual')+' '+pesos(x.costoListaActual):''):' · su proveedor')+
+      (x.compraSugerida>0?' · <b>comprar ~'+x.compraSugerida+' u.</b>':'')+
       (x.ahorroMes>0?' · ahorrás ~'+pesos(x.ahorroMes)+' por mes':'')+'</div>'+
       (x.cabecera?'<div class="rk"><span class="chip c" style="font-size:10px;padding:1px 6px">'+(String(x.cabecera)===String(x.codigo)?'CABECERA':'cab. '+esc(x.cabecera))+'</span> '+
         (x.gamaCantidad>1?'<b>'+x.gamaCantidad+' de la gama</b> con esta oferta':'gama de '+esc(x.cabeceraProducto||x.cabecera))+(x.gamaTotal?' ('+x.gamaTotal+' productos)':'')+'</div>':'')+'</div></div>';
@@ -1388,13 +1409,22 @@ function pintarOportunidades(){
   }});
 }
 $('opmas').onclick=function(){OPVER+=20;pintarOportunidades()};
-// v29: "Con ventas" (por defecto) o "Todos". Queda guardado en ECHU (CONFIGURACIÓN).
-document.querySelectorAll('#opseg button').forEach(function(b){b.onclick=function(){
-  var cv=b.dataset.v==='1'; if(OPS&&(OPS.soloConVentas!==false)===cv)return;
-  document.querySelectorAll('#opseg button').forEach(function(x){x.classList.toggle('on',x===b)});
-  cargarOportunidades(cv);
-}});
-document.querySelector('nav button[data-tab="productos"]').addEventListener('click',cargarOportunidades);
+document.querySelector('nav button[data-tab="productos"]').addEventListener('click',function(){cargarOportunidades()});
+// v41: configuración de las sugerencias (⚙ Ajustes). Se guarda en ECHU.
+function pintarConfigSug(){
+  if(!OPS)return;
+  $('cfmodo').value=OPS.modo||'SIN STOCK';$('cfdias').value=OPS.dias||7;$('cfpct').value=OPS.pct===undefined?20:OPS.pct;$('cfventas').checked=OPS.soloConVentas!==false;
+  $('cfdiasbox').classList.toggle('oculto',$('cfmodo').value!=='SE AGOTA');
+}
+$('cfmodo').addEventListener('change',function(){$('cfdiasbox').classList.toggle('oculto',$('cfmodo').value!=='SE AGOTA')});
+$('cfguardar').onclick=function(){
+  var b=$('cfguardar');b.disabled=true;$('cfmsg').textContent='Guardando…';
+  OPS=null;
+  cargarOportunidades({guardar:1,modo:$('cfmodo').value,dias:+$('cfdias').value||7,pct:Math.max(0,+$('cfpct').value||0),ventas:$('cfventas').checked?1:0}).then(function(){
+    b.disabled=false;$('cfmsg').innerHTML=OPS?'Listo: <b>'+(OPS.total||0)+'</b> productos cumplen. Los ves en la solapa <a href="#" onclick="irA(\'productos\');return false">Productos</a>.':'';
+  }).catch(function(e){b.disabled=false;$('cfmsg').innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
+};
+document.querySelector('nav button[data-tab="ajustes"]').addEventListener('click',function(){if(OPS)pintarConfigSug();else cargarOportunidades()});
 
 /* ---------------- PRODUCTOS SIN ESTADÍSTICA (Ajustes y ficha del producto) ---------------- */
 var SINEST=null;
