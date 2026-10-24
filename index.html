@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=39;
+var APP_V=40;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -225,8 +225,14 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <div id="epdfmsg" class="note"></div>
     </div>
     <div class="card" id="sprop" style="margin-top:12px">
-      <h2>Mis propuestas (seguimiento)</h2>
-      <div id="lprop" class="note" style="margin-top:0">Cada simulación que guardás (o bajás en PDF) queda en la planilla <b>Gestión de Compras 2026</b>. Cuando la pidas, tildá <b>“¿Se pidió?”</b> (última columna): desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.</div>
+      <h2>Mis propuestas</h2>
+      <div class="note" style="margin-top:0">Las simulaciones guardadas que todavía no pediste. Cuando la pidas, tocá <b>✔ La pedí</b> (o tildá “¿Se pidió?” en la planilla): pasa a <b>Seguimientos</b>.</div>
+      <div id="lprop" class="note">Cargando…</div>
+    </div>
+    <div class="card" id="sseg" style="margin-top:12px">
+      <h2>Seguimientos (compras pedidas)</h2>
+      <div class="note" style="margin-top:0">Desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron, en cuántos días, cuánto ganaste y si se cumplió el objetivo.</div>
+      <div id="lseg" class="note">Cargando…</div>
     </div>
   </section>
 
@@ -1127,7 +1133,7 @@ function armarPDFDesde(f,id){
         D.fila('Proyección de ventas',f.proy.toFixed(1).replace('.',',')+' u.');D.fila('Ganancia proyectada',$f(f.ganProy),f.ganProy<0);
         var falta=Math.max(0,f.objU-f.proy);D.fila('¿Se cumple el objetivo?',falta>0?'NO: faltan '+Math.ceil(falta)+' u.':'SÍ',falta>0);
         if(falta>0)D.fila('Plata parada si no se vende',$f(falta*f.c),true);}
-      D.sub('');D.parrafo('Seguimiento: queda en Gestión de Compras 2026. Cuando la pidas, tildá "¿Se pidió?": desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.');
+      D.sub('');D.parrafo('Seguimiento: queda en ECHU (SEGUIMIENTO DE COMPRAS Y PROPUESTAS) y en Gestión de Compras 2026. Cuando la pidas, tocá "La pedí" en la app (o tildá "¿Se pidió?"): desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron y en cuántos días.');
     });
   });
 }
@@ -1167,7 +1173,7 @@ function guardarSimulacion(e){
   });
 }
 function mensajeGuardado(r){
-  return r&&r.id?(r.actualizada?'Se actualizó la simulación '+esc(r.id)+' en Gestión de Compras 2026 (no se duplicó).':'Quedó guardada en Gestión de Compras 2026 ('+esc(r.id)+'). Cuando la pidas, tildá <b>“¿Se pidió?”</b>.')
+  return r&&r.id?(r.actualizada?'Se actualizó la simulación '+esc(r.id)+' en Gestión de Compras 2026 (no se duplicó).':'Quedó guardada en Mis propuestas ('+esc(r.id)+'). Cuando la pidas, tocá <b>✔ La pedí</b>.')
     :'No se pudo guardar en Gestión de Compras.';
 }
 function pintarEdicion(){
@@ -1231,11 +1237,13 @@ function cargarPropuestas(){
   if(!CFG.token)return;
   api('propuestas').then(function(l){
     marcarPropuestas(l);
-    PROPS=(l||[]).slice(0,20);
-    if(!PROPS.length){$('lprop').innerHTML='Todavía no hay simulaciones guardadas. Guardá una (o bajala en PDF) y queda acá.';return}
-    $('lprop').innerHTML=PROPS.map(function(x,i){
+    PROPS=(l||[]).slice(0,60);
+    // v40: sin pedir -> Mis propuestas; pedidas -> Seguimientos.
+    var htmlProp=[], htmlSeg=[];
+    PROPS.forEach(function(x,i){
+      var seg=!!x.pedido;
       var est=x.estado||'', ch=/✔/.test(est)?'v':(/NO LLEG/.test(est)?'r':(/PEDIDA|VENDIENDO/.test(est)?'c':'a'));
-      var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(x.producto)+'</b><span class="chip '+ch+'">'+(x.pedido?'pedida':'sin pedir')+'</span></div>'+
+      var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(x.producto)+'</b><span class="chip '+ch+'">'+(x.pedido?(x.llego?'llegó':'pedida'):'sin pedir')+'</span></div>'+
         '<div>'+esc(x.fecha)+' · '+(x.proveedor?esc(x.proveedor)+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+(x.fueraDeLista?' (fuera de las listas)':''):'proveedor sin elegir')+' · '+$$(x.cantidad)+' u. a <b>'+pesos2(x.costo)+'</b>'+
           (function(){var cs=x.masBarato!==null&&x.masBarato!==undefined&&x.masBarato<1?x.costo/(1-x.masBarato):((x.datos&&x.datos.costoSistema)||(x.datos&&x.datos.pdf&&x.datos.pdf.prod&&x.datos.pdf.prod.costo)); if(!cs||!x.costo||Math.abs(cs-x.costo)<0.005)return '';
             var d=1-x.costo/cs; return ' <span class="chip '+(d>0?'v':'r')+'" style="font-size:10px;padding:1px 6px">'+Math.round(Math.abs(d)*100)+'% '+(d>0?'más barato':'más caro')+' que el sistema ('+pesos2(cs)+')</span>'})()+'</div>'+
@@ -1250,13 +1258,28 @@ function cargarPropuestas(){
         h+='<div class="bar"><i style="width:'+Math.min(100,(x.avance||0)*100)+'%;background:'+(ch==='v'?'var(--verde)':ch==='r'?'var(--rojo)':'var(--azul2)')+'"></i></div>'+
           '<div>Llegó el '+esc(x.llego)+(x.entraron?' ('+$$(x.entraron)+' u.)':'')+' · vendidas <b>'+$$(x.vendidas)+'</b> en '+$$(x.diasDesde)+' días'+(x.ritmo!==null?' · '+String(Math.round(x.ritmo*10)/10).replace('.',',')+' por mes':'')+
           (typeof x.resto==='number'&&x.resto>0?' · lo que queda se vende en ~'+$$(x.resto)+' días':'')+'</div>';
+        // Lo ganado hasta ahora con lo que se vendió de esta compra.
+        if(x.gananciaTotal!==null&&x.gananciaTotal!==undefined&&x.cantidad>0&&x.vendidas!==null)
+          h+='<div>Ganado hasta ahora: <b class="'+(x.gananciaTotal>=0?'pos':'neg')+'">'+pesos(x.gananciaTotal/x.cantidad*Math.min(x.vendidas,x.cantidad))+'</b> de '+pesos(x.gananciaTotal)+'</div>';
       }
+      if(seg){var sirvio=/✔/.test(est)?'<b class="pos">¿Sirvió la propuesta? SÍ</b>':(/NO LLEG/.test(est)?'<b class="neg">¿Sirvió la propuesta? NO llegó al objetivo</b>':'');
+        if(sirvio)h+='<div style="margin-top:4px">'+sirvio+'</div>';}
       h+='<div class="note" style="margin-top:4px"><b class="'+(ch==='v'?'pos':ch==='r'?'neg':'')+'">'+esc(est)+'</b></div>'+
-        '<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="bajarPDFPropuesta('+i+',this)">⬇ PDF</button><button class="btn sec" onclick="editarPropuesta('+i+')">Editar</button><button class="btn sec" style="color:var(--rojo)" onclick="borrarPropuesta('+i+',this)">Borrar</button></div>'+
+        (seg?'<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="bajarPDFPropuesta('+i+',this)">⬇ PDF</button><button class="btn sec" onclick="marcarPedida('+i+',false,this)">No la pedí</button></div>'
+          :'<div class="btns" style="margin-top:6px"><button class="btn" onclick="marcarPedida('+i+',true,this)">✔ La pedí</button><button class="btn sec" onclick="bajarPDFPropuesta('+i+',this)">⬇ PDF</button></div>'+
+           '<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="editarPropuesta('+i+')">Editar</button><button class="btn sec" style="color:var(--rojo)" onclick="borrarPropuesta('+i+',this)">Borrar</button></div>')+
         '<div class="note" id="pmsg'+i+'"></div></div>';
-      return h;
-    }).join('');
+      (seg?htmlSeg:htmlProp).push(h);
+    });
+    $('lprop').innerHTML=htmlProp.length?htmlProp.join(''):'No hay propuestas sin pedir. Guardá una simulación (o bajala en PDF) y queda acá.';
+    $('lseg').innerHTML=htmlSeg.length?htmlSeg.join(''):'Todavía no hay compras pedidas. Cuando pidas una propuesta, tocá <b>✔ La pedí</b>.';
   }).catch(function(){$('lprop').innerHTML='Para ver el seguimiento, actualizá ECHU a la versión 5.18.'});
+}
+function marcarPedida(i,valor,btn){
+  var x=PROPS[i]; if(!x)return; if(btn)btn.disabled=true;
+  $('pmsg'+i).textContent=valor?'Pasando a Seguimientos…':'Volviendo a Mis propuestas…';
+  api('marcar_pedido',{id:x.id,pedido:valor?1:0}).then(function(){cargarPropuestas()})
+    .catch(function(e){$('pmsg'+i).innerHTML=/Acci/i.test(e.message)?'<b class="neg">Actualizá ECHU a la versión 5.46 (Nueva versión).</b>':'<b class="neg">'+esc(e.message)+'</b>';if(btn)btn.disabled=false});
 }
 
 document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',function(){cargarPropuestas();cargarLibPDF().catch(function(){})});
