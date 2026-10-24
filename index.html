@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=44;
+var APP_V=45;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -88,7 +88,7 @@ label{font-size:12px;color:var(--gris);font-weight:600;display:block;margin:10px
 .marcas{position:relative;height:28px;font-size:10px;color:var(--gris)}
 .marcas span{position:absolute;transform:translateX(-50%);white-space:nowrap}
 .oculto{display:none}
-.opc{border:2px solid var(--linea);border-radius:12px;padding:10px 12px;margin-top:12px;cursor:pointer;transition:background .4s}.opc.on{border-color:var(--azul2);background:#f8fbff}.opc-h{display:flex;justify-content:space-between;align-items:center;gap:8px}.opc-h b{font-size:15px}.opc .tick{font-size:12px;font-weight:700;color:var(--gris)}.opc.on .tick{color:var(--azul2)}.opc.flash{background:#fff3c4}.opc.bloq{opacity:.55;cursor:not-allowed}input[readonly]{background:#f1f3f6;color:#555}
+.opc{border:2px solid var(--linea);border-radius:12px;padding:10px 12px;margin-top:12px;cursor:pointer;transition:background .4s}.opc.on{border-color:var(--azul2);background:#f8fbff}.opc-h{display:flex;justify-content:space-between;align-items:center;gap:8px}.opc-h b{font-size:15px}.opc .tick{font-size:12px;font-weight:700;color:var(--gris)}.opc.on .tick{color:var(--azul2)}.opc.flash{background:#fff3c4}.opc.bloq{opacity:.55;cursor:not-allowed}.btn:disabled{opacity:.5;cursor:wait}input[readonly]{background:#f1f3f6;color:#555}
 .seg{display:flex;gap:6px;margin:10px 0 4px}.seg button{flex:1;border:2px solid var(--linea);background:#fff;border-radius:10px;padding:8px 4px;font-weight:700;color:var(--gris);cursor:pointer;font-size:13px}.seg button small{font-weight:600}.seg button.on{border-color:var(--azul2);background:var(--celeste);color:var(--azul2)}
 #login{max-width:420px;margin:40px auto;padding:0 16px}
 #login .logo{width:72px;height:72px;border-radius:18px;margin:0 auto 12px;display:block}
@@ -1219,6 +1219,7 @@ function armarPDFDesde(f,id){
 }
 var BOTON_COMPARTIR='<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="compartirPDF()">Abrir / compartir el PDF</button></div>';
 $('bpdf').onclick=function(){
+  if(GUARDANDO)return;
   calcEstrategia(); var e=EST.ult; if(!e||!e.d.c||!e.P){$('epdfmsg').innerHTML='<b class="neg">Falta el precio de la opción elegida.</b>';return}
   // v44: una orden NUEVA primero se guarda (así ECHU le da el número) y después se arma el PDF con ese número.
   if(!EST.editId&&e.d.q>0){
@@ -1261,13 +1262,20 @@ function datosSimulacion(e){
     ed:{sprecio:$('sprecio').value,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2}};
 }
 // Una vez guardada, lo que guardes o bajes de nuevo actualiza la MISMA fila (no se duplica).
+// v45: mientras se guarda, los botones quedan bloqueados (tocar varias veces no duplica la orden).
+var GUARDANDO=null;
 function guardarSimulacion(e){
-  return api('guardar_propuesta',{datos:JSON.stringify(datosSimulacion(e))}).then(function(r){
+  if(GUARDANDO)return GUARDANDO;
+  var bs=[$('bpdf'),$('bguardar')];bs.forEach(function(b){b.disabled=true});
+  var fin=function(){GUARDANDO=null;bs.forEach(function(b){b.disabled=false})};
+  GUARDANDO=api('guardar_propuesta',{datos:JSON.stringify(datosSimulacion(e))}).then(function(r){
     if(r&&r.id){EST.editId=r.id;if(r.orden)EST.orden=r.orden;pintarEdicion();guardarEstadoPronto()}
-    return r||{};
-  });
+    fin();return r||{};
+  },function(err){fin();throw err});
+  return GUARDANDO;
 }
 function mensajeGuardado(r){
+  if(r&&r.repetida)return 'Ya estaba guardada igual como <b>orden de compra N° '+esc(r.orden||'')+'</b>: no se duplicó.';
   return r&&r.id?(r.actualizada?'Se actualizó la orden de compra <b>N° '+esc(r.orden||'')+'</b> (no se duplicó).':'Quedó guardada la <b>orden de compra N° '+esc(r.orden||'')+'</b>. Cuando la pidas, tocá <b>✔ La pedí</b>.')
     :'No se pudo guardar en Gestión de Compras.';
 }
@@ -1277,6 +1285,7 @@ function pintarEdicion(){
 }
 function nuevaSim(){EST.editId='';EST.orden='';pintarEdicion();guardarEstadoPronto()}
 $('bguardar').onclick=function(){
+  if(GUARDANDO)return;
   calcEstrategia(); var e=EST.ult;
   if(!e||!e.d.c||!e.P){$('epdfmsg').innerHTML='<b class="neg">Falta el costo o el precio.</b>';return}
   if(!e.d.q){$('epdfmsg').innerHTML='<b class="neg">Poné la cantidad que comprarías para guardarla.</b>';return}
