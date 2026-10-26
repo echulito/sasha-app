@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=49;
+var APP_V=50;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -1379,7 +1379,9 @@ function cargarPropuestas(){
     PROPS.forEach(function(x,i){
       var seg=!!x.pedido;
       var est=x.estado||'', ch=/✔/.test(est)?'v':(/NO LLEG/.test(est)?'r':(/PEDIDA|VENDIENDO/.test(est)?'c':'a'));
-      var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+(x.orden?'<span class="chip c" style="margin-right:6px">N° '+esc(x.orden)+'</span>':'')+esc(x.producto)+'</b><span class="chip '+ch+'">'+(x.pedido?(x.llego?'llegó':'pedida'):'sin pedir')+'</span></div>'+
+      var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+(x.orden?'<span class="chip c" style="margin-right:6px">N° '+esc(x.orden)+'</span>':'')+esc(x.producto)+'</b><span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="chip '+ch+'">'+(x.pedido?(x.llego?'llegó':'pedida'):'sin pedir')+'</span>'+
+        // v50: marca de "cargado en el sistema" (o "falta cargar") a la vista.
+        (x.necesitaCarga?'<span class="chip '+(x.cargado?'v':'r')+'" style="white-space:nowrap">'+(x.cargado?'✔ en sistema':'falta cargar')+'</span>':'')+'</span></div>'+
         '<div>'+esc(x.fecha)+' · '+(x.proveedor?esc(x.proveedor)+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+(x.fueraDeLista?' (fuera de las listas)':''):'proveedor sin elegir')+' · '+$$(x.cantidad)+' u. a <b>'+pesos2(x.costo)+'</b>'+
           (function(){var cs=x.masBarato!==null&&x.masBarato!==undefined&&x.masBarato<1?x.costo/(1-x.masBarato):((x.datos&&x.datos.costoSistema)||(x.datos&&x.datos.pdf&&x.datos.pdf.prod&&x.datos.pdf.prod.costo)); if(!cs||!x.costo||Math.abs(cs-x.costo)<0.005)return '';
             var d=1-x.costo/cs; return ' <span class="chip '+(d>0?'v':'r')+'" style="font-size:10px;padding:1px 6px">'+Math.round(Math.abs(d)*100)+'% '+(d>0?'más barato':'más caro')+' que el sistema ('+pesos2(cs)+')</span>'})()+'</div>'+
@@ -1402,8 +1404,9 @@ function cargarPropuestas(){
         if(sirvio)h+='<div style="margin-top:4px">'+sirvio+'</div>';}
       // v47: qué hay que cargar en el sistema (proveedor, costo, precio) y si ya se cargó.
       if(x.queCargar){
-        if(x.necesitaCarga)h+='<div class="eval '+(x.cargado?'bien':'bajo')+'" style="margin-top:6px"><b>'+(x.cargado?'✔ Cargado en el sistema':'Falta cargar en el sistema')+':</b> '+esc(x.queCargar)+'</div>'+
-          '<div class="btns" style="margin-top:6px"><button class="btn'+(x.cargado?' sec':'')+'" onclick="marcarCargado('+i+','+(!x.cargado)+',this)">'+(x.cargado?'No lo cargué':'✔ Lo cargué en el sistema')+'</button></div>';
+        if(x.necesitaCarga&&x.cargado)h+='<div class="note" style="margin-top:4px;color:var(--verde)"><b>✔ Cargado en el sistema</b> ('+esc(x.queCargar)+') · <a href="#" onclick="marcarCargado('+i+',false,null);return false">deshacer</a></div>';
+        else if(x.necesitaCarga)h+='<div class="eval bajo" style="margin-top:6px"><b>Falta cargar en el sistema:</b> '+esc(x.queCargar)+'</div>'+
+          '<div class="btns" style="margin-top:6px"><button class="btn" onclick="marcarCargado('+i+',true,this)">✔ Lo cargué en el sistema</button></div>';
         else h+='<div class="note" style="margin-top:4px">🔒 '+esc(x.queCargar)+'</div>';
       }
       h+='<div class="note" style="margin-top:4px"><b class="'+(ch==='v'?'pos':ch==='r'?'neg':'')+'">'+esc(est)+'</b></div>'+
@@ -1412,7 +1415,7 @@ function cargarPropuestas(){
            '<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="editarPropuesta('+i+')">Editar</button><button class="btn sec" style="color:var(--rojo)" onclick="borrarPropuesta('+i+',this)">Borrar</button></div>')+
         '<div class="note" id="pmsg'+i+'"></div></div>';
       // v48: clave de búsqueda (N° de orden, fecha, producto, códigos, proveedor, estado).
-      var clave=normBus([x.orden?'n'+x.orden+' orden'+x.orden:'',x.fecha,x.producto,x.codigo,x.proveedor,x.codigoProveedor,est,x.queCargar||''].join(' | '));
+      var clave=normBus([x.orden?'n'+x.orden+' orden'+x.orden:'',x.fecha,x.producto,x.codigo,x.proveedor,x.codigoProveedor,est,x.queCargar||'',x.necesitaCarga?(x.cargado?'en sistema cargado':'falta cargar'):''].join(' | '));
       (seg?htmlSeg:htmlProp).push({h:h,k:' '+clave+' ',orden:String(x.orden||'')});
     });
     ORD_ITEMS={prop:htmlProp,seg:htmlSeg};
