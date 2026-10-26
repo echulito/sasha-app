@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=54;
+var APP_V=55;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -183,6 +183,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <label>Código del producto en ese proveedor</label>
       <input id="sprovcod" placeholder="Ej.: 93 (se completa solo si está en la lista)" autocomplete="off">
       <div id="sprovinfo" class="note"></div>
+      <div id="ssug"></div>
       <label>Precio de venta ($)</label>
       <input id="sprecio" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0">
       <input id="sslider" class="slider" type="range" min="0" max="100" step="1">
@@ -647,6 +648,10 @@ function verProducto(c){
         '. Hasta que se vendan esas '+$$(cc.entraron||0)+' u.'+(cc.quedan!=null?' (quedan '+$$(cc.quedan)+')':'')+' la ganancia se calcula con este costo, aunque en el sistema figure '+pesos(cs)+'.</div>';}
     var mUso=pv&&cUso?(pv-cUso)/pv:null, gUso=pv&&cUso?pv-cUso:null;
     var ev=evaluarRotacion(p,cUso), nivel=ev.nivel, txtNivel=ev.texto;
+    // v55: lo que se confirmó como cargado en el sistema y todavía no llegó en PRODUCTOS.
+    var cpd=p.cargadoPendiente;
+    if(cpd)aviso+='<div class="note" style="margin-top:8px">Cargado en el sistema el '+esc(cpd.fecha)+' (orden N° '+esc(cpd.orden)+(cpd.deCabecera?', en la cabecera '+esc(cpd.deCabecera):'')+'). Todavía no llegó en el archivo de PRODUCTOS: se muestra el dato nuevo'+
+      (cpd.antes&&cpd.antes.precio&&Math.abs(cpd.antes.precio-p.precio)>1?' (antes '+pesos(cpd.antes.precio)+')':'')+'.</div>';
     h+='<div class="card"><h2>Precio y margen</h2>'+
       '<div class="row"><span>Precio de venta</span><span>'+pesos(pv)+'</span></div>'+
       (cUso?'<div class="row"><span>Costo '+origen+'</span><span>'+pesos(cUso)+'</span></div>'+
@@ -745,6 +750,7 @@ function pintarSprod(){
     '<div class="note" style="margin:2px 0 4px"><b>HOY EN EL SISTEMA</b> (para comparar con la simulación)</div>'+
     // v52: código interno y cabecera.
     fila('Código interno','<b style="font-size:16px;user-select:all">'+esc(p.codigo||'-')+'</b>')+
+    (p.cargadoPendiente?'<div class="note" style="margin:2px 0">Incluye lo cargado el '+esc(p.cargadoPendiente.fecha)+' (orden N° '+esc(p.cargadoPendiente.orden)+'), que todavía no llegó en PRODUCTOS.</div>':'')+
     (p.cabecera?fila('Cabecera',p.cabecera.esCabecera?'<span class="chip c">ES CABECERA</span> de '+p.cabecera.cantidad+' productos':'<span class="chip a">en la gama de '+esc(p.cabecera.codigo)+'</span> '+esc(p.cabecera.producto||'')):'')+
     fila('Proveedor',esc(p.proveedor||'-')+(p.codigoProveedor?' · cód. '+esc(p.codigoProveedor):''))+
     fila('Costo en el sistema','<b>'+pesos(cs)+'</b>')+
@@ -762,25 +768,48 @@ function elegirSim(p){
   SPROD=p;$('sq').value='';
   EST.t1=EST.t2=EST.tObj=false;EST.lista2=0;EST.editId='';EST.orden='';if($('eedit'))pintarEdicion();$('eobj').value='';
   pintarSprod();
-  PROV.modo='L';PROV.sel=p?(((p.bultos||[]).filter(function(x){return x.actual})[0]||{}).proveedor||p.proveedor||''):PROV.sel;
+  // v55: por defecto, el proveedor MÁS BARATO de las listas (con su costo).
+  var mejor=p?((p.bultos||[]).filter(function(x){return x.costo>0&&x.proveedor}).sort(function(a,b){return a.costo-b.costo})[0]||null):null;
+  EST.pManual=false;
+  PROV.modo='L';PROV.sel=p?(mejor?mejor.proveedor:(((p.bultos||[]).filter(function(x){return x.actual})[0]||{}).proveedor||p.proveedor||'')):PROV.sel;
   pintarProveedores();
-  if(p)$('sprovcod').value=codigoEnProveedor(PROV.sel);
+  if(p)$('sprovcod').value=(mejor&&mejor.codigo)||codigoEnProveedor(PROV.sel);
   if(p){
-    if(!$('scosto').value&&p.costo)ponerPesos('scosto',Math.round(p.costo));
+    if(mejor)ponerPesos('scosto',Math.round(mejor.costo*100)/100);
+    else if(p.costo)ponerPesos('scosto',Math.round(p.costo*100)/100);
     if(p.precio)ponerPesos('sprecio',Math.round(p.precio));
     // v46: cantidad por defecto = lo que queda del mes + el mes que viene, menos el stock.
     var sug=p.mesActual&&p.mesActual.comprarHastaFinMesQueViene;
     $('scant').value=sug>0?sug:'';
+    infoProveedor();
   }
+  sugerirPrecioPorCosto(true);
   recalcular();
 }
-['scosto','scant','sprecio'].forEach(function(id){$(id).addEventListener('input',function(){recalcular(id)})});
+['scosto','scant','sprecio'].forEach(function(id){$(id).addEventListener('input',function(){if(id==='sprecio')EST.pManual=true;if(id==='scosto'||id==='sprecio')sugerirPrecioPorCosto(true);recalcular(id)})});
 $('sslider').addEventListener('input',function(){
   var c=num('scosto')||0; if(!c||precioFijoCab())return;
+  EST.pManual=true;
   var m=+$('sslider').value/100; ponerPesos('sprecio',Math.round(c/(1-m))); recalcular('slider');
 });
 function precioPara(c,m){return m<1?Math.ceil(c/(1-m)/10)*10:0}
-function setPrecio(v){if(precioFijoCab())return;ponerPesos('sprecio',v);recalcular()}
+function setPrecio(v){if(precioFijoCab())return;EST.pManual=true;ponerPesos('sprecio',v);recalcular()}
+// v55: si el costo de la compra es MÁS CARO que el del sistema, el precio por defecto es el que mantiene
+// el margen actual del sistema (es el mínimo para no perder margen). No toca nada en el sistema.
+function sugerirPrecioPorCosto(sinRecalcular){
+  var p=SPROD, el=$('ssug'); if(!el)return; el.innerHTML='';
+  if(!p||!p.precio)return;
+  var cs=p.costoSistema||p.costo||0, c=num('scosto')||0;
+  if(!cs||!c||c<=cs+0.005)return;
+  var mA=(p.precio-cs)/p.precio, pn=precioPara(c,mA), sube=c/cs-1;
+  if(precioFijoCab()){
+    el.innerHTML='<div class="eval bajo" style="margin-top:6px">El costo sube de '+pesos2(cs)+' a <b>'+pesos2(c)+'</b> (+'+pct(sube,0)+'). Para mantener el margen actual ('+pct(mA)+') la gama tendría que estar a <b>'+pesos(pn)+'</b>: el precio se cambia desde la cabecera.</div>';
+    return;
+  }
+  if(!EST.pManual){ponerPesos('sprecio',pn);EST.t1=false;if(!sinRecalcular)recalcular()}
+  el.innerHTML='<div class="eval bajo" style="margin-top:6px">El costo sube de '+pesos2(cs)+' a <b>'+pesos2(c)+'</b> (+'+pct(sube,0)+'). Para mantener el margen actual del sistema ('+pct(mA)+') el precio mínimo es <b>'+pesos(pn)+'</b>'+
+    (EST.pManual?' (hoy en el sistema '+pesos(p.precio)+').':' y ya quedó como precio de venta.')+'</div>';
+}
 // v43: si el producto está en una cabecera (o ES la cabecera), el precio de venta NO se toca en la simulación:
 // la compra es solo el costo de este producto; el precio es el de toda la gama.
 // v52: solo los productos DE LA GAMA tienen el precio fijo; el artículo de CABECERA sí lo puede cambiar (cambia toda la gama).
@@ -1007,6 +1036,7 @@ function usarOferta(p){
 }
 function mantenerPrecio(){
   if(!SPROD||!SPROD.precio)return;
+  EST.pManual=true;
   ponerPesos('sprecio',Math.round(SPROD.precio));ponerPesos('e1pre',Math.round(SPROD.precio));EST.t1=true;
   recalcular();elegirOpcion(1);irAEstrategia(1);guardarEstadoPronto();
 }
@@ -1166,7 +1196,7 @@ $('sprov').addEventListener('change',function(){
   var e=listasDelProducto().filter(function(x){return normProv(x.proveedor)===normProv(PROV.sel)})[0];
   if(e&&e.costo>0)ponerPesos('scosto',Math.round(e.costo*100)/100);
   $('sprovcod').value=codigoEnProveedor(PROV.sel);
-  infoProveedor();recalcular();guardarEstadoPronto();
+  infoProveedor();sugerirPrecioPorCosto(true);recalcular();guardarEstadoPronto();
 });
 $('sprovcod').addEventListener('input',guardarEstadoPronto);
 
@@ -1364,6 +1394,7 @@ function editarPropuesta(i){
   $('pmsg'+i).textContent='Cargando en el simulador…';
   var seguir=function(p){
     elegirSim(p);
+    EST.pManual=true;
     ponerPesos('scosto',x.costo);$('scant').value=x.cantidad||'';
     PROV.modo=x.fueraDeLista?'F':'L';PROV.sel=x.fueraDeLista?'':(x.proveedor||'');$('sprovf').value=x.fueraDeLista?(x.proveedor||''):'';pintarProveedores();
     $('sprovcod').value=x.codigoProveedor||(x.datos&&x.datos.codigoProveedor)||(x.fueraDeLista?'':codigoEnProveedor(x.proveedor));
@@ -1372,7 +1403,7 @@ function editarPropuesta(i){
     if(op===2){ponerPesos('epre',x.precioConOferta);EST.t2=true;$('epct').value=ed.epct||Math.round((1-x.precioConOferta/x.precioSinOferta)*100);EST.lista2=ed.lista2||0;if(ed.eaum!==undefined)$('eaum').value=ed.eaum}
     else if(!ed.e1pre){ponerPesos('e1pre',x.precioConOferta);EST.t1=true}
     $('edias').value=x.dias||30;$('eobj').value=x.objetivo||'';EST.tObj=true;
-    EST.editId=x.id;EST.orden=x.orden||'';elegirOpcion(op);recalcular();pintarEdicion();
+    EST.editId=x.id;EST.orden=x.orden||'';sugerirPrecioPorCosto(true);elegirOpcion(op);recalcular();pintarEdicion();
     $('pmsg'+i).textContent='';irA('simulador');guardarEstado();
   };
   if(x.codigo)api('producto',{codigo:x.codigo}).then(seguir).catch(function(){seguir(null)});else seguir(null);
@@ -1551,6 +1582,7 @@ function abrirOportunidadEnSim(x){
     PROV.modo='L';PROV.sel=x.proveedor;pintarProveedores();
     $('sprovcod').value=x.codigoProveedor||codigoEnProveedor(x.proveedor);
     ponerPesos('scosto',Math.round(x.costo*100)/100);
+    sugerirPrecioPorCosto(true);
     if(x.compraSugerida>0&&!$('scant').value)$('scant').value=x.compraSugerida;
     $('sprovinfo').innerHTML=(x.menos>0?'Oportunidad: en la lista de <b>'+esc(x.proveedor)+'</b> está a <b>'+pesos2(x.costo)+'</b> ('+x.menos+'% menos que el sistema, '+pesos(x.costoSistema)+'). ':'Sugerencia de compra: en <b>'+esc(x.proveedor)+'</b> a <b>'+pesos2(x.costo)+'</b>. ')+
       (x.compraSugerida>0?'ECHU sugiere comprar <b>'+x.compraSugerida+' u.</b> ':'')+'Elegí cuántas comprar y la estrategia, y guardala.';
