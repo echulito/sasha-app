@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=48;
+var APP_V=49;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -713,7 +713,10 @@ function verProducto(c){
     h+='<div class="card"><h2>Proveedor</h2>'+
       '<div class="row"><span>Proveedor</span><span>'+esc(p.proveedor||'-')+'</span></div>'+
       '<div class="row"><span>Código de proveedor</span><span>'+esc(p.codigoProveedor||'-')+'</span></div>'+
-      ((p.bultos||[]).filter(function(x){return x.unidades>1}).slice(0,1).map(function(x){return '<div class="row"><span>Bulto ('+esc(x.proveedor)+')</span><span>'+x.unidades+' u. · '+pesos(x.costo*x.unidades)+'</span></div>'}).join(''))+
+      // v49: unidades por bulto (de su proveedor primero; si su lista no lo dice, de las otras listas).
+      (function(){var bs=(p.bultos||[]).filter(function(x){return x.unidades>1}).slice(0,3);
+        if(!bs.length)return '<div class="row"><span>Unidades por bulto</span><span class="note" style="margin:0">la lista no lo informa</span></div>';
+        return bs.map(function(x){return '<div class="row"><span>Bulto'+(x.actual?'':' en')+' ('+esc(x.proveedor)+')</span><span><b>'+x.unidades+' u.</b> · '+pesos(x.costo*x.unidades)+' el bulto</span></div>'}).join('')})()+
       (p.mejorCosto?'<div class="eval bien">Más barato en '+esc(p.mejorDonde)+': '+pesos(p.mejorCosto)+' ('+pct(1-p.mejorCosto/p.costo,0)+' menos). Con ese costo el margen sería '+pct(p.precio?(p.precio-p.mejorCosto)/p.precio:null)+'.</div>':'<div class="note">No hay un costo más barato en otra lista vigente.</div>')+
       (f.recomendacion?'<div class="note"><b>'+esc(f.recomendacion)+'</b></div>':'')+
       '<div class="btns"><button class="btn" id="bsim">Simular una compra de este producto</button></div>'+
