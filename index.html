@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=57;
+var APP_V=58;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -742,21 +742,22 @@ function pintarSprod(){
   var p=SPROD;
   // v32: lo que hay HOY en el sistema (proveedor, costo y precio cargados), para comparar con la simulación de abajo.
   if(!p){$('sprod').innerHTML='';return}
-  var cs=p.costoSistema||p.costo||0, act=((p.bultos||[]).filter(function(x){return x.actual})[0])||null;
+  var bh=baseHoy(p), cs=bh.costo, act=((p.bultos||[]).filter(function(x){return x.actual})[0])||null;
   var cl=act&&act.costo?act.costo:0;
-  var cA=p.compraEnCurso&&p.compraEnCurso.costo>0?p.compraEnCurso.costo:cs, mHoy=p.precio&&cA?(p.precio-cA)/p.precio:null, fila=function(a,b){return '<div class="row"><span>'+a+'</span><span>'+b+'</span></div>'};
+  var cA=p.compraEnCurso&&p.compraEnCurso.costo>0?p.compraEnCurso.costo:cs, mHoy=bh.precio&&cA?(bh.precio-cA)/bh.precio:null, fila=function(a,b){return '<div class="row"><span>'+a+'</span><span>'+b+'</span></div>'};
   $('sprod').innerHTML='<div style="border:1px solid var(--linea);border-radius:10px;padding:8px 12px;margin-top:6px;background:#fafbfc">'+
     '<div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+esc(p.producto)+'</b><a href="#" id="squitar">quitar</a></div>'+
     '<div class="note" style="margin:2px 0 4px"><b>HOY EN EL SISTEMA</b> (para comparar con la simulación)</div>'+
     // v52: código interno y cabecera.
     fila('Código interno','<b style="font-size:16px;user-select:all">'+esc(p.codigo||'-')+'</b>')+
-    (p.cargadoPendiente?'<div class="note" style="margin:2px 0">Incluye lo cargado el '+esc(p.cargadoPendiente.fecha)+' (orden N° '+esc(p.cargadoPendiente.orden)+'), que todavía no llegó en PRODUCTOS.</div>':'')+
+    (p.cargadoPendiente?fila('Ya cargado el '+esc(p.cargadoPendiente.fecha)+' (orden N° '+esc(p.cargadoPendiente.orden)+(p.cargadoPendiente.deCabecera?', cabecera '+esc(p.cargadoPendiente.deCabecera):'')+'; falta en PRODUCTOS)',
+      (p.cargadoPendiente.lista?pesos(p.cargadoPendiente.lista)+' con '+Math.round((1-p.precio/p.cargadoPendiente.lista)*100)+'% (se cobra '+pesos(p.precio)+')':pesos(p.precio))+(Math.abs((p.costoSistema||0)-cs)>0.005?' · costo '+pesos2(p.costoSistema):'')):'')+
     (p.cabecera?fila('Cabecera',p.cabecera.esCabecera?'<span class="chip c">ES CABECERA</span> de '+p.cabecera.cantidad+' productos':'<span class="chip a">en la gama de '+esc(p.cabecera.codigo)+'</span> '+esc(p.cabecera.producto||'')):'')+
-    fila('Proveedor',esc(p.proveedor||'-')+(p.codigoProveedor?' · cód. '+esc(p.codigoProveedor):''))+
+    fila('Proveedor',esc(bh.proveedor||'-')+(bh.codigoProveedor?' · cód. '+esc(bh.codigoProveedor):''))+
     fila('Costo en el sistema','<b>'+pesos(cs)+'</b>')+
     (p.compraEnCurso&&p.compraEnCurso.costo>0?fila('Compra en curso ('+esc(p.compraEnCurso.proveedor||'')+')','<b>'+pesos2(p.compraEnCurso.costo)+'</b>'+(p.compraEnCurso.quedan!=null?' · quedan '+$$(p.compraEnCurso.quedan)+' u.':'')):'')+
     (cl?fila('Costo en su lista ('+esc(act&&act.proveedor||p.proveedor||'actual')+')',pesos(cl)):'')+
-    fila('Precio de venta','<b>'+pesos(p.precio)+'</b>')+
+    fila('Precio de venta','<b>'+pesos(bh.precio)+'</b>')+
     fila('Margen hoy',mHoy===null?'-':'<b>'+pct(mHoy)+'</b>')+
     fila('Stock',$$(p.stock)+' u.')+
     fila('Vende por mes',(p.ventaMensual||0).toFixed(1).replace('.',',')+' u.')+
@@ -817,6 +818,13 @@ function sugerirPrecioPorCosto(sinRecalcular){
 // la compra es solo el costo de este producto; el precio es el de toda la gama.
 // v52: solo los productos DE LA GAMA tienen el precio fijo; el artículo de CABECERA sí lo puede cambiar (cambia toda la gama).
 function precioFijoCab(){return SPROD&&SPROD.cabecera&&!SPROD.cabecera.esCabecera&&SPROD.precio>0?Math.round(SPROD.precio):0}
+// v58: "hoy en el sistema" para comparar = lo del archivo de PRODUCTOS (sin lo ya cargado de otra orden).
+function baseHoy(p){
+  if(!p)return {costo:0,precio:0,proveedor:'',codigoProveedor:''};
+  var a=p.cargadoPendiente&&p.cargadoPendiente.antes;
+  return a?{costo:a.costo||p.costoSistema||p.costo||0,precio:a.precio||p.precio||0,proveedor:a.proveedor||p.proveedor||'',codigoProveedor:a.codigoProveedor||p.codigoProveedor||''}
+    :{costo:p.costoSistema||p.costo||0,precio:p.precio||0,proveedor:p.proveedor||'',codigoProveedor:p.codigoProveedor||''};
+}
 function esCabeceraSim(){return !!(SPROD&&SPROD.cabecera&&SPROD.cabecera.esCabecera)}
 // v57: oferta vigente (llamador) del producto o de su gama: precio de lista + bonificación (lo cargado en el sistema).
 function ofertaVigente(){
@@ -853,9 +861,9 @@ function aplicarBloqueoCab(){
 // v36: lo que conseguiste contra lo de hoy (en el recuadro HOY EN EL SISTEMA).
 function pintarComparacion(){
   var el=$('scomp'), p=SPROD; if(!el)return;
-  var cs=p&&(p.costoSistema||p.costo)||0, c=num('scosto')||0;
+  var bh=baseHoy(p), cs=bh.costo, c=num('scosto')||0;
   if(!p||!cs||!c||Math.abs(c-cs)<0.005){el.innerHTML='';return}
-  var dif=1-c/cs, mN=p.precio?(p.precio-c)/p.precio:null;
+  var dif=1-c/cs, mN=bh.precio?(bh.precio-c)/bh.precio:null;
   el.innerHTML='<div class="eval '+(dif>0?'bien':'mal')+'" style="margin-top:6px">Se consiguió a <b>'+pesos2(c)+'</b>: <b>'+Math.round(Math.abs(dif)*100)+'% '+(dif>0?'más barato':'más caro')+'</b> que el sistema'+
     (mN!==null?' · con el precio de hoy el margen sería <b>'+pct(mN)+'</b>':'')+'.</div>';
 }
@@ -1225,7 +1233,7 @@ function fotoPDF(e){
   var d=e.d, P=SPROD||{}, bp=bultoPrincipal(), pv=proveedorElegido();
   return {orden:EST.orden||'',op:e.op,of:e.op===2&&e.desc>0,lista:e.lista,desc:e.desc,P:e.P,m:e.m,gan:e.gan,dias:e.dias,aum:e.aum,vm:e.vm,proy:e.proy,objU:e.objU,ganProy:e.ganProy,
     c:d.c,q:d.q||0,mn:d.mn,fecha:hoyTxt(),hora:(function(x){return ('0'+x.getHours()).slice(-2)+':'+('0'+x.getMinutes()).slice(-2)})(new Date()),hasta:hoyTxt(e.dias),prov:pv,bulto:bp?{proveedor:bp.proveedor,unidades:bp.unidades}:null,
-    prod:{codigo:P.codigo||'',producto:P.producto||'',proveedor:P.proveedor||'',codigoProveedor:P.codigoProveedor||'',costo:P.costoSistema||P.costo||0,precio:P.precio||0,stock:P.stock||0,ventaMensual:P.ventaMensual||0,
+    prod:{codigo:P.codigo||'',producto:P.producto||'',proveedor:baseHoy(P).proveedor,codigoProveedor:baseHoy(P).codigoProveedor,costo:baseHoy(P).costo,precio:baseHoy(P).precio,stock:P.stock||0,ventaMensual:P.ventaMensual||0,
       cab:P.cabecera?{codigo:P.cabecera.codigo||'',producto:P.cabecera.producto||'',esCabecera:!!P.cabecera.esCabecera,cantidad:P.cabecera.cantidad||0}:null}};
 }
 // v43: cabecera del producto para el PDF (de la foto; si es una propuesta vieja, del índice de productos).
@@ -1352,7 +1360,8 @@ $('bpdf').onclick=function(){
 function datosSimulacion(e){
   var d=e.d, P=SPROD||{}, op2=e.op===2&&e.desc>0, pv=proveedorElegido();
   return {id:EST.editId||'',codigo:P.codigo||'',producto:P.producto||'Producto sin elegir',proveedor:pv.nombre,codigoProveedor:pv.codigo||'',fueraDeLista:pv.fuera,
-    costoSistema:P.costoSistema||P.costo||0,precioHoy:P.precio||0,
+    costoSistema:baseHoy(P).costo,precioHoy:baseHoy(P).precio,
+    sistemaActual:{costo:P.costoSistema||P.costo||0,precio:P.precio||0,proveedor:P.proveedor||'',codigoProveedor:P.codigoProveedor||''},
     costo:d.c,cantidad:d.q||0,precioSinOferta:e.lista,precioConOferta:e.P,
     ofertaPct:op2?Math.round(e.desc*100):0,margen:Math.round(e.m*1000)/10,gananciaUnidad:Math.round(e.gan),objetivo:e.objU,dias:e.dias,
     ventaMensual:Math.round(e.vm*10)/10,aumento:Math.round(e.aum*100),proyeccion:Math.round(e.proy*10)/10,gananciaProyectada:Math.round(e.ganProy),
