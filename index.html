@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=55;
+var APP_V=56;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -829,7 +829,7 @@ function aplicarBloqueoCab(){
   $('scabnota').innerHTML=f?'<div class="eval ok" style="margin-top:8px"><b>Precio fijo de cabecera: '+pesos(f)+'</b>. '+
     'Pertenece a la gama de '+esc(cb.codigo)+' · '+esc(cb.producto)+
     ': el precio se cambia desde el artículo de cabecera (para toda la gama), no acá. El costo nuevo es solo de este producto. Se simula solo el costo.</div>'
-    :(esCabeceraSim()?'<div class="eval ok" style="margin-top:8px"><b>Es el artículo de CABECERA</b> de '+cb.cantidad+' productos: si cambiás el precio de venta acá, <b>cambia el de toda la gama</b>. El costo de esta compra es solo de este producto (no se cambia en el sistema).</div>':'');
+    :(esCabeceraSim()?'<div class="eval ok" style="margin-top:8px"><b>Es el artículo de CABECERA</b> de '+cb.cantidad+' productos: si cambiás el precio de venta acá, <b>cambia el de toda la gama</b>. El costo: si la compra sale más cara, se cambia en la cabecera (para toda la gama); si sale más barata, no se cambia (es solo de este producto).</div>':'');
 }
 // v36: lo que conseguiste contra lo de hoy (en el recuadro HOY EN EL SISTEMA).
 function pintarComparacion(){
@@ -984,11 +984,12 @@ function htmlOpcion(e){
   if(e.P<d.pMin)h+='<div class="eval mal">'+(d.parte?'No paga su parte de los gastos: con lo que vende necesita '+pesos(d.pMin)+'.':'Queda debajo del mínimo del local ('+pesos(d.pMin)+'): no cubre los gastos.')+'</div>';
   if(precioFijoCab())return h+'<div class="note" style="margin-top:8px">Está en la gama de una cabecera: <b>no se carga nada en el sistema</b> (ni costo ni precio). Solo se informa la compra.</div>';
   if(esCabeceraSim()){
-    var cp=of||(SPROD.precio&&Math.abs(e.P-SPROD.precio)>1);
+    var cp=of||(SPROD.precio&&Math.abs(e.P-SPROD.precio)>1), csis=SPROD.costoSistema||SPROD.costo||0, sube=csis>0&&d.c>csis+0.005;
     return h+'<div style="margin-top:8px;padding:8px 10px;border:1px dashed var(--azul2);border-radius:10px"><b>Para cargar en el sistema (en la cabecera)</b>'+
+      (sube?'<div class="row"><span>Costo nuevo · toda la gama</span><span><b>'+pesos2(d.c)+'</b> (hoy '+pesos2(csis)+')</span></div>':'')+
       (cp?(of?'<div class="row"><span>Precio de venta (lista) · toda la gama</span><span>'+pesos(e.lista)+'</span></div><div class="row"><span>Bonificación</span><span>'+pct(e.desc,0)+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(e.P)+'</b></span></div>'
-        :'<div class="row"><span>Precio de venta nuevo · toda la gama</span><span><b>'+pesos(e.P)+'</b></span></div>'):'<div class="note">El precio no cambia: no hay nada para cargar.</div>')+
-      '<div class="note">El costo NO se cambia: la compra es solo de este producto.</div></div>';
+        :'<div class="row"><span>Precio de venta nuevo · toda la gama</span><span><b>'+pesos(e.P)+'</b></span></div>'):'<div class="note">El precio no cambia.</div>')+
+      (sube?'<div class="note">El costo subió: se cambia en la cabecera para no perder margen.</div>':(d.c>0&&csis>0&&d.c<csis-0.005?'<div class="note">El costo no se cambia: la compra salió más barata y es solo de este producto (el resto de la gama tiene stock a su costo).</div>':''))+'</div>';
   }
   h+='<div style="margin-top:8px;padding:8px 10px;border:1px dashed var(--azul2);border-radius:10px"><b>Para cargar en el sistema</b>'+
     (of?'<div class="row"><span>Precio de venta (lista)</span><span>'+pesos(e.lista)+'</span></div><div class="row"><span>Bonificación</span><span>'+pct(e.desc,0)+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(e.P)+'</b></span></div>'
@@ -1262,11 +1263,12 @@ function armarPDFDesde(f,id){
       if(f.q>0)D.fila('Ganancia si se vende todo (después de comisiones)',$f(f.gan*f.q),f.gan<0);
       if(CB&&CB.esCabecera){
         // v52: el artículo de CABECERA sí cambia el precio (para toda la gama); el costo no.
-        var cambiaPrecio=f.of||(P.precio&&Math.abs(f.P-P.precio)>1);
-        D.seccion(cambiaPrecio?'Para cargar en el sistema (en la cabecera: cambia toda la gama)':'No se carga en el sistema');
+        var cambiaPrecio=f.of||(P.precio&&Math.abs(f.P-P.precio)>1), subeC=P.costo>0&&f.c>P.costo+0.005;
+        D.seccion(cambiaPrecio||subeC?'Para cargar en el sistema (en la cabecera: cambia toda la gama)':'No se carga en el sistema');
         D.parrafo('Este producto es el ARTÍCULO DE CABECERA'+(CB.cantidad?' de '+CB.cantidad+' productos':'')+'. '+
           (cambiaPrecio?'El precio de venta se cambia acá y cambia el de toda la gama. ':'El precio de venta no cambia. ')+
-          'El costo NO se cambia en el sistema: la compra es solo de este producto. Mientras dure este stock, ECHU calcula la ganancia con el costo de la compra.');
+          (subeC?'El costo subió: se cambia en la cabecera (toda la gama) para no perder margen.':(P.costo>0&&f.c<P.costo-0.005?'El costo no se cambia: la compra salió más barata y es solo de este producto (el resto de la gama tiene stock a su costo). Mientras dure este stock, ECHU calcula la ganancia con el costo de la compra.':'')));
+        if(subeC)D.fila('Costo nuevo · toda la gama',$c(f.c)+' (hoy '+$c(P.costo)+')');
         if(f.of){D.fila('Precio de venta (lista) · toda la gama',$f(f.lista));D.fila('Bonificación',Math.round(f.desc*100)+'%');D.fila('Se cobra',$f(f.P));if(f.hasta)D.fila('Vigencia de la oferta',f.fecha+' al '+f.hasta);}
         else D.fila(cambiaPrecio?'Precio de venta nuevo · toda la gama':'Precio de venta (no cambia)',$f(f.P)+(cambiaPrecio&&P.precio?' (hoy '+$f(P.precio)+')':''));
         D.fila('Margen con el costo de la compra',pc(f.m),f.m<f.mn);D.fila('Ganancia por unidad (después de comisiones)',$f(f.gan),f.gan<0);
