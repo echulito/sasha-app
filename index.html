@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=52;
+var APP_V=53;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -745,7 +745,7 @@ function pintarSprod(){
     '<div class="note" style="margin:2px 0 4px"><b>HOY EN EL SISTEMA</b> (para comparar con la simulación)</div>'+
     // v52: código interno y cabecera.
     fila('Código interno','<b style="font-size:16px;user-select:all">'+esc(p.codigo||'-')+'</b>')+
-    (p.cabecera?fila('Cabecera',p.cabecera.esCabecera?'<span class="chip c">👑 ES CABECERA</span> de '+p.cabecera.cantidad+' productos':'<span class="chip a">en la gama de '+esc(p.cabecera.codigo)+'</span> '+esc(p.cabecera.producto||'')):'')+
+    (p.cabecera?fila('Cabecera',p.cabecera.esCabecera?'<span class="chip c">ES CABECERA</span> de '+p.cabecera.cantidad+' productos':'<span class="chip a">en la gama de '+esc(p.cabecera.codigo)+'</span> '+esc(p.cabecera.producto||'')):'')+
     fila('Proveedor',esc(p.proveedor||'-')+(p.codigoProveedor?' · cód. '+esc(p.codigoProveedor):''))+
     fila('Costo en el sistema','<b>'+pesos(cs)+'</b>')+
     (p.compraEnCurso&&p.compraEnCurso.costo>0?fila('🛒 Compra en curso ('+esc(p.compraEnCurso.proveedor||'')+')','<b>'+pesos2(p.compraEnCurso.costo)+'</b>'+(p.compraEnCurso.quedan!=null?' · quedan '+$$(p.compraEnCurso.quedan)+' u.':'')):'')+
@@ -800,7 +800,7 @@ function aplicarBloqueoCab(){
   $('scabnota').innerHTML=f?'<div class="eval ok" style="margin-top:8px">🔒 <b>Precio fijo de cabecera: '+pesos(f)+'</b>. '+
     'Pertenece a la gama de '+esc(cb.codigo)+' · '+esc(cb.producto)+
     ': el precio se cambia desde el artículo de cabecera (para toda la gama), no acá. El costo nuevo es solo de este producto. Se simula solo el costo.</div>'
-    :(esCabeceraSim()?'<div class="eval ok" style="margin-top:8px">👑 <b>Es el artículo de CABECERA</b> de '+cb.cantidad+' productos: si cambiás el precio de venta acá, <b>cambia el de toda la gama</b>. El costo de esta compra es solo de este producto (no se cambia en el sistema).</div>':'');
+    :(esCabeceraSim()?'<div class="eval ok" style="margin-top:8px"><b>Es el artículo de CABECERA</b> de '+cb.cantidad+' productos: si cambiás el precio de venta acá, <b>cambia el de toda la gama</b>. El costo de esta compra es solo de este producto (no se cambia en el sistema).</div>':'');
 }
 // v36: lo que conseguiste contra lo de hoy (en el recuadro HOY EN EL SISTEMA).
 function pintarComparacion(){
