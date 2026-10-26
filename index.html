@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=45;
+var APP_V=46;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -758,6 +758,9 @@ function elegirSim(p){
   if(p){
     if(!$('scosto').value&&p.costo)ponerPesos('scosto',Math.round(p.costo));
     if(p.precio)ponerPesos('sprecio',Math.round(p.precio));
+    // v46: cantidad por defecto = lo que queda del mes + el mes que viene, menos el stock.
+    var sug=p.mesActual&&p.mesActual.comprarHastaFinMesQueViene;
+    $('scant').value=sug>0?sug:'';
   }
   recalcular();
 }
@@ -840,14 +843,28 @@ function recalcular(origen){
   if(SPROD){
     var vm2=SPROD.ventaMensual||0, st=Math.max(0,SPROD.stock||0);
     var minimo=Math.max(0,Math.ceil(vm2-st)), maximo=Math.max(0,Math.ceil(vm2*2-st));
-    h+='<div class="card"><h2>¿Cuántos comprar?</h2>'+
-      (vm2>0?'<div class="row"><span>Vendés por mes</span><span>'+vm2.toFixed(1).replace('.',',')+' u.</span></div>'+
-        '<div class="row"><span>Tenés en stock</span><span>'+$$(SPROD.stock)+' u.</span></div>'+
+    // v46: cuánto tiempo está sin stock, cuánto vendería si no se cortara y lo sugerido (resto del mes + el que viene).
+    var ma=SPROD.mesActual||null, fl=function(a,b){return '<div class="row"><span>'+a+'</span><span>'+b+'</span></div>'}, hs='';
+    if(ma){
+      if(st<=0&&ma.sinStockDesde)hs+=fl('Sin stock','desde el '+esc(ma.sinStockDesde.slice(0,5))+' · <b class="neg">'+$$(ma.diasSinStockAhora)+' días</b>');
+      if(ma.diasMedidos90>0)hs+=fl('Días sin stock (últimos '+ma.diasMedidos90+' días)',(ma.diasSinStock90>0?'<span class="neg">'+$$(ma.diasSinStock90)+' días</span>':'ninguno'));
+    }
+    if(vm2>0){
+      var reg=SPROD.ventaRegistradaMes;
+      hs+=fl('Si no se cortara el stock, vende por mes','<b>~'+vm2.toFixed(1).replace('.',',')+' u.</b>');
+      if(reg!==null&&reg!==undefined&&reg<vm2*0.9)hs+='<div class="note" style="margin:0 0 4px">Registradas: '+String(Math.round(reg*10)/10).replace('.',',')+' u. por mes. Como estuvo días sin stock, se proyecta con lo que vende cuando hay.</div>';
+    }
+    if(ma&&vm2>0){
+      if(ma.diasQuedan>0)hs+=fl('En lo que queda de '+esc(ma.mes.split(' ')[0])+' ('+ma.diasQuedan+' días)',(ma.restoMes.min===ma.restoMes.max?ma.restoMes.max:ma.restoMes.min+' a '+ma.restoMes.max)+' u.');
+      hs+=fl('<b>Sugerido</b> (resto de '+esc(ma.mes.split(' ')[0])+' + '+esc(ma.mesQueViene)+', menos lo que tenés)','<b class="pos">'+$$(ma.comprarHastaFinMesQueViene)+' u.</b>'+(q===ma.comprarHastaFinMesQueViene?' ✓':''));
+    }
+    h+='<div class="card"><h2>¿Cuántos comprar?</h2>'+hs+
+      (vm2>0?'<div class="row"><span>Tenés en stock</span><span>'+$$(SPROD.stock)+' u.</span></div>'+
         '<div class="row"><span>Comprá como mínimo (1 mes)</span><span class="pos">'+$$(minimo)+' u.</span></div>'+
         '<div class="row"><span>Como mucho (2 meses)</span><span>'+$$(maximo)+' u.</span></div>'+
         (q>0&&q>maximo?'<div class="eval bajo">Con '+$$(q)+' te queda plata parada más de 2 meses: comprá menos salvo que el precio sea una oportunidad única.</div>':'')+
         (q>0&&q<minimo?'<div class="eval ok">Con '+$$(q)+' no llegás a cubrir un mes de venta.</div>':'')
-      :'<div class="note">Este producto no tiene ventas registradas: comprá poco para probar.</div>')+htmlBulto(c,q,vm2,minimo)+'</div>';
+      :'<div class="note">'+(ma&&ma.diasMedidos90>0&&ma.diasSinStock90>=ma.diasMedidos90?'No tuvo stock en los últimos '+ma.diasMedidos90+' días: no hay ventas para proyectar. Comprá poco para probar.':'Este producto no tiene ventas registradas: comprá poco para probar.')+'</div>')+htmlBulto(c,q,vm2,minimo)+'</div>';
     if(SPROD.costo>0){
       var ahorro=1-c/SPROD.costo;
       h+='<div class="card"><h2>Contra tu costo de hoy</h2>'+
