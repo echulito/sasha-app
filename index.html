@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=56;
+var APP_V=57;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -770,7 +770,7 @@ function elegirSim(p){
   pintarSprod();
   // v55: por defecto, el proveedor MÁS BARATO de las listas (con su costo).
   var mejor=p?((p.bultos||[]).filter(function(x){return x.costo>0&&x.proveedor}).sort(function(a,b){return a.costo-b.costo})[0]||null):null;
-  EST.pManual=false;
+  EST.pManual=false;EST.ofDef=false;
   PROV.modo='L';PROV.sel=p?(mejor?mejor.proveedor:(((p.bultos||[]).filter(function(x){return x.actual})[0]||{}).proveedor||p.proveedor||'')):PROV.sel;
   pintarProveedores();
   if(p)$('sprovcod').value=(mejor&&mejor.codigo)||codigoEnProveedor(PROV.sel);
@@ -784,6 +784,9 @@ function elegirSim(p){
     infoProveedor();
   }
   sugerirPrecioPorCosto(true);
+  // v57: si el producto (o la cabecera) ya tiene una oferta cargada, por defecto se simula con esa oferta (se puede elegir sin).
+  var ov=p&&!precioFijoCab()?ofertaVigente():null;
+  if(ov&&!EST.pManual){ponerPesos('sprecio',ov.P);ponerPesos('e1pre',ov.L);ponerPesos('epre',ov.P);$('epct').value=Math.round(ov.desc*100);EST.lista2=ov.L;EST.t1=EST.t2=true;EST.ofDef=true;elegirOpcion(2)}
   recalcular();
 }
 ['scosto','scant','sprecio'].forEach(function(id){$(id).addEventListener('input',function(){if(id==='sprecio')EST.pManual=true;if(id==='scosto'||id==='sprecio')sugerirPrecioPorCosto(true);recalcular(id)})});
@@ -815,20 +818,36 @@ function sugerirPrecioPorCosto(sinRecalcular){
 // v52: solo los productos DE LA GAMA tienen el precio fijo; el artículo de CABECERA sí lo puede cambiar (cambia toda la gama).
 function precioFijoCab(){return SPROD&&SPROD.cabecera&&!SPROD.cabecera.esCabecera&&SPROD.precio>0?Math.round(SPROD.precio):0}
 function esCabeceraSim(){return !!(SPROD&&SPROD.cabecera&&SPROD.cabecera.esCabecera)}
+// v57: oferta vigente (llamador) del producto o de su gama: precio de lista + bonificación (lo cargado en el sistema).
+function ofertaVigente(){
+  var c=SPROD&&SPROD.cargadoPendiente, P=SPROD&&SPROD.precio;
+  if(!c||!(c.lista>0)||!(P>0)||c.lista<=P+1)return null;
+  return {L:Math.round(c.lista),P:Math.round(P),desc:1-P/c.lista};
+}
 function aplicarBloqueoCab(){
-  var f=precioFijoCab(), cb=SPROD&&SPROD.cabecera;
-  ['sprecio','e1pre','epre','epct','eaum'].forEach(function(id){$(id).readOnly=!!f});
+  var f=precioFijoCab(), cb=SPROD&&SPROD.cabecera, of=f?ofertaVigente():null;
+  ['sprecio','e1pre','epre','epct'].forEach(function(id){$(id).readOnly=!!f});
   $('sslider').disabled=!!f;
-  $('op2').classList.toggle('bloq',!!f);
+  $('op2').classList.toggle('bloq',!!f&&!of);
   if(f){
     if(num('sprecio')!==f)ponerPesos('sprecio',f);
-    if(num('e1pre')!==f)ponerPesos('e1pre',f);
-    EST.t1=true;EST.lista2=0;
-    if(EST.op===2)elegirOpcion(1);
+    if(of){
+      // De la gama con oferta: opción 1 = sin la oferta (precio de lista); opción 2 = con la oferta de la gama.
+      if(num('e1pre')!==of.L)ponerPesos('e1pre',of.L);
+      if(num('epre')!==of.P)ponerPesos('epre',of.P);
+      $('epct').value=Math.round(of.desc*100);
+      EST.t1=EST.t2=true;EST.lista2=of.L;
+      if(!EST.ofDef){EST.ofDef=true;elegirOpcion(2)}
+    }else{
+      if(num('e1pre')!==f)ponerPesos('e1pre',f);
+      EST.t1=true;EST.lista2=0;
+      if(EST.op===2)elegirOpcion(1);
+    }
   }
   $('scabnota').innerHTML=f?'<div class="eval ok" style="margin-top:8px"><b>Precio fijo de cabecera: '+pesos(f)+'</b>. '+
     'Pertenece a la gama de '+esc(cb.codigo)+' · '+esc(cb.producto)+
-    ': el precio se cambia desde el artículo de cabecera (para toda la gama), no acá. El costo nuevo es solo de este producto. Se simula solo el costo.</div>'
+    ': el precio se cambia desde el artículo de cabecera (para toda la gama), no acá. Se simula solo el costo.'+
+    (of?' La gama tiene oferta: lista '+pesos(of.L)+' con '+Math.round(of.desc*100)+'% (se cobra '+pesos(of.P)+'). Elegí abajo <b>con la oferta</b> o <b>sin la oferta</b>.':'')+'</div>'
     :(esCabeceraSim()?'<div class="eval ok" style="margin-top:8px"><b>Es el artículo de CABECERA</b> de '+cb.cantidad+' productos: si cambiás el precio de venta acá, <b>cambia el de toda la gama</b>. El costo: si la compra sale más cara, se cambia en la cabecera (para toda la gama); si sale más barata, no se cambia (es solo de este producto).</div>':'');
 }
 // v36: lo que conseguiste contra lo de hoy (en el recuadro HOY EN EL SISTEMA).
@@ -950,7 +969,7 @@ function elegirOpcion(o){
   if(EST.r)EST.ult=EST.r[o];
 }
 $('op1').addEventListener('click',function(){if(EST.op!==1)elegirOpcion(1)});
-$('op2').addEventListener('click',function(){if(EST.op!==2&&!precioFijoCab())elegirOpcion(2)});
+$('op2').addEventListener('click',function(){if(EST.op!==2&&!(precioFijoCab()&&!ofertaVigente()))elegirOpcion(2)});
 elegirOpcion(1);
 function calcOpcion(o,d,vm,dias,objU){
   var P=num(o===1?'e1pre':'epre')||0;
@@ -1017,7 +1036,7 @@ function calcEstrategia(){
   var objU=+$('eobj').value||0;
   var e1=calcOpcion(1,d,vm,dias,objU), e2=calcOpcion(2,d,vm,dias,objU);
   $('e1res').innerHTML=htmlOpcion(e1);
-  $('e2res').innerHTML=precioFijoCab()?'<div class="note">No disponible: el precio es de cabecera y no se puede hacer oferta con este producto solo.</div>':htmlOpcion(e2);
+  $('e2res').innerHTML=precioFijoCab()&&!ofertaVigente()?'<div class="note">No disponible: el precio es de cabecera y no se puede hacer oferta con este producto solo.</div>':htmlOpcion(e2);
   EST.r={1:e1,2:e2};EST.ult=EST.r[EST.op];
 }
 [['e1pre','t1'],['epre','t2'],['eobj','tObj'],['edias',''],['epct',''],['eaum','']].forEach(function(x){
