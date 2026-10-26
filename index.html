@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=46;
+var APP_V=47;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -1393,6 +1393,12 @@ function cargarPropuestas(){
       }
       if(seg){var sirvio=/✔/.test(est)?'<b class="pos">¿Sirvió la propuesta? SÍ</b>':(/NO LLEG/.test(est)?'<b class="neg">¿Sirvió la propuesta? NO llegó al objetivo</b>':'');
         if(sirvio)h+='<div style="margin-top:4px">'+sirvio+'</div>';}
+      // v47: qué hay que cargar en el sistema (proveedor, costo, precio) y si ya se cargó.
+      if(x.queCargar){
+        if(x.necesitaCarga)h+='<div class="eval '+(x.cargado?'bien':'bajo')+'" style="margin-top:6px"><b>'+(x.cargado?'✔ Cargado en el sistema':'Falta cargar en el sistema')+':</b> '+esc(x.queCargar)+'</div>'+
+          '<div class="btns" style="margin-top:6px"><button class="btn'+(x.cargado?' sec':'')+'" onclick="marcarCargado('+i+','+(!x.cargado)+',this)">'+(x.cargado?'No lo cargué':'✔ Lo cargué en el sistema')+'</button></div>';
+        else h+='<div class="note" style="margin-top:4px">🔒 '+esc(x.queCargar)+'</div>';
+      }
       h+='<div class="note" style="margin-top:4px"><b class="'+(ch==='v'?'pos':ch==='r'?'neg':'')+'">'+esc(est)+'</b></div>'+
         (seg?'<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="bajarPDFPropuesta('+i+',this)">⬇ PDF</button><button class="btn sec" onclick="marcarPedida('+i+',false,this)">No la pedí</button></div>'
           :'<div class="btns" style="margin-top:6px"><button class="btn" onclick="marcarPedida('+i+',true,this)">✔ La pedí</button><button class="btn sec" onclick="bajarPDFPropuesta('+i+',this)">⬇ PDF</button></div>'+
@@ -1409,6 +1415,12 @@ function marcarPedida(i,valor,btn){
   $('pmsg'+i).textContent=valor?'Pasando a Seguimientos…':'Volviendo a Órdenes de compra…';
   api('marcar_pedido',{id:x.id,pedido:valor?1:0}).then(function(){cargarPropuestas()})
     .catch(function(e){$('pmsg'+i).innerHTML=/Acci/i.test(e.message)?'<b class="neg">Actualizá ECHU a la versión 5.46 (Nueva versión).</b>':'<b class="neg">'+esc(e.message)+'</b>';if(btn)btn.disabled=false});
+}
+function marcarCargado(i,valor,btn){
+  var x=PROPS[i]; if(!x)return; if(btn)btn.disabled=true;
+  $('pmsg'+i).textContent=valor?'Marcando como cargado…':'Volviendo a "falta cargar"…';
+  api('marcar_cargado',{id:x.id,cargado:valor?1:0}).then(function(){cargarPropuestas()})
+    .catch(function(e){$('pmsg'+i).innerHTML=/Acci/i.test(e.message)?'<b class="neg">Actualizá ECHU a la versión 5.57 (Nueva versión).</b>':'<b class="neg">'+esc(e.message)+'</b>';if(btn)btn.disabled=false});
 }
 
 document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',function(){cargarPropuestas();cargarLibPDF().catch(function(){})});
