@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=47;
+var APP_V=48;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -224,12 +224,16 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
     <div class="card" id="sprop" style="margin-top:12px">
       <h2>Órdenes de compra</h2>
       <div class="note" style="margin-top:0">Las órdenes guardadas que todavía no pediste, con su número. Cuando la pidas, tocá <b>✔ La pedí</b> (o tildá “¿Se pidió?” en la planilla): pasa a <b>Seguimientos</b>. Si antes de pedirla cambia la lista de ese proveedor y el producto sube (o ya no está), la orden se anula sola.</div>
+      <input id="pbus" type="search" placeholder="🔎 Buscar orden: N° (ej. 7), fecha (21/10), producto, código…" autocomplete="off" style="margin:8px 0 4px">
+      <div id="pbusinfo" class="note" style="margin:0 0 4px"></div>
+      <button class="btn sec" id="tprop" style="width:100%;margin:4px 0">Mostrar órdenes</button>
       <div id="lprop" class="note">Cargando…</div>
       <div id="lanul"></div>
     </div>
     <div class="card" id="sseg" style="margin-top:12px">
       <h2>Seguimientos (compras pedidas)</h2>
-      <div class="note" style="margin-top:0">Desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron, en cuántos días, cuánto ganaste y si se cumplió el objetivo.</div>
+      <div class="note" style="margin-top:0">Desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron, en cuántos días, cuánto ganaste y si se cumplió el objetivo. El buscador de arriba también busca acá.</div>
+      <button class="btn sec" id="tseg" style="width:100%;margin:4px 0">Mostrar seguimientos</button>
       <div id="lseg" class="note">Cargando…</div>
     </div>
   </section>
@@ -1404,12 +1408,41 @@ function cargarPropuestas(){
           :'<div class="btns" style="margin-top:6px"><button class="btn" onclick="marcarPedida('+i+',true,this)">✔ La pedí</button><button class="btn sec" onclick="bajarPDFPropuesta('+i+',this)">⬇ PDF</button></div>'+
            '<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="editarPropuesta('+i+')">Editar</button><button class="btn sec" style="color:var(--rojo)" onclick="borrarPropuesta('+i+',this)">Borrar</button></div>')+
         '<div class="note" id="pmsg'+i+'"></div></div>';
-      (seg?htmlSeg:htmlProp).push(h);
+      // v48: clave de búsqueda (N° de orden, fecha, producto, códigos, proveedor, estado).
+      var clave=normBus([x.orden?'n'+x.orden+' orden'+x.orden:'',x.fecha,x.producto,x.codigo,x.proveedor,x.codigoProveedor,est,x.queCargar||''].join(' | '));
+      (seg?htmlSeg:htmlProp).push({h:h,k:' '+clave+' ',orden:String(x.orden||'')});
     });
-    $('lprop').innerHTML=htmlProp.length?htmlProp.join(''):'No hay órdenes de compra sin pedir. Guardá una simulación (o bajá el PDF) y queda acá con su número.';
-    $('lseg').innerHTML=htmlSeg.length?htmlSeg.join(''):'Todavía no hay compras pedidas. Cuando pidas una orden de compra, tocá <b>✔ La pedí</b>.';
+    ORD_ITEMS={prop:htmlProp,seg:htmlSeg};
+    pintarOrdenes();
   }).catch(function(){$('lprop').innerHTML='Para ver el seguimiento, actualizá ECHU a la versión 5.18.'});
 }
+// v48: las listas se pueden ocultar (se recuerda) y se pueden filtrar con el buscador.
+var ORD_ITEMS=null, ORD_VER={prop:false,seg:false};
+try{var _ov=JSON.parse(localStorage.getItem('sasha_ord_ver')||'null');if(_ov)ORD_VER=_ov}catch(e){}
+function coincideOrden(it,q){
+  if(!q)return true;
+  var mo=q.match(/^(?:n|nro|numero|orden|n °|#)\s*(\d+)$/);
+  if(mo)return it.orden===mo[1];
+  if(it.k.indexOf(' '+q)>=0)return true;
+  return q.split(' ').every(function(t){return /^\d+$/.test(t)?(it.orden===t||it.k.indexOf(' '+t)>=0):it.k.indexOf(t)>=0});
+}
+function pintarOrdenes(){
+  if(!ORD_ITEMS)return;
+  var q=normBus($('pbus').value||'');
+  var lista=function(k,cont,boton,vacio,nombre){
+    var items=ORD_ITEMS[k], f=items.filter(function(it){return coincideOrden(it,q)}), ver=ORD_VER[k]||!!q;
+    $(boton).textContent=(ver&&!q?'Ocultar ':'Mostrar ')+nombre+' ('+(q?f.length+' de '+items.length:items.length)+')';
+    $(boton).classList.toggle('oculto',!!q||!items.length);
+    if(!items.length){$(cont).innerHTML=vacio;return f.length}
+    $(cont).innerHTML=ver?(f.length?f.map(function(it){return it.h}).join(''):'Ninguna coincide con la búsqueda.'):'';
+    return f.length;
+  };
+  var a=lista('prop','lprop','tprop','No hay órdenes de compra sin pedir. Guardá una simulación (o bajá el PDF) y queda acá con su número.','órdenes');
+  var b=lista('seg','lseg','tseg','Todavía no hay compras pedidas. Cuando pidas una orden de compra, tocá <b>✔ La pedí</b>.','seguimientos');
+  $('pbusinfo').textContent=q?('Encontradas: '+a+' sin pedir y '+b+' en seguimiento.'):'';
+}
+$('pbus').addEventListener('input',pintarOrdenes);
+['prop','seg'].forEach(function(k){$('t'+k).addEventListener('click',function(){ORD_VER[k]=!ORD_VER[k];try{localStorage.setItem('sasha_ord_ver',JSON.stringify(ORD_VER))}catch(e){}pintarOrdenes()})});
 function marcarPedida(i,valor,btn){
   var x=PROPS[i]; if(!x)return; if(btn)btn.disabled=true;
   $('pmsg'+i).textContent=valor?'Pasando a Seguimientos…':'Volviendo a Órdenes de compra…';
