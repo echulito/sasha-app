@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=50;
+var APP_V=51;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -1379,7 +1379,9 @@ function cargarPropuestas(){
     PROPS.forEach(function(x,i){
       var seg=!!x.pedido;
       var est=x.estado||'', ch=/✔/.test(est)?'v':(/NO LLEG/.test(est)?'r':(/PEDIDA|VENDIENDO/.test(est)?'c':'a'));
-      var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+(x.orden?'<span class="chip c" style="margin-right:6px">N° '+esc(x.orden)+'</span>':'')+esc(x.producto)+'</b><span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="chip '+ch+'">'+(x.pedido?(x.llego?'llegó':'pedida'):'sin pedir')+'</span>'+
+      var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+(x.orden?'<span class="chip c" style="margin-right:6px">N° '+esc(x.orden)+'</span>':'')+esc(x.producto)+
+        // v51: código interno a la vista (para cargarlo en el sistema mirando el celular).
+        (x.codigo?'<div style="font-weight:400;margin-top:2px">Cód. interno <b style="font-size:17px;letter-spacing:.5px;user-select:all">'+esc(x.codigo)+'</b></div>':'')+'</b><span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="chip '+ch+'">'+(x.pedido?(x.llego?'llegó':'pedida'):'sin pedir')+'</span>'+
         // v50: marca de "cargado en el sistema" (o "falta cargar") a la vista.
         (x.necesitaCarga?'<span class="chip '+(x.cargado?'v':'r')+'" style="white-space:nowrap">'+(x.cargado?'✔ en sistema':'falta cargar')+'</span>':'')+'</span></div>'+
         '<div>'+esc(x.fecha)+' · '+(x.proveedor?esc(x.proveedor)+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+(x.fueraDeLista?' (fuera de las listas)':''):'proveedor sin elegir')+' · '+$$(x.cantidad)+' u. a <b>'+pesos2(x.costo)+'</b>'+
