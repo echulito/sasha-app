@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=53;
+var APP_V=54;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -224,7 +224,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
     <div class="card" id="sprop" style="margin-top:12px">
       <h2>Órdenes de compra</h2>
       <div class="note" style="margin-top:0">Las órdenes guardadas que todavía no pediste, con su número. Cuando la pidas, tocá <b>✔ La pedí</b> (o tildá “¿Se pidió?” en la planilla): pasa a <b>Seguimientos</b>. Si antes de pedirla cambia la lista de ese proveedor y el producto sube (o ya no está), la orden se anula sola.</div>
-      <input id="pbus" type="search" placeholder="🔎 Buscar orden: N° (ej. 7), fecha (21/10), producto, código…" autocomplete="off" style="margin:8px 0 4px">
+      <input id="pbus" type="search" placeholder="Buscar orden: N° (ej. 7), fecha (21/10), producto, código…" autocomplete="off" style="margin:8px 0 4px">
       <div id="pbusinfo" class="note" style="margin:0 0 4px"></div>
       <button class="btn sec" id="tprop" style="width:100%;margin:4px 0">Mostrar órdenes</button>
       <div id="lprop" class="note">Cargando…</div>
@@ -627,7 +627,7 @@ function verProducto(c){
     var f=p.ficha||{}, h='';
     h+='<div class="card"><div style="display:flex;gap:10px;align-items:center"><div class="dot '+(p.descontinuado?'D':'A')+'" style="width:32px;height:32px;font-size:14px">'+(p.descontinuado?'D':'A')+'</div>'+
       '<div><div class="mid">'+esc(p.producto)+'</div><div class="note" style="margin:0"><b style="color:#000;font-size:16px">'+esc(p.codigo)+'</b> · '+(p.descontinuado?'<b class="neg">DESCONTINUADO</b>':'<b class="pos">ACTIVO</b>')+(p.barras?' · '+esc(p.barras):'')+'</div></div></div>'+
-      (f.clase?'<div style="margin-top:8px"><span class="chip '+({ESTRELLA:'v',VOLUMEN:'c',NICHO:'a',REVISAR:'a',PIERDE:'r'}[f.clase]||'c')+'">'+(f.clase==='ESTRELLA'?'⭐ ':'')+esc(f.clase)+'</span> <span class="note">puesto '+f.puesto+' en contribución · deja '+pesos(f.contribucionMes)+' por mes</span></div>':'')+
+      (f.clase?'<div style="margin-top:8px"><span class="chip '+({ESTRELLA:'v',VOLUMEN:'c',NICHO:'a',REVISAR:'a',PIERDE:'r'}[f.clase]||'c')+'">'+esc(f.clase)+'</span> <span class="note">puesto '+f.puesto+' en contribución · deja '+pesos(f.contribucionMes)+' por mes</span></div>':'')+
       '</div>';
     h+='<div class="grid" style="margin-top:12px">';
     // REGLA DEL COSTO: con stock, si la lista bajó se usa el costo del sistema; si subió, el de la lista.
@@ -643,7 +643,7 @@ function verProducto(c){
     // v43 REGLA UNIVERSAL: compra pedida y llegada a otro costo → hasta que se agote ese stock, se analiza con el costo de la compra.
     var cc=p.compraEnCurso;
     if(cc&&cc.costo>0){cUso=cc.costo;origen='de la compra ('+esc(cc.proveedor||'otro proveedor')+')';
-      aviso='<div class="eval ok" style="margin-top:8px">🛒 Comprado a <b>'+pesos2(cc.costo)+'</b>'+(cc.llego?' (llegó el '+esc(cc.llego)+')':'')+
+      aviso='<div class="eval ok" style="margin-top:8px">Comprado a <b>'+pesos2(cc.costo)+'</b>'+(cc.llego?' (llegó el '+esc(cc.llego)+')':'')+
         '. Hasta que se vendan esas '+$$(cc.entraron||0)+' u.'+(cc.quedan!=null?' (quedan '+$$(cc.quedan)+')':'')+' la ganancia se calcula con este costo, aunque en el sistema figure '+pesos(cs)+'.</div>';}
     var mUso=pv&&cUso?(pv-cUso)/pv:null, gUso=pv&&cUso?pv-cUso:null;
     var ev=evaluarRotacion(p,cUso), nivel=ev.nivel, txtNivel=ev.texto;
@@ -748,7 +748,7 @@ function pintarSprod(){
     (p.cabecera?fila('Cabecera',p.cabecera.esCabecera?'<span class="chip c">ES CABECERA</span> de '+p.cabecera.cantidad+' productos':'<span class="chip a">en la gama de '+esc(p.cabecera.codigo)+'</span> '+esc(p.cabecera.producto||'')):'')+
     fila('Proveedor',esc(p.proveedor||'-')+(p.codigoProveedor?' · cód. '+esc(p.codigoProveedor):''))+
     fila('Costo en el sistema','<b>'+pesos(cs)+'</b>')+
-    (p.compraEnCurso&&p.compraEnCurso.costo>0?fila('🛒 Compra en curso ('+esc(p.compraEnCurso.proveedor||'')+')','<b>'+pesos2(p.compraEnCurso.costo)+'</b>'+(p.compraEnCurso.quedan!=null?' · quedan '+$$(p.compraEnCurso.quedan)+' u.':'')):'')+
+    (p.compraEnCurso&&p.compraEnCurso.costo>0?fila('Compra en curso ('+esc(p.compraEnCurso.proveedor||'')+')','<b>'+pesos2(p.compraEnCurso.costo)+'</b>'+(p.compraEnCurso.quedan!=null?' · quedan '+$$(p.compraEnCurso.quedan)+' u.':'')):'')+
     (cl?fila('Costo en su lista ('+esc(act&&act.proveedor||p.proveedor||'actual')+')',pesos(cl)):'')+
     fila('Precio de venta','<b>'+pesos(p.precio)+'</b>')+
     fila('Margen hoy',mHoy===null?'-':'<b>'+pct(mHoy)+'</b>')+
@@ -797,7 +797,7 @@ function aplicarBloqueoCab(){
     EST.t1=true;EST.lista2=0;
     if(EST.op===2)elegirOpcion(1);
   }
-  $('scabnota').innerHTML=f?'<div class="eval ok" style="margin-top:8px">🔒 <b>Precio fijo de cabecera: '+pesos(f)+'</b>. '+
+  $('scabnota').innerHTML=f?'<div class="eval ok" style="margin-top:8px"><b>Precio fijo de cabecera: '+pesos(f)+'</b>. '+
     'Pertenece a la gama de '+esc(cb.codigo)+' · '+esc(cb.producto)+
     ': el precio se cambia desde el artículo de cabecera (para toda la gama), no acá. El costo nuevo es solo de este producto. Se simula solo el costo.</div>'
     :(esCabeceraSim()?'<div class="eval ok" style="margin-top:8px"><b>Es el artículo de CABECERA</b> de '+cb.cantidad+' productos: si cambiás el precio de venta acá, <b>cambia el de toda la gama</b>. El costo de esta compra es solo de este producto (no se cambia en el sistema).</div>':'');
@@ -1432,7 +1432,7 @@ function cargarPropuestas(){
         if(x.necesitaCarga&&x.cargado)h+='<div class="note" style="margin-top:4px;color:var(--verde)"><b>✔ Cargado en el sistema</b> ('+esc(x.queCargar)+') · <a href="#" onclick="marcarCargado('+i+',false,null);return false">deshacer</a></div>';
         else if(x.necesitaCarga)h+='<div class="eval bajo" style="margin-top:6px"><b>Falta cargar en el sistema:</b> '+esc(x.queCargar)+'</div>'+
           '<div class="btns" style="margin-top:6px"><button class="btn" onclick="marcarCargado('+i+',true,this)">✔ Lo cargué en el sistema</button></div>';
-        else h+='<div class="note" style="margin-top:4px">🔒 '+esc(x.queCargar)+'</div>';
+        else h+='<div class="note" style="margin-top:4px">'+esc(x.queCargar)+'</div>';
       }
       h+='<div class="note" style="margin-top:4px"><b class="'+(ch==='v'?'pos':ch==='r'?'neg':'')+'">'+esc(est)+'</b></div>'+
         (seg?'<div class="btns" style="margin-top:6px"><button class="btn sec" onclick="bajarPDFPropuesta('+i+',this)">⬇ PDF</button><button class="btn sec" onclick="marcarPedida('+i+',false,this)">No la pedí</button></div>'
@@ -1518,7 +1518,7 @@ function pintarRanking(){
     return '<div class="item" data-c="'+esc(x.codigo)+'"><div class="num">'+(i+1)+'</div><div class="n" style="flex:1">'+
       '<div style="font-weight:600">'+esc(x.producto)+'</div>'+
       '<div class="rk"><b style="color:#000">'+esc(x.codigo)+'</b> · '+esc(x.proveedor||'-')+
-      (x.clase?' <span class="chip '+(clase[x.clase]||'c')+'" style="font-size:10px;padding:1px 6px">'+(x.clase==='ESTRELLA'?'⭐ ':'')+esc(x.clase)+'</span>':'')+
+      (x.clase?' <span class="chip '+(clase[x.clase]||'c')+'" style="font-size:10px;padding:1px 6px">'+esc(x.clase)+'</span>':'')+
       (x.stock!==null&&x.stock<=0?' <span class="chip r" style="font-size:10px;padding:1px 6px">SIN STOCK</span>':'')+'</div>'+
       '<div class="rk">'+dato+'</div></div></div>';
   }).join('');
