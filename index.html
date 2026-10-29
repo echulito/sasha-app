@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=61;
+var APP_V=62;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -282,7 +282,8 @@ var CFG={url:'',token:''};
 try{CFG.url=localStorage.getItem('echu_url')||'';CFG.token=localStorage.getItem('echu_token')||'';CFG.modo=localStorage.getItem('echu_modo')||''}catch(e){}
 function guardarCfg(){try{localStorage.setItem('echu_url',CFG.url);localStorage.setItem('echu_token',CFG.token);localStorage.setItem('echu_modo',CFG.modo||'')}catch(e){}}
 // v59: con el PIN de consulta la app solo muestra y simula (ECHU no deja guardar nada con ese PIN).
-function esConsulta(){return CFG.modo==='consulta'}
+// v62: el link con ?consulta muestra siempre la versión de consulta (aunque se entre con el PIN completo, para ver cómo la ve el otro).
+function esConsulta(){return CFG.modo==='consulta'||/[?&]consulta\b/.test(location.search)}
 // v61: ícono propio de la versión de consulta (flor naranja sobre blanco). Se elige al agregarla a la pantalla de inicio.
 function aplicarIconos(){var c=esConsulta()||/[?&]consulta\b/.test(location.search),p=c?'consulta-':'';var s=function(id,h){var e=$(id);if(e&&e.getAttribute('href')!==h)e.setAttribute('href',h)};s('ltouch',p+'apple-touch-icon.png');s('lfav',p+'icon-192.png');s('lmanif',c?'manifest-consulta.webmanifest':'manifest.webmanifest')}
 try{document.addEventListener('DOMContentLoaded',aplicarIconos)}catch(e){}
