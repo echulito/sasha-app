@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=64;
+var APP_V=65;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -639,7 +639,7 @@ function verProducto(c){
     if(!p){$('detalle').innerHTML='<div class="card">No encontré ese producto.</div>';return}
     var f=p.ficha||{}, h='';
     h+='<div class="card"><div style="display:flex;gap:10px;align-items:center"><div class="dot '+(p.descontinuado?'D':'A')+'" style="width:32px;height:32px;font-size:14px">'+(p.descontinuado?'D':'A')+'</div>'+
-      '<div><div class="mid">'+esc(p.producto)+'</div><div class="note" style="margin:0"><b style="color:#000;font-size:16px">'+esc(p.codigo)+'</b> · '+(p.descontinuado?'<b class="neg">DESCONTINUADO</b>':'<b class="pos">ACTIVO</b>')+(p.barras?' · '+esc(p.barras):'')+'</div></div></div>'+
+      '<div><div class="mid">'+esc(p.producto)+'</div><div class="note" style="margin:0"><b style="color:#000;font-size:16px">'+esc(p.codigo)+'</b> · '+(p.descontinuado?'<b class="neg">DESCONTINUADO</b>':'<b class="pos">ACTIVO</b>')+((p.barrasVer||p.barras)?' · '+esc(p.barrasVer||p.barras):'')+'</div></div></div>'+
       (f.clase?'<div style="margin-top:8px"><span class="chip '+({ESTRELLA:'v',VOLUMEN:'c',NICHO:'a',REVISAR:'a',PIERDE:'r'}[f.clase]||'c')+'">'+esc(f.clase)+'</span> <span class="note">puesto '+f.puesto+' en contribución · deja '+pesos(f.contribucionMes)+' por mes</span></div>':'')+
       '</div>';
     h+='<div class="grid" style="margin-top:12px">';
@@ -664,13 +664,18 @@ function verProducto(c){
     var cpd=p.cargadoPendiente;
     if(cpd)aviso+='<div class="note" style="margin-top:8px">Cargado en el sistema el '+esc(cpd.fecha)+' (orden N° '+esc(cpd.orden)+(cpd.deCabecera?', en la cabecera '+esc(cpd.deCabecera):'')+'). Todavía no llegó en el archivo de PRODUCTOS: se muestra el dato nuevo'+
       (cpd.antes&&cpd.antes.precio&&Math.abs(cpd.antes.precio-p.precio)>1?' (antes '+pesos(cpd.antes.precio)+')':'')+'.</div>';
+    // v65: arriba, los datos ACTUALES del sistema (archivo de PRODUCTOS): precio, costo, ganancia y margen.
+    // Si para el análisis corresponde otro costo (la lista subió, o una compra a otro costo), va aparte.
+    var cMos=cs||cUso, mMos=pv&&cMos?(pv-cMos)/pv:null, gMos=pv&&cMos?pv-cMos:null, otroCosto=cUso&&cMos&&Math.abs(cUso-cMos)>1;
     h+='<div class="card"><h2>Precio y margen</h2>'+
       '<div class="row"><span>Precio de venta</span><span>'+pesos(pv)+'</span></div>'+
-      (cUso?'<div class="row"><span>Costo '+origen+'</span><span>'+pesos(cUso)+'</span></div>'+
-        '<div class="row"><span><b>Ganancia por unidad</b> (precio − costo)</span><span class="'+(gUso>=0?'pos':'neg')+'"><b>'+pesos(gUso)+'</b></span></div>'+
-        '<div class="row"><span><b>Margen</b></span><span><b>'+pct(mUso)+'</b></span></div>':'')+
+      (cMos?'<div class="row"><span>Costo'+(cs?' (en el sistema)':' '+origen)+'</span><span>'+pesos2(cMos)+'</span></div>'+
+        '<div class="row"><span><b>Ganancia por unidad</b> (precio − costo)</span><span class="'+(gMos>=0?'pos':'neg')+'"><b>'+pesos(gMos)+'</b></span></div>'+
+        '<div class="row"><span><b>Margen</b></span><span><b>'+pct(mMos)+'</b></span></div>':'')+
+      (otroCosto?'<div class="row" style="margin-top:8px"><span>Costo '+origen+'</span><span>'+pesos2(cUso)+' · margen '+pct(mUso)+'</span></div>'+
+        '<div class="note" style="margin-top:0">La evaluación de abajo usa este costo.</div>':'')+
       '<div class="eval '+nivel+'">'+esc(txtNivel)+'</div>'+ev.filas+aviso+
-      (cs&&cl&&Math.abs(cl-cs)>1?'<div class="row" style="margin-top:8px"><span>Costo en el sistema · en la lista</span><span>'+pesos(cs)+' · '+pesos(cl)+'</span></div>':'')+
+      (!otroCosto&&cs&&cl&&Math.abs(cl-cs)>1?'<div class="row" style="margin-top:8px"><span>Costo en el sistema · en la lista</span><span>'+pesos(cs)+' · '+pesos(cl)+'</span></div>':'')+
       (p.precioSugerido?'<div class="note">Precio sugerido este mes: <b>'+pesos(p.precioSugerido)+'</b></div>':'')+'</div>';
     // Ventas: a qué precio, con qué oferta, a qué costo y con qué margen se vendió.
     var vt=p.ventas||{meses:[],ultimas:[]};
@@ -729,7 +734,7 @@ function verProducto(c){
     }
     h+='<div class="card"><h2>Proveedor</h2>'+
       '<div class="row"><span>Proveedor</span><span>'+esc(p.proveedor||'-')+'</span></div>'+
-      '<div class="row"><span>Código de proveedor</span><span>'+esc(p.codigoProveedor||'-')+'</span></div>'+
+      '<div class="row"><span>Código de proveedor</span><span>'+esc(p.codigoProveedorVer||p.codigoProveedor||'-')+'</span></div>'+
       // v49: unidades por bulto (de su proveedor primero; si su lista no lo dice, de las otras listas).
       (function(){var bs=(p.bultos||[]).filter(function(x){return x.unidades>1}).slice(0,3);
         if(!bs.length)return '<div class="row"><span>Unidades por bulto</span><span class="note" style="margin:0">la lista no lo informa</span></div>';
