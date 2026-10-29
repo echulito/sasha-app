@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=65;
+var APP_V=66;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -245,7 +245,14 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
   </section>
 
   <section id="ajustes" class="oculto">
-    <div class="card">
+    <div class="card solo-completo" id="echucard">
+      <h2>Actualizar ECHU</h2>
+      <div id="echuest" class="note" style="margin-top:0">Cargando el estado…</div>
+      <div class="btns"><button class="btn" id="bact">Actualizar</button><button class="btn sec" id="brec">Reconstrucción completa</button></div>
+      <div id="echumsg" class="note"></div>
+      <div class="note">Actualizar lee los archivos nuevos (listas, stock, ventas, productos). Reconstrucción completa relee <b>todas</b> las listas desde cero, tarda más y vuelve a mostrar las tareas que tildaste como hechas.</div>
+    </div>
+    <div class="card" style="margin-top:12px">
       <h2>Sugerencias de compra</h2>
       <div class="note" style="margin-top:0">Qué productos te sugiere comprar la solapa Productos.</div>
       <label>¿Qué stock?</label>
@@ -1735,6 +1742,37 @@ function pintarBotonSinEst(p){
 }
 buscador($('aq'),$('aresultados'),function(c,nombre){$('aq').value='';marcarSinEst(c,true,nombre)});
 document.querySelector('nav button[data-tab="ajustes"]').addEventListener('click',function(){if(!SINEST)cargarSinEst()});
+/* ---------------- v66: ACTUALIZAR ECHU DESDE LA APP (⚙ Ajustes) ---------------- */
+var ECHUPOLL=null;
+function pintarEstadoEchu(e){
+  if(!e)return;
+  var txt=e.enCurso?'<b>Actualizando…</b>'+(e.pct?' '+e.pct+'%':'')+' Podés seguir usando la app.'
+    :'Estado: <b>'+esc(e.estado||'-')+'</b>'+(e.ultima?' · última: '+esc(e.ultima):'')+(e.estado==='ERROR'&&e.detalle?'<br><span class="neg">'+esc(e.detalle)+'</span>':'');
+  $('echuest').innerHTML=txt;
+  $('bact').disabled=!!e.enCurso;$('brec').disabled=!!e.enCurso;
+  clearTimeout(ECHUPOLL);
+  if(e.enCurso)ECHUPOLL=setTimeout(function(){if(!$('ajustes').classList.contains('oculto'))cargarEstadoEchu()},15000);
+  else if(window.__echuCorria){window.__echuCorria=false;$('echumsg').innerHTML='Terminó. Tocá <b>↻ Actualizar</b> arriba para ver los datos nuevos.'}
+  if(e.enCurso)window.__echuCorria=true;
+}
+function cargarEstadoEchu(){
+  if(!CFG.token||esConsulta())return;
+  api('estado_echu').then(pintarEstadoEchu).catch(function(err){$('echuest').innerHTML=/accion|Acci/i.test(err.message)?'Para usar esto, pegá la versión 5.74 de ECHU (Nueva versión).':'<span class="neg">'+esc(err.message)+'</span>'});
+}
+function pedirActualizacionEchu(tipo){
+  $('bact').disabled=true;$('brec').disabled=true;$('echumsg').textContent='Pidiendo…';
+  api('actualizar_echu',{tipo:tipo}).then(function(r){
+    $('echumsg').innerHTML=r.lanzada?(tipo==='completa'?'Listo: arrancó la <b>Reconstrucción completa</b>.':'Listo: arrancó <b>Actualizar</b>.')+' Cuando termine te aviso acá.':'Ya hay una actualización en curso: esperá a que termine.';
+    pintarEstadoEchu(r.estado);
+  }).catch(function(err){$('echumsg').innerHTML='<b class="neg">'+esc(err.message)+'</b>';$('bact').disabled=false;$('brec').disabled=false});
+}
+$('bact').onclick=function(){pedirActualizacionEchu('actualizar')};
+$('brec').onclick=function(){
+  var b=$('brec');
+  if(!b.dataset.seguro){b.dataset.seguro='1';b.textContent='¿Seguro? tocá de nuevo';setTimeout(function(){if(b.isConnected){delete b.dataset.seguro;b.textContent='Reconstrucción completa'}},4000);return}
+  delete b.dataset.seguro;b.textContent='Reconstrucción completa';pedirActualizacionEchu('completa');
+};
+document.querySelector('nav button[data-tab="ajustes"]').addEventListener('click',cargarEstadoEchu);
 </script>
 </body>
 </html>
