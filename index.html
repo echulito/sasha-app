@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=63;
+var APP_V=64;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -146,7 +146,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
       <input id="q" placeholder="Nombre, código, código de barras o proveedor" autocomplete="off">
       <div class="lista" id="resultados"></div>
     </div>
-    <div class="card" id="opcard" style="margin-top:12px">
+    <div class="card solo-completo" id="opcard" style="margin-top:12px">
       <h2>Sugerencias de compra</h2>
       <div id="opnota" class="note" style="margin-top:0">Cargando…</div>
       <div id="oplista" class="lista"><div class="note">Cargando…</div></div>
@@ -1632,7 +1632,7 @@ function abrirOportunidadEnSim(x){
   }).catch(function(e){$('sprod').innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
 }
 function cargarOportunidades(params){
-  if((OPS&&!params)||OPCARGANDO||!CFG.token)return Promise.resolve();
+  if((OPS&&!params)||OPCARGANDO||!CFG.token||esConsulta())return Promise.resolve();
   OPCARGANDO=true;OPVER=15;$('oplista').innerHTML='<div class="note">Cargando…</div>';
   if(PROPCOD===null&&esConsulta())PROPCOD={};
   if(PROPCOD===null)api('propuestas').then(marcarPropuestas).catch(function(){PROPCOD={}});
