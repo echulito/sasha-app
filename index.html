@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=62;
+var APP_V=63;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -19,7 +19,7 @@ var APP_V=62;
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sasha · Mi negocio</title>
 <link rel="manifest" id="lmanif" href="manifest.webmanifest">
-<meta name="theme-color" content="#1f3a5f">
+<meta name="theme-color" id="mtema" content="#1f3a5f">
 <link rel="icon" id="lfav" href="icon-192.png">
 <link rel="apple-touch-icon" id="ltouch" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -105,6 +105,8 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
 /* v59: modo consulta (PIN de consulta): sin órdenes, PDF, seguimiento ni ajustes */
 body.consulta .solo-completo{display:none!important}
 body.consulta .opc .tick{display:none}
+/* v63: colores de la versión de consulta (modelo 2: naranja de la flor) */
+body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
 </style>
 </head>
 <body>
@@ -285,8 +287,8 @@ function guardarCfg(){try{localStorage.setItem('echu_url',CFG.url);localStorage.
 // v62: el link con ?consulta muestra siempre la versión de consulta (aunque se entre con el PIN completo, para ver cómo la ve el otro).
 function esConsulta(){return CFG.modo==='consulta'||/[?&]consulta\b/.test(location.search)}
 // v61: ícono propio de la versión de consulta (flor naranja sobre blanco). Se elige al agregarla a la pantalla de inicio.
-function aplicarIconos(){var c=esConsulta()||/[?&]consulta\b/.test(location.search),p=c?'consulta-':'';var s=function(id,h){var e=$(id);if(e&&e.getAttribute('href')!==h)e.setAttribute('href',h)};s('ltouch',p+'apple-touch-icon.png');s('lfav',p+'icon-192.png');s('lmanif',c?'manifest-consulta.webmanifest':'manifest.webmanifest')}
-try{document.addEventListener('DOMContentLoaded',aplicarIconos)}catch(e){}
+function aplicarIconos(){var c=esConsulta()||/[?&]consulta\b/.test(location.search),p=c?'consulta-':'';var s=function(id,h){var e=$(id);if(e&&e.getAttribute('href')!==h)e.setAttribute('href',h)};s('ltouch',p+'apple-touch-icon.png');s('lfav',p+'icon-192.png');s('lmanif',c?'manifest-consulta.webmanifest':'manifest.webmanifest');var t=$('mtema');if(t)t.setAttribute('content',c?'#F49820':'#1f3a5f')}
+try{document.addEventListener('DOMContentLoaded',function(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta())})}catch(e){}
 function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&!$('ajustes').classList.contains('oculto'))irA('resumen')}
 function jsonp(url){
   return new Promise(function(ok,mal){
