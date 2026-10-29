@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=60;
+var APP_V=61;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -18,10 +18,10 @@ var APP_V=60;
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sasha · Mi negocio</title>
-<link rel="manifest" href="manifest.webmanifest">
+<link rel="manifest" id="lmanif" href="manifest.webmanifest">
 <meta name="theme-color" content="#1f3a5f">
-<link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" id="lfav" href="icon-192.png">
+<link rel="apple-touch-icon" id="ltouch" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Sasha">
 <style>
@@ -283,7 +283,10 @@ try{CFG.url=localStorage.getItem('echu_url')||'';CFG.token=localStorage.getItem(
 function guardarCfg(){try{localStorage.setItem('echu_url',CFG.url);localStorage.setItem('echu_token',CFG.token);localStorage.setItem('echu_modo',CFG.modo||'')}catch(e){}}
 // v59: con el PIN de consulta la app solo muestra y simula (ECHU no deja guardar nada con ese PIN).
 function esConsulta(){return CFG.modo==='consulta'}
-function aplicarModo(){document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&!$('ajustes').classList.contains('oculto'))irA('resumen')}
+// v61: ícono propio de la versión de consulta (flor naranja sobre blanco). Se elige al agregarla a la pantalla de inicio.
+function aplicarIconos(){var c=esConsulta()||/[?&]consulta\b/.test(location.search),p=c?'consulta-':'';var s=function(id,h){var e=$(id);if(e&&e.getAttribute('href')!==h)e.setAttribute('href',h)};s('ltouch',p+'apple-touch-icon.png');s('lfav',p+'icon-192.png');s('lmanif',c?'manifest-consulta.webmanifest':'manifest.webmanifest')}
+try{document.addEventListener('DOMContentLoaded',aplicarIconos)}catch(e){}
+function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&!$('ajustes').classList.contains('oculto'))irA('resumen')}
 function jsonp(url){
   return new Promise(function(ok,mal){
     var nombre='echu_cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
