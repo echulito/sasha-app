@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=58;
+var APP_V=59;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -102,6 +102,9 @@ td,th{padding:6px 4px;border-bottom:1px solid var(--linea);text-align:right}
 td:first-child,th:first-child{text-align:left}
 th{color:var(--gris);font-size:11px;text-transform:uppercase}
 @media (max-width:520px){.big{font-size:23px}.two{grid-template-columns:1fr}}
+/* v59: modo consulta (PIN de consulta): sin órdenes, PDF, seguimiento ni ajustes */
+body.consulta .solo-completo{display:none!important}
+body.consulta .opc .tick{display:none}
 </style>
 </head>
 <body>
@@ -127,7 +130,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
     <button class="on" data-tab="resumen">Resumen</button>
     <button data-tab="productos">Productos</button>
     <button data-tab="simulador">Simular compra</button>
-    <button data-tab="ajustes" style="flex:0 0 auto;padding:10px 8px" aria-label="Ajustes">⚙</button>
+    <button data-tab="ajustes" class="solo-completo" style="flex:0 0 auto;padding:10px 8px" aria-label="Ajustes">⚙</button>
   </nav>
 </header>
 <div id="estado" class="estado oculto"></div>
@@ -194,7 +197,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
     <div class="card oculto" id="sest" style="margin-top:12px">
       <h2>Estrategia de precio y objetivo</h2>
       <div id="eedit"></div>
-      <div class="note" style="margin-top:0">Se completa sola con el precio de arriba: así quedaría <b>sin oferta</b> y <b>con oferta</b>. Si querés, cambiá cualquier número. Tocá la opción que querés bajar en PDF.</div>
+      <div class="note" style="margin-top:0">Se completa sola con el precio de arriba: así quedaría <b>sin oferta</b> y <b>con oferta</b>. Si querés, cambiá cualquier número. <span class="solo-completo">Tocá la opción que querés bajar en PDF.</span></div>
       <div class="two">
         <div><label>Duración / objetivo (días)</label><input id="edias" type="number" inputmode="numeric" min="1" value="30"></div>
         <div><label>Objetivo: vender (unidades)</label><input id="eobj" type="number" inputmode="numeric" min="0"></div>
@@ -216,13 +219,13 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
         <input id="eaum" type="number" inputmode="decimal" min="0" value="30">
         <div id="e2res"></div>
       </div>
-      <div class="btns">
+      <div class="btns solo-completo">
         <button class="btn" id="bpdf">⬇ Orden de compra (PDF) · Opción 1</button>
         <button class="btn sec" id="bguardar">Guardar simulación (sin PDF)</button>
       </div>
-      <div id="epdfmsg" class="note"></div>
+      <div id="epdfmsg" class="note solo-completo"></div>
     </div>
-    <div class="card" id="sprop" style="margin-top:12px">
+    <div class="card solo-completo" id="sprop" style="margin-top:12px">
       <h2>Órdenes de compra</h2>
       <div class="note" style="margin-top:0">Las órdenes guardadas que todavía no pediste, con su número. Cuando la pidas, tocá <b>✔ La pedí</b> (o tildá “¿Se pidió?” en la planilla): pasa a <b>Seguimientos</b>. Si antes de pedirla cambia la lista de ese proveedor y el producto sube (o ya no está), la orden se anula sola.</div>
       <input id="pbus" type="search" placeholder="Buscar orden: N° (ej. 7), fecha (21/10), producto, código…" autocomplete="off" style="margin:8px 0 4px">
@@ -231,7 +234,7 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
       <div id="lprop" class="note">Cargando…</div>
       <div id="lanul"></div>
     </div>
-    <div class="card" id="sseg" style="margin-top:12px">
+    <div class="card solo-completo" id="sseg" style="margin-top:12px">
       <h2>Seguimientos (compras pedidas)</h2>
       <div class="note" style="margin-top:0">Desde que la compra entra en los movimientos de stock, ECHU cuenta cuántas se vendieron, en cuántos días, cuánto ganaste y si se cumplió el objetivo. El buscador de arriba también busca acá.</div>
       <button class="btn sec" id="tseg" style="width:100%;margin:4px 0">Mostrar seguimientos</button>
@@ -276,8 +279,11 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
 <script>
 /* ---------- conexión con ECHU (API con PIN) ---------- */
 var CFG={url:'',token:''};
-try{CFG.url=localStorage.getItem('echu_url')||'';CFG.token=localStorage.getItem('echu_token')||''}catch(e){}
-function guardarCfg(){try{localStorage.setItem('echu_url',CFG.url);localStorage.setItem('echu_token',CFG.token)}catch(e){}}
+try{CFG.url=localStorage.getItem('echu_url')||'';CFG.token=localStorage.getItem('echu_token')||'';CFG.modo=localStorage.getItem('echu_modo')||''}catch(e){}
+function guardarCfg(){try{localStorage.setItem('echu_url',CFG.url);localStorage.setItem('echu_token',CFG.token);localStorage.setItem('echu_modo',CFG.modo||'')}catch(e){}}
+// v59: con el PIN de consulta la app solo muestra y simula (ECHU no deja guardar nada con ese PIN).
+function esConsulta(){return CFG.modo==='consulta'}
+function aplicarModo(){document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&!$('ajustes').classList.contains('oculto'))irA('resumen')}
 function jsonp(url){
   return new Promise(function(ok,mal){
     var nombre='echu_cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
@@ -316,10 +322,10 @@ function entrar(){
   var u=$('lurl').value.trim(); if(u)CFG.url=u;
   if(!/^https:\/\/script\.google(usercontent)?\.com\//.test(CFG.url)){$('lerr').textContent='Pegá la dirección de ECHU (empieza con https://script.google.com/).';$('campoUrl').style.display='';return}
   $('lerr').textContent='Entrando…';
-  api('login',{pin:$('lpin').value.trim()}).then(function(j){CFG.token=j.token;guardarCfg();$('lpin').value='';arrancar()})
+  api('login',{pin:$('lpin').value.trim()}).then(function(j){CFG.token=j.token;CFG.modo=j.modo==='consulta'?'consulta':'';guardarCfg();$('lpin').value='';arrancar()})
    .catch(function(e){$('lerr').textContent=/Failed to fetch|RED|no respondió/.test(e.message)?'No se pudo conectar con ECHU. Revisá la dirección y que esté publicada para "Cualquier persona".':e.message;$('campoUrl').style.display=''});
 }
-function arrancar(){$('login').classList.add('oculto');$('app').classList.remove('oculto');try{restaurarEstado()}catch(e){}cargar();setTimeout(function(){cargarSinEst()},1500)}
+function arrancar(){aplicarModo();$('login').classList.add('oculto');$('app').classList.remove('oculto');try{restaurarEstado()}catch(e){}cargar();setTimeout(function(){cargarSinEst()},1500)}
 
 var DETCOD='', D=null, ADMIN={porVenta:0.03,minimo:0.5,deseado:0.6,fijos:0}, SPROD=null;
 function $(id){return document.getElementById(id)}
@@ -725,7 +731,7 @@ function verProducto(c){
       (p.mejorCosto?'<div class="eval bien">Más barato en '+esc(p.mejorDonde)+': '+pesos(p.mejorCosto)+' ('+pct(1-p.mejorCosto/p.costo,0)+' menos). Con ese costo el margen sería '+pct(p.precio?(p.precio-p.mejorCosto)/p.precio:null)+'.</div>':'<div class="note">No hay un costo más barato en otra lista vigente.</div>')+
       (f.recomendacion?'<div class="note"><b>'+esc(f.recomendacion)+'</b></div>':'')+
       '<div class="btns"><button class="btn" id="bsim">Simular una compra de este producto</button></div>'+
-      '<div class="btns"><button class="btn sec" id="bsinest"></button></div><div class="note" id="sinestmsg"></div></div>';
+      '<div class="btns solo-completo"><button class="btn sec" id="bsinest"></button></div><div class="note solo-completo" id="sinestmsg"></div></div>';
     h+='</div>'+(window.__ventasHtml||'');
     $('detalle').innerHTML=h;
     $('bsim').onclick=function(){cerrarFicha();elegirSim(p);irA('simulador')};
@@ -1453,7 +1459,7 @@ function pintarAnuladas(l){
     l.map(function(a){return '<div class="note" style="padding:6px 0;border-bottom:1px dashed var(--linea)"><b>N° '+esc(a.orden)+'</b> · '+esc(a.producto)+' · '+esc(a.fecha)+'<br>'+esc(a.motivo)+'.</div>'}).join('')+'</details>':'';
 }
 function cargarPropuestas(){
-  if(!CFG.token)return;
+  if(!CFG.token||esConsulta())return;
   api('propuestas').then(function(l){
     marcarPropuestas(l);
     PROPS=(l||[]).slice(0,60);
@@ -1548,7 +1554,7 @@ function marcarCargado(i,valor,btn){
     .catch(function(e){$('pmsg'+i).innerHTML=/Acci/i.test(e.message)?'<b class="neg">Actualizá ECHU a la versión 5.57 (Nueva versión).</b>':'<b class="neg">'+esc(e.message)+'</b>';if(btn)btn.disabled=false});
 }
 
-document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',function(){cargarPropuestas();cargarLibPDF().catch(function(){})});
+document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',function(){cargarPropuestas();if(!esConsulta())cargarLibPDF().catch(function(){})});
 
 /* ---------------- RANKINGS (solapa Productos) ---------------- */
 var RANK=null, RTAB='vendidos', RVER=20, RCARGANDO=false;
@@ -1615,13 +1621,14 @@ function abrirOportunidadEnSim(x){
     sugerirPrecioPorCosto(true);
     if(x.compraSugerida>0&&!$('scant').value)$('scant').value=x.compraSugerida;
     $('sprovinfo').innerHTML=(x.menos>0?'Oportunidad: en la lista de <b>'+esc(x.proveedor)+'</b> está a <b>'+pesos2(x.costo)+'</b> ('+x.menos+'% menos que el sistema, '+pesos(x.costoSistema)+'). ':'Sugerencia de compra: en <b>'+esc(x.proveedor)+'</b> a <b>'+pesos2(x.costo)+'</b>. ')+
-      (x.compraSugerida>0?'ECHU sugiere comprar <b>'+x.compraSugerida+' u.</b> ':'')+'Elegí cuántas comprar y la estrategia, y guardala.';
+      (x.compraSugerida>0?'ECHU sugiere comprar <b>'+x.compraSugerida+' u.</b> ':'')+(esConsulta()?'Elegí cuántas comprar y la estrategia.':'Elegí cuántas comprar y la estrategia, y guardala.');
     recalcular();guardarEstadoPronto();
   }).catch(function(e){$('sprod').innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
 }
 function cargarOportunidades(params){
   if((OPS&&!params)||OPCARGANDO||!CFG.token)return Promise.resolve();
   OPCARGANDO=true;OPVER=15;$('oplista').innerHTML='<div class="note">Cargando…</div>';
+  if(PROPCOD===null&&esConsulta())PROPCOD={};
   if(PROPCOD===null)api('propuestas').then(marcarPropuestas).catch(function(){PROPCOD={}});
   return api('sugerencias',params||{}).then(function(r){OPCARGANDO=false;OPS=r||{};pintarOportunidades();pintarConfigSug()})
     .catch(function(e){OPCARGANDO=false;$('oplista').innerHTML=/accion|Acci/i.test(e.message)?'<div class="note">Para ver las sugerencias de compra, actualizá ECHU a la versión 5.48 (Nueva versión).</div>':err(e)});
@@ -1639,7 +1646,7 @@ function pintarOportunidades(){
   $('opnota').innerHTML='Productos '+txtStock+(cv?', que <b>se vendieron este mes, el pasado o el anterior</b>':'')+
     (pc>0?', y que en otra lista están <b>'+pc+'% o más</b> más baratos que el costo del sistema':'')+'. '+
     (modo==='SE AGOTA'?'Primero los que se agotan antes. ':'Primero los que más se venden. ')+
-    '<b>Tocá uno para simular la compra</b>; cuando la guardás, sale de esta lista. Lo cambiás en <a href="#" onclick="irA(\'ajustes\');return false">⚙ Ajustes</a>.';
+    (esConsulta()?'<b>Tocá uno para simular la compra</b>.':'<b>Tocá uno para simular la compra</b>; cuando la guardás, sale de esta lista. Lo cambiás en <a href="#" onclick="irA(\'ajustes\');return false">⚙ Ajustes</a>.');
   if(!l.length){$('oplista').innerHTML='<div class="note">'+esc(OPS.mensaje||'Hoy no hay productos que cumplan lo que elegiste.')+'</div>';$('opmas').classList.add('oculto');return}
   var u=function(x){return String(Math.round(x*10)/10).replace('.',',')};
   $('oplista').innerHTML=l.slice(0,OPVER).map(function(x){
