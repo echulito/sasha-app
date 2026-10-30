@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=82;
+var APP_V=83;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -725,6 +725,11 @@ window.addEventListener('popstate',function(){cerrarFicha(true)});
    vende (la otra mitad, según su venta). Masivo: carga poco por unidad y puede ir con menos margen.
    Nicho: necesita más margen. La venta es la REAL (sin contar los días que estuvo sin stock). */
 function precioParteSim(c){
+  // v83: en una gama, el precio que necesita LA GAMA (cada uno pesa según lo que vende).
+  var G=SPROD&&!SPROD.sinEstadistica?gamaDeProducto(SPROD.cabecera,SPROD.codigo,SPROD.precio):null;
+  if(G&&SPROD.cuotaGastos&&SPROD.cuotaGastos.porProducto){var cg=SPROD.cuotaGastos,den=1-(ADMIN.porVenta||0)-(cg.porVenta||0);if(den<=0)return null;
+    var n=G.ms.filter(function(x){return (x.vm||0)>0}).length,C=G.ms.reduce(function(a,x){return a+Math.max(0,x.vm||0)*(String(x.codigo)===G.codigo?c:(x.costo||0))},0);
+    return Math.ceil((cg.porProducto*n+C)/(G.U*den)/10)*10}
   if(!SPROD||!SPROD.cuotaGastos||!SPROD.cuotaGastos.porProducto||!((SPROD.ventaMensual||0)>0)||SPROD.sinEstadistica)return null;
   return precioParaParte(SPROD.cuotaGastos,SPROD.ventaMensual,c,ADMIN.porVenta||0);
 }
@@ -733,8 +738,47 @@ function precioParaParte(cg,vm,costo,com){
   var den=1-com-(cg.porVenta||0); if(den<=0)return null;
   return Math.ceil(((cg.porProducto/vm)+costo)/den/10)*10;
 }
+/* v83 - REGLA DE LA GAMA (artículo de cabecera): el precio es uno solo para toda la gama, así que se juzga la GAMA JUNTA.
+   Se suman las ventas de todos y cada uno pesa según lo que vende (no se le pide a un tono o a un acondicionador que venda
+   lo que vende otro). El precio que necesita sale del costo promedio ponderado por ventas. */
+function gamaDeProducto(cab,codigo,precioReal){
+  if(!cab||!cab.ventas||cab.ventas.length<2)return null;
+  var ms=cab.ventas.filter(function(x){return !precioReal||!x.precio||Math.abs(x.precio-precioReal)<=1});
+  if(ms.length<2||!ms.some(function(x){return String(x.codigo)===String(codigo)}))return null;
+  var U=ms.reduce(function(a,x){return a+Math.max(0,x.vm||0)},0);
+  return U>0?{ms:ms,U:U,codigo:String(codigo),cab:cab}:null;
+}
+function evaluarGama(p,costo,G){
+  var pv=p.precio||0, com=p.porVenta||0, cg=p.cuotaGastos||{}, k=cg.porVenta||0, fijo=cg.porProducto||0;
+  var u=function(x){return (Math.round(x*10)/10).toLocaleString('es-AR')};
+  var cDe=function(x){return String(x.codigo)===G.codigo?costo:(x.costo||0)};
+  var conV=G.ms.filter(function(x){return (x.vm||0)>0}), n=conV.length, U=G.U;
+  var C=G.ms.reduce(function(a,x){return a+Math.max(0,x.vm||0)*cDe(x)},0), cProm=C/U;
+  var PG=cg.etapa===2?'la parte de los gastos y de la ganancia':'la parte de los gastos';
+  var parte=fijo*n+k*U*pv, deja=U*pv*(1-com)-C, den=1-com-k;
+  var pNec=den>0?Math.ceil((fijo*n+C)/(U*den)/10)*10:null, libre=pv*den-cProm, necU=libre>0?fijo*n/libre:null;
+  var esta=G.ms.filter(function(x){return String(x.codigo)===G.codigo})[0]||{}, part=(esta.vm||0)/U;
+  var nivel,texto,quien='La gama ('+G.ms.length+' productos, se analiza junta)';
+  if(pv*(1-com)<=cProm){nivel='mal';texto='MAL: '+quien+' pierde plata con las comisiones: el costo promedio según lo que vende cada uno es '+pesos(cProm)+'.'}
+  else if(necU===null){nivel='mal';texto='NO LLEGA: con este precio '+quien.toLowerCase()+' no paga '+PG+' aunque venda mucho.'+(pNec?' Con lo que vende, la gama tendría que estar a '+pesos(pNec)+'.':'')}
+  else if(deja>=parte){nivel='bien';texto='BIEN: '+quien.toLowerCase()+' vende '+u(U)+' u. por mes entre todos y le alcanza con '+u(necU)+' para pagar '+PG+'.'}
+  else if(deja>=parte*0.75){nivel='ok';texto='CASI: '+quien.toLowerCase()+' tiene que vender '+u(necU)+' u. por mes y vende '+u(U)+'.'+(pNec&&pNec>pv?' O el precio de la gama tendría que ser '+pesos(pNec)+'.':'')}
+  else {nivel='bajo';texto='BAJO: '+quien.toLowerCase()+' tiene que vender '+u(necU)+' u. por mes y vende '+u(U)+'.'+(pNec&&pNec>pv?' Con lo que vende, la gama tendría que estar a '+pesos(pNec)+'.':'')}
+  var top=G.ms.slice().sort(function(a,b){return (b.vm||0)-(a.vm||0)}).slice(0,10);
+  var filas='<div class="row" style="margin-top:8px"><span>Vende la gama por mes</span><span>'+u(U)+' u. · este '+pct(part,0)+'</span></div>'+
+    '<div class="row"><span>Deja la gama por mes</span><span class="'+(deja>=parte?'pos':'neg')+'">'+pesos(deja)+'</span></div>'+
+    '<div class="row"><span>'+(cg.etapa===2?'Parte de gastos y ganancia de la gama':'Parte de los gastos de la gama')+'</span><span>'+pesos(parte)+' por mes</span></div>'+
+    '<div class="row"><span>Costo promedio (según lo que vende cada uno)</span><span>'+pesos(cProm)+'</span></div>'+
+    (pNec?'<div class="row"><span>Precio que necesita la gama</span><span>'+pesos(pNec)+' · margen promedio '+pct(1-cProm/pNec,0)+'</span></div>':'')+
+    '<table style="margin-top:6px;font-size:12px"><tr><th>Producto</th><th>Vende</th><th>% gama</th><th>Margen</th></tr>'+top.map(function(x){var c2=cDe(x),es=String(x.codigo)===G.codigo;
+      return '<tr'+(es?' style="font-weight:700"':'')+'><td>'+esc(x.producto||x.codigo).slice(0,26)+'</td><td>'+u(x.vm||0)+'</td><td>'+pct((x.vm||0)/U,0)+'</td><td>'+(c2&&pv?pct((pv-c2)/pv,0):'-')+'</td></tr>'}).join('')+'</table>'+
+    (G.ms.length>top.length?'<div class="note" style="margin-top:2px">y '+(G.ms.length-top.length)+' más de la gama.</div>':'')+
+    '<div class="note">El precio es el mismo para toda la gama: se juzga la suma de las ventas y cada uno pesa según lo que vende (por estadística unos se venden más que otros). Cada uno tiene su margen; el promedio ponderado es el de la gama. Al pedir, cada uno se pide según sus ventas.</div>';
+  return {nivel:nivel,texto:texto,filas:filas};
+}
 function evaluarRotacion(p,costo){
   var pv=p.precio||0, com=p.porVenta||0, vm=p.ventaMensual||0, cg=p.cuotaGastos||{};
+  if(p.gama&&pv&&costo&&cg.porProducto&&!p.sinEstadistica)return evaluarGama(p,costo,p.gama);
   var u=function(x){return (Math.round(x*10)/10).toLocaleString('es-AR')};
   if(!pv||!costo)return {nivel:'sin',texto:'Sin costo cargado: no se puede calcular.',filas:''};
   var m=(pv-costo)/pv, gan=pv*(1-com)-costo;
@@ -794,6 +838,7 @@ function verProducto(c){
       aviso='<div class="eval ok" style="margin-top:8px">Comprado a <b>'+pesos2(cc.costo)+'</b>'+(cc.llego?' (llegó el '+esc(cc.llego)+')':'')+
         '. Hasta que se vendan esas '+$$(cc.entraron||0)+' u.'+(cc.quedan!=null?' (quedan '+$$(cc.quedan)+')':'')+' la ganancia se calcula con este costo, aunque en el sistema figure '+pesos(cs)+'.</div>';}
     var mUso=pv&&cUso?(pv-cUso)/pv:null, gUso=pv&&cUso?pv-cUso:null;
+    p.gama=gamaDeProducto(p.cabecera,p.codigo,p.precio);
     var ev=evaluarRotacion(p,cUso), nivel=ev.nivel, txtNivel=ev.texto;
     // v55: lo que se confirmó como cargado en el sistema y todavía no llegó en PRODUCTOS.
     var cpd=p.cargadoPendiente;
@@ -1038,7 +1083,8 @@ function recalcular(origen){
   var ganU=P*(1-pv)-c, nivel=m<pv?'mal':(m<mn?'bajo':(m<obj?'ok':'bien'));
   var txt={mal:'PERDÉS PLATA en cada venta.',bajo:'Ganás algo, pero no cubre los gastos del local.',ok:'Cubre los gastos del local. Todavía podés sacarle más.',bien:'Llega a tu margen deseado.'}[nivel];
   // Con el producto elegido: se juzga por rotación (lo que deja por mes contra su parte de los gastos).
-  var evR=SPROD&&SPROD.cuotaGastos&&SPROD.cuotaGastos.porProducto&&(SPROD.ventaMensual||0)>0?evaluarRotacion({precio:P,porVenta:pv,ventaMensual:SPROD.ventaMensual,ventaRegistradaMes:SPROD.ventaRegistradaMes,cuotaGastos:SPROD.cuotaGastos,minimo:mnLocal,sinEstadistica:SPROD.sinEstadistica},c):null;
+  var gS=SPROD?gamaDeProducto(SPROD.cabecera,SPROD.codigo,SPROD.precio):null;
+  var evR=SPROD&&SPROD.cuotaGastos&&SPROD.cuotaGastos.porProducto&&((SPROD.ventaMensual||0)>0||gS)?evaluarRotacion({precio:P,porVenta:pv,ventaMensual:SPROD.ventaMensual,ventaRegistradaMes:SPROD.ventaRegistradaMes,cuotaGastos:SPROD.cuotaGastos,minimo:mnLocal,sinEstadistica:SPROD.sinEstadistica,gama:gS},c):null;
   if(evR&&evR.nivel!=='sin'){nivel=evR.nivel==='mal'?'mal':evR.nivel;txt=evR.texto}
   var colorM={mal:'var(--rojo)',bajo:'var(--rojo)',ok:'var(--amar)',bien:'var(--verde)'}[nivel];
   var h='<div class="grid">';
