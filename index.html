@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=70;
+var APP_V=71;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -105,6 +105,16 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
 /* v59: modo consulta (PIN de consulta): sin órdenes, PDF, seguimiento ni ajustes */
 body.consulta .solo-completo{display:none!important}
 body.consulta .opc .tick{display:none}
+/* v71: calendario de los rankings */
+.cal{width:100%;border-collapse:separate;border-spacing:3px;table-layout:fixed}.cal th{font-size:11px;color:var(--gris);text-align:center;padding:2px;font-weight:600}
+.cal td,.cal th{border-bottom:0}.cal td{text-align:center;padding:0}.cal td span{display:block;padding:9px 0;border-radius:9px;font-size:14px;font-weight:600;color:var(--txt);cursor:pointer;user-select:none}
+.cal td span.s{background:var(--azul2);color:#fff}.cal td span.r{background:var(--celeste);color:var(--azul2)}.cal td span.hoy{box-shadow:inset 0 0 0 1.5px var(--azul2)}
+.cal td span.no{color:#c4c7cc;cursor:default}
+.calh{display:flex;justify-content:space-between;align-items:center;margin:2px 0 4px}.calh button{border:0;background:none;font-size:22px;color:var(--azul2);padding:2px 12px;cursor:pointer}
+.calh .tit{text-align:center;cursor:pointer}.calh .tit b{font-size:16px;display:block}.calh .tit small{font-size:11px;color:var(--azul2);font-weight:600}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 4px;margin:6px 0}.chips button{flex:0 0 auto;border:1.5px solid var(--linea);background:#fff;border-radius:999px;padding:6px 12px;font-size:13px;font-weight:600;color:var(--gris);cursor:pointer}
+.resu{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px dashed var(--linea);margin-top:6px;padding-top:8px}
+.tag{display:inline-block;background:var(--celeste);color:var(--azul2);border-radius:999px;padding:3px 9px;font-size:12px;font-weight:700;margin:2px 4px 2px 0;cursor:pointer}.tag.d{background:var(--amarF);color:var(--amar)}
 /* v67: Armar pedido (modo dentro de Simular compra) */
 #simulador:not(.modo-ped) #armped{display:none}
 #simulador.modo-ped>:not(#simmodo):not(#armped):not(#sprop):not(#sseg){display:none!important}
@@ -160,7 +170,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
     </div>
     <div class="card" id="rank" style="margin-top:12px">
       <h2>Rankings</h2>
-      <select id="rper" style="margin-bottom:8px"><option value="">Últimos 90 días (promedio por mes)</option><option value="d7">Últimos 7 días</option><option value="d15">Últimos 15 días</option><option value="d30">Últimos 30 días</option><option value="d60">Últimos 60 días</option><option value="d180">Últimos 180 días</option><option value="d365">Últimos 365 días</option></select>
+      <div id="rcal"></div>
       <div class="seg seg4" id="rseg" style="margin-top:0">
         <button data-r="vendidos" class="on">Más vendidos</button>
         <button data-r="contribuyen">Más contribuyen</button>
@@ -1613,29 +1623,85 @@ document.querySelector('nav button[data-tab="simulador"]').addEventListener('cli
 
 /* ---------------- RANKINGS (solapa Productos) ---------------- */
 var RANK=null, RTAB='vendidos', RVER=20, RCARGANDO=false, RANKS={}, RPER='';
-try{RPER=localStorage.getItem('sasha_rank_per')||''}catch(e){}
-// v70: período del ranking (90 días, últimos N días, un mes o un año).
-function pintarOpcionesPeriodo(op){
-  if(!op||$('rper').dataset.listo)return;
-  var h='';
-  if(op.meses&&op.meses.length)h+='<optgroup label="Un mes">'+op.meses.map(function(m){return '<option value="m'+esc(m.clave)+'">'+esc(m.nombre)+'</option>'}).join('')+'</optgroup>';
-  if(op.anios&&op.anios.length)h+='<optgroup label="Un año">'+op.anios.map(function(a){return '<option value="a'+esc(a)+'">Año '+esc(a)+'</option>'}).join('')+'</optgroup>';
-  $('rper').insertAdjacentHTML('beforeend',h);$('rper').dataset.listo='1';
-  $('rper').value=RPER;if($('rper').value!==RPER){$('rper').value='';RPER=''}
+// v71: período del ranking con CALENDARIO (modelo A). Se eligen días sueltos o rangos (tocás un día y otro),
+// el mes entero o el año entero, y se suman. Sin nada elegido: últimos 90 días (promedio por mes).
+var RCAL={sel:[],pend:null,mes:null,op:null};
+try{var _rc=JSON.parse(localStorage.getItem('sasha_rank_cal')||'null');if(_rc&&_rc.sel)RCAL.sel=_rc.sel}catch(e){}
+var MESES_L=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function kDia(y,m,d){return y+'-'+('0'+(m+1)).slice(-2)+'-'+('0'+d).slice(-2)}
+function hoyK(){var d=new Date();return kDia(d.getFullYear(),d.getMonth(),d.getDate())}
+function fK(k){return k.slice(8,10)+'/'+k.slice(5,7)}
+function mesK(y,m){return [kDia(y,m,1),kDia(y,m,new Date(y,m+1,0).getDate())]}
+function guardarCal(){try{localStorage.setItem('sasha_rank_cal',JSON.stringify({sel:RCAL.sel}))}catch(e){}}
+function etiquetaRango(r){
+  if(r.t==='a')return 'Año '+r.d.slice(0,4);
+  if(r.t==='m')return MESES_L[+r.d.slice(5,7)-1].slice(0,3).toLowerCase()+' '+r.d.slice(0,4);
+  var an=r.h.slice(0,4)!==hoyK().slice(0,4)||r.d.slice(0,4)!==r.h.slice(0,4)?'/'+r.h.slice(0,4):'';
+  return r.d===r.h?fK(r.d)+an:fK(r.d)+' al '+fK(r.h)+an;
 }
-function paramsPeriodo(v){if(!v)return {};var t=v[0],x=v.slice(1);return t==='d'?{periodo:'d',dias:x}:t==='m'?{periodo:'m',mes:x}:{periodo:'a',anio:x}}
-$('rper').addEventListener('change',function(){RPER=$('rper').value;try{localStorage.setItem('sasha_rank_per',RPER)}catch(e){}RVER=20;
-  if(RANKS[RPER]){RANK=RANKS[RPER];pintarRanking();return}
-  RANK=null;RCARGANDO=false;cargarRanking();});
+function rangoDe(k){for(var i=0;i<RCAL.sel.length;i++){var r=RCAL.sel[i];if(k>=r.d&&k<=r.h)return i}return -1}
+function tocarDia(k){
+  if(k>hoyK())return;
+  if(RCAL.pend!==null){
+    var r=RCAL.sel[RCAL.pend];RCAL.pend=null;
+    if(r&&k!==r.d){r.h=k>r.d?k:r.d;r.d=k>r.d?r.d:k}
+  }else{
+    var i=rangoDe(k);
+    if(i>=0){RCAL.sel.splice(i,1)}
+    else{RCAL.sel.push({d:k,h:k,t:'d'});RCAL.pend=RCAL.sel.length-1}
+  }
+  guardarCal();pintarCal();
+}
+function pintarCal(){
+  var hoy=new Date();if(!RCAL.mes)RCAL.mes={y:hoy.getFullYear(),m:hoy.getMonth()};
+  var y=RCAL.mes.y,m=RCAL.mes.m, primero=(new Date(y,m,1).getDay()+6)%7, n=new Date(y,m+1,0).getDate(), hk=hoyK();
+  var pend=RCAL.pend!==null?RCAL.sel[RCAL.pend]:null;
+  var h='<div class="calh"><button id="rcprev" aria-label="Mes anterior">‹</button><div class="tit" id="rctit"><b>'+MESES_L[m]+' '+y+'</b><small>tocá acá para elegir el mes entero</small></div><button id="rcnext" aria-label="Mes siguiente">›</button></div>'+
+    '<table class="cal"><tr><th>L</th><th>M</th><th>M</th><th>J</th><th>V</th><th>S</th><th>D</th></tr><tr>';
+  for(var i=0;i<primero;i++)h+='<td></td>';
+  for(var d=1;d<=n;d++){
+    var k=kDia(y,m,d), i2=rangoDe(k), cl=[];
+    if(k>hk)cl.push('no');
+    else if(i2>=0){var r=RCAL.sel[i2];cl.push(k===r.d||k===r.h?'s':'r')}
+    if(k===hk)cl.push('hoy');
+    h+='<td><span data-k="'+k+'" class="'+cl.join(' ')+'">'+d+'</span></td>';
+    if((primero+d)%7===0&&d<n)h+='</tr><tr>';
+  }
+  h+='</tr></table>'+
+    '<div class="chips"><button id="rcmes">Elegir '+MESES_L[m].toLowerCase()+' entero</button><button id="rcanio">Elegir el año '+y+'</button>'+(RCAL.sel.length?'<button id="rcborrar">Borrar</button>':'')+'</div>'+
+    '<div class="resu"><div class="note" style="margin:0">'+(RCAL.sel.length?RCAL.sel.map(function(r,i){return '<span class="tag'+(r.t==='d'?' d':'')+'" data-q="'+i+'">'+esc(etiquetaRango(r))+' ×</span>'}).join(''):'Sin elegir: <b>últimos 90 días</b> (promedio por mes). Tocá un día y después otro para marcar del uno al otro.')+
+    (pend?'<div style="margin-top:4px">Tocá otro día para marcar desde el '+fK(pend.d)+' hasta ese (o el mismo para dejar solo ese día).</div>':'')+'</div>'+
+    '<button class="btn" id="rcver" style="padding:8px 16px;flex:0 0 auto">Ver</button></div>';
+  $('rcal').innerHTML=h;
+  $('rcal').querySelectorAll('[data-k]').forEach(function(el){el.onclick=function(){tocarDia(el.dataset.k)}});
+  $('rcal').querySelectorAll('[data-q]').forEach(function(el){el.onclick=function(){RCAL.sel.splice(+el.dataset.q,1);RCAL.pend=null;guardarCal();pintarCal()}});
+  $('rcprev').onclick=function(){RCAL.mes.m--;if(RCAL.mes.m<0){RCAL.mes.m=11;RCAL.mes.y--}pintarCal()};
+  $('rcnext').onclick=function(){RCAL.mes.m++;if(RCAL.mes.m>11){RCAL.mes.m=0;RCAL.mes.y++}pintarCal()};
+  var agregar=function(r){RCAL.pend=null;if(!RCAL.sel.some(function(x){return x.d===r.d&&x.h===r.h})){RCAL.sel=RCAL.sel.filter(function(x){return !(x.d>=r.d&&x.h<=r.h)});RCAL.sel.push(r)}guardarCal();pintarCal()};
+  $('rctit').onclick=$('rcmes').onclick=function(){var mk=mesK(y,m);agregar({d:mk[0],h:mk[1],t:'m'})};
+  $('rcanio').onclick=function(){agregar({d:y+'-01-01',h:y+'-12-31',t:'a'})};
+  if($('rcborrar'))$('rcborrar').onclick=function(){RCAL.sel=[];RCAL.pend=null;guardarCal();pintarCal();verRankingCal()};
+  $('rcver').onclick=verRankingCal;
+}
+function claveCal(){return RCAL.sel.map(function(r){return r.d+'_'+r.h}).join(',')}
+function verRankingCal(){
+  RCAL.pend=null;pintarCal();RVER=20;
+  var k=claveCal();RPER=k;
+  if(RANKS[k]){RANK=RANKS[k];pintarRanking();return}
+  RANK=null;RCARGANDO=false;cargarRanking();
+}
+function paramsPeriodo(k){
+  if(!k)return {};
+  return {periodo:'r',rangos:k,titulo:RCAL.sel.map(etiquetaRango).join(' + ')};
+}
 var RTXT={vendidos:'Los que más unidades venden.',contribuyen:'Los que más plata te dejan (venta − costo de reponer − comisiones). Son los que no pueden faltar.',
   facturan:'Los que más facturan (no siempre son los que más dejan).',pierden:'Venden por debajo de lo que cuesta reponerlos más comisiones: cada venta te hace perder.'};
 function cargarRanking(){
   if(RANK||RCARGANDO||!CFG.token)return;
   RCARGANDO=true;$('rlista').innerHTML='<div class="note">Cargando…</div>';
+  if(!$('rcal').innerHTML){RPER=claveCal();pintarCal()}
   var per=RPER;
-  // Las opciones de meses y años vienen con el ranking de 90 días: si arranca con otro período, se piden antes.
-  var base=(!$('rper').dataset.listo&&per)?api('ranking').then(function(r0){RANKS['']=r0||{};pintarOpcionesPeriodo((r0||{}).opciones)}).catch(function(){}):Promise.resolve();
-  base.then(function(){return api('ranking',paramsPeriodo(per))}).then(function(r){RCARGANDO=false;r=r||{};RANKS[per]=r;if(per!==RPER)return;RANK=r;if(!per)pintarOpcionesPeriodo(r.opciones);pintarRanking()})
+  api('ranking',paramsPeriodo(per)).then(function(r){RCARGANDO=false;r=r||{};RANKS[per]=r;if(per!==RPER)return;RANK=r;pintarRanking()})
     .catch(function(e){RCARGANDO=false;$('rlista').innerHTML=/accion|Acci/i.test(e.message)?'<div class="note">Para ver los rankings, actualizá ECHU a la versión 5.21 (Nueva versión).</div>':err(e)});
 }
 function pintarRanking(){
@@ -1643,7 +1709,7 @@ function pintarRanking(){
   if(!RANK)return;
   if(!RANK.listas){$('rlista').innerHTML='<div class="note">'+esc(RANK.mensaje||'Sin datos.')+'</div>';$('rmas').classList.add('oculto');return}
   var l=RANK.listas[RTAB]||[], tc=RANK.totalContribMes||0, PP=!!RANK.porPeriodo;
-  $('rnota').innerHTML=(PP?'<b>'+esc(RANK.titulo||'')+'</b> · '+(RANK.estimado?'unidades de los movimientos de stock'+(RANK.movHasta?' (cargados hasta '+esc(RANK.movHasta)+')':'')+'; facturación y lo que deja estimados con el precio y el costo de hoy'+(RANK.mesesReales&&RANK.mesesReales.length?' (reales de '+esc(RANK.mesesReales.join(', '))+')':'')+'. ':'datos reales del archivo de VENTAS. '):'')+esc(RTXT[RTAB])+' Tocá uno para ver su ficha.';
+  $('rnota').innerHTML=(PP?'<b>'+esc(RANK.titulo||'')+'</b> · '+(RANK.antesDeLosDatos?'<span class="neg">hay movimientos desde el '+esc(RANK.movDesde||'')+': lo anterior no cuenta.</span> ':'')+(RANK.estimado?'unidades de los movimientos de stock'+(RANK.movHasta?' (cargados hasta '+esc(RANK.movHasta)+')':'')+'; facturación y lo que deja estimados con el precio y el costo de hoy'+(RANK.mesesReales&&RANK.mesesReales.length?' (reales de '+esc(RANK.mesesReales.join(', '))+')':'')+'. ':'datos reales del archivo de VENTAS. '):'')+esc(RTXT[RTAB])+' Tocá uno para ver su ficha.';
   if(!l.length){$('rlista').innerHTML='<div class="note">'+(RTAB==='pierden'?'Ningún producto pierde plata.':'Sin datos.')+'</div>';$('rmas').classList.add('oculto');return}
   var u=function(x){return String(Math.round(x*10)/10).replace('.',',')};
   var clase={ESTRELLA:'v',VOLUMEN:'c',NICHO:'a',REVISAR:'a',PIERDE:'r'};
