@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=89;
+var APP_V=90;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -804,7 +804,7 @@ function evaluarRotacion(p,costo){
   else if(deja>=parte*0.75){nivel='ok';texto='CASI: tiene que vender '+u(necesita)+' u. por mes y vende '+u(vm)+'.'+(pNec&&pNec>pv?' O el precio tendría que ser '+pesos(pNec)+' (margen '+pct(mNec,0)+').':'')}
   else {nivel='bajo';texto='BAJO: tiene que vender '+u(necesita)+' u. por mes y vende '+u(vm)+'.'+(pNec&&pNec>pv?' Con lo que vende, el precio tendría que ser '+pesos(pNec)+' (margen '+pct(mNec,0)+').':'')}
   var reg=p.ventaRegistradaMes;
-  var filas='<div class="row" style="margin-top:8px"><span>Vende por mes (venta real)</span><span>'+u(vm)+' u.</span></div>'+
+  var filas='<div class="row" style="margin-top:8px"><span>Vende por mes (promedio)</span><span>'+u(vm)+' u.</span></div>'+
     (reg!==null&&reg!==undefined&&vm>reg*1.1?'<div class="note" style="margin-top:0">Registradas: '+u(reg)+' u. por mes. Estuvo días sin stock, por eso se calcula con lo que vende cuando hay.</div>':'')+
     '<div class="row"><span>Deja por mes</span><span class="'+(deja>=parte?'pos':'neg')+'">'+pesos(deja)+'</span></div>'+
     '<div class="row"><span>'+(cg.etapa===2?'Su parte de gastos y ganancia':'Su parte de los gastos')+'</span><span>'+pesos(parte)+' por mes</span></div>'+
@@ -816,7 +816,10 @@ function evaluarRotacion(p,costo){
 // v89: la ficha de un producto ya abierto se muestra al toque (queda 5 minutos en memoria).
 var PRODC={};
 function productoRapido(c){var k=String(c),x=PRODC[k];if(x&&Date.now()-x.t<300000)return Promise.resolve(x.p);
-  return api('producto',{codigo:c}).then(function(p){PRODC[k]={t:Date.now(),p:p};return p})}
+  return api('producto',{codigo:c}).then(function(p){
+    // v90: "vende por mes" = promedio de sus meses (hasta 6); la venta con stock todo el mes queda como proyección aparte.
+    if(p&&p.ventaPromedio!=null){p.ventaProyeccion=p.ventaProyeccion!=null?p.ventaProyeccion:p.ventaMensual;p.ventaMensual=p.ventaPromedio}
+    PRODC[k]={t:Date.now(),p:p};return p})}
 function verProducto(c){
   DETCOD=c;abrirFicha();
   $('detalle').innerHTML='<div class="cargando">Cargando producto…</div>';
@@ -889,7 +892,8 @@ function verProducto(c){
     var dias=p.diasStock, colorD=dias===null?'':(dias<7?'neg':(dias<20?'warn':'pos'));
     h+='<div class="card"><h2>Stock</h2>'+
       '<div class="row"><span>Stock actual</span><span class="'+(p.stock<=0?'neg':'')+'">'+$$(p.stock)+' u.</span></div>'+
-      '<div class="row"><span>Vendés por mes</span><span>'+(p.ventaMensual?(p.ventaMensual).toFixed(1).replace('.',','):'0')+' u.</span></div>'+
+      '<div class="row"><span>Vendés por mes'+(p.mesesPromedio?' <span class="rk">(promedio de '+p.mesesPromedio+(p.mesesPromedio===1?' mes':' meses')+')</span>':'')+'</span><span>'+(p.ventaMensual?(p.ventaMensual).toFixed(1).replace('.',','):'0')+' u.</span></div>'+
+      (p.ventaProyeccion!=null&&Math.abs(p.ventaProyeccion-(p.ventaMensual||0))>=0.5?'<div class="row"><span>Si tuviera stock todo el mes <span class="rk">(proyección)</span></span><span>'+(p.ventaProyeccion).toFixed(1).replace('.',',')+' u.</span></div>':'')+
       '<div class="row"><span>Te alcanza para</span><span class="'+colorD+'">'+(dias===null?'sin ventas':(p.stock<=0?'SIN STOCK':Math.floor(dias)+' días'))+'</span></div>'+
       (f.sinStockDesde?'<div class="row"><span>Sin stock desde</span><span class="neg">'+esc(f.sinStockDesde)+'</span></div>':'')+
       (f.ultimaCompra?'<div class="row"><span>Última compra</span><span>'+esc(f.ultimaCompra)+'</span></div>':'')+
@@ -963,7 +967,7 @@ function pintarSprod(){
     fila('Precio de venta','<b>'+pesos(bh.precio)+'</b>')+
     fila('Margen hoy',mHoy===null?'-':'<b>'+pct(mHoy)+'</b>')+
     fila('Stock',$$(p.stock)+' u.')+
-    fila('Vende por mes',(p.ventaMensual||0).toFixed(1).replace('.',',')+' u.')+
+    fila('Vende por mes'+(p.mesesPromedio?' (promedio '+p.mesesPromedio+' meses)':''),(p.ventaMensual||0).toFixed(1).replace('.',',')+' u.'+(p.ventaProyeccion!=null&&Math.abs(p.ventaProyeccion-(p.ventaMensual||0))>=0.5?' · con stock todo el mes ~'+(p.ventaProyeccion).toFixed(1).replace('.',','):''))+
     '<div id="scomp"></div></div>'+
     // v85: producto de una gama: ¿solo este o toda la gama junta?
     (p.cabecera&&p.cabecera.ventas&&p.cabecera.ventas.length>1?(p.__gama==='solo'?
@@ -1667,7 +1671,7 @@ function editarPropuesta(i){
     EST.editId=x.id;EST.orden=x.orden||'';sugerirPrecioPorCosto(true);elegirOpcion(op);recalcular();pintarEdicion();
     $('pmsg'+i).textContent='';irA('simulador');guardarEstado();
   };
-  if(x.codigo)api('producto',{codigo:x.codigo}).then(seguir).catch(function(){seguir(null)});else seguir(null);
+  if(x.codigo)productoRapido(x.codigo).then(seguir).catch(function(){seguir(null)});else seguir(null);
 }
 function borrarPropuesta(i,btn){
   var x=PROPS[i]; if(!x)return;
@@ -1921,7 +1925,7 @@ function marcarPropuestas(l){
 function abrirOportunidadEnSim(x){
   irA('simulador');try{window.scrollTo(0,0)}catch(e){}
   $('sprod').textContent='Cargando…';
-  api('producto',{codigo:x.codigo}).then(function(p){
+  productoRapido(x.codigo).then(function(p){
     elegirSim(p);
     // Se compra en el proveedor de la oportunidad, a ese costo.
     PROV.modo='L';PROV.sel=x.proveedor;pintarProveedores();
