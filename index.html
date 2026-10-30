@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=67;
+var APP_V=68;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -1864,7 +1864,7 @@ function totalesPedido(){
   var t=0,g=0,gm=0,provs={};(PED.items||[]).forEach(function(x){t+=x.cant*x.costo;g+=x.cant*x.gananciaUnidad;gm+=x.gananciaMes;provs[x.proveedor]=1});
   return {total:t,gan:g,ganMes:gm,provs:Object.keys(provs).length};
 }
-function firmaPed(){return PED.items.map(function(x){return x.codigo+'|'+x.proveedor+'|'+x.cant}).sort().join(';')}
+function firmaPed(){return PED.items.map(function(x){return x.codigo+'|'+x.proveedor+'|'+x.cant+'|'+x.precio}).sort().join(';')}
 function pintarTotalesPedido(){
   var T=totalesPedido(), pres=PED.pres, pasa=T.total>pres+0.5;
   $('ptot').innerHTML='<div class="sum"><div><b>'+pesos(T.total)+'</b><span>de '+pesos(pres)+'</span></div><div><b>'+PED.items.length+'</b><span>productos · '+T.provs+' proveedor'+(T.provs===1?'':'es')+'</span></div><div><b class="'+(T.gan>=0?'pos':'neg')+'">'+pesos(T.gan)+'</b><span>ganás si vendés todo</span></div></div>'+
@@ -1889,7 +1889,9 @@ function pintarPedido(){
     G.filas.forEach(function(f){var x=f.x,i=f.i,m=x.precio?(x.precio-x.costo)/x.precio:null;
       h+='<div class="item" style="display:block;cursor:default"><div style="display:flex;justify-content:space-between;gap:8px"><b>'+esc(x.producto)+'</b><button class="x" data-px="'+i+'" aria-label="Sacar">×</button></div>'+
         '<div class="rk"><b style="color:#000">'+esc(x.codigo)+'</b> · cód. '+esc(x.codigoProveedor||'-')+' · vende '+String(Math.round((x.ventaMensual||0)*10)/10).replace('.',',')+' u./mes · '+
-        (x.stock>0?'stock '+$$(x.stock):'sin stock')+(m!==null?' · margen <b>'+pct(m)+'</b>':'')+'</div>'+
+        (x.stock>0?'stock '+$$(x.stock):'sin stock')+(x.vendidasMes!=null?' · este mes vendió '+$$(x.vendidasMes):'')+(m!==null?' · margen <b>'+pct(m)+'</b>':'')+'</div>'+
+        // v68: precio de venta. Sin stock: el que mantiene el margen de hoy con el costo nuevo; con stock, el de hoy.
+        (x.cambiaPrecio?'<div class="rk">Precio de venta <b>'+pesos(x.precio)+'</b> (hoy '+pesos(x.precioHoy)+') · '+esc(x.motivoPrecio||'')+'</div>':'')+
         (x.otroProveedor?'<div class="rk"><span class="pos">Más barato que en '+esc(x.proveedorActual||'su proveedor')+'</span></div>':'')+
         '<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span class="rk" style="margin:0">Cantidad</span><input class="qty" type="number" inputmode="numeric" min="0" value="'+x.cant+'" data-pi="'+i+'">'+
         '<span class="rk" style="margin:0">× '+pesos2(x.costo)+' =</span><b style="margin-left:auto" id="psub'+i+'"></b></div></div>';
@@ -1930,7 +1932,7 @@ function guardarPedido(){
   var viejo=PED.orden;
   var antes=viejo?api('borrar_pedido',{orden:viejo}).catch(function(){}):Promise.resolve();
   GUARDANDO_PED=antes.then(function(){
-    return api('guardar_pedido',{datos:JSON.stringify({presupuesto:PED.pres,items:items.map(function(x){return [x.codigo,x.proveedor,x.codigoProveedor||'',x.costo,x.cant]})})});
+    return api('guardar_pedido',{datos:JSON.stringify({presupuesto:PED.pres,items:items.map(function(x){return [x.codigo,x.proveedor,x.codigoProveedor||'',x.costo,x.cant,x.precio]})})});
   }).then(function(r){
     GUARDANDO_PED=null;bs.forEach(function(b){if(b)b.disabled=false});
     PED.orden=String(r.orden||'');PED.firmaGuardada=firma;PED.cargar=r.cargar||{};PED.fecha=hoyTxt();pintarTotalesPedido();return r;
