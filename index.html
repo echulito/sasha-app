@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=73;
+var APP_V=74;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -196,7 +196,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
         <input id="pdias" type="number" inputmode="numeric" min="1" max="120" value="30">
         <div class="seg oculto" id="pmodo" style="margin:8px 0 0"><button data-v="0" class="on">Todo lo que tiene</button><button data-v="1">Solo donde es el más barato</button></div>
         <div id="pnota" class="note">Cargando…</div>
-        <div class="btns"><button class="btn" id="barmar">Armar pedido</button><button class="btn sec" id="bmanual">Elegir yo los productos</button></div>
+        <div class="btns"><button class="btn" id="barmar">Automático</button><button class="btn sec" id="bmanual">Manual</button></div>
         <div id="pmsgarm" class="note"></div>
       </div>
       <div id="pres"></div>
