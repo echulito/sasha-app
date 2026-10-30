@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=66;
+var APP_V=67;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -105,6 +105,12 @@ th{color:var(--gris);font-size:11px;text-transform:uppercase}
 /* v59: modo consulta (PIN de consulta): sin órdenes, PDF, seguimiento ni ajustes */
 body.consulta .solo-completo{display:none!important}
 body.consulta .opc .tick{display:none}
+/* v67: Armar pedido (modo dentro de Simular compra) */
+#simulador:not(.modo-ped) #armped{display:none}
+#simulador.modo-ped>:not(#simmodo):not(#armped):not(#sprop):not(#sseg){display:none!important}
+.qty{width:58px;padding:6px;text-align:center}.x{border:0;background:none;color:var(--gris);font-size:20px;cursor:pointer;padding:0 2px}
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin:14px 2px 6px;font-weight:700;color:var(--azul2);font-size:13px;letter-spacing:.3px}
+.sum{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center}.sum b{display:block;font-size:17px}.sum span{font-size:11px;color:var(--gris)}
 /* v63: colores de la versión de consulta (modelo 2: naranja de la flor) */
 body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
 </style>
@@ -167,6 +173,20 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
   </section>
 
   <section id="simulador" class="oculto">
+    <div class="seg solo-completo" id="simmodo" style="margin-top:0"><button data-m="uno" class="on">Un producto</button><button data-m="ped">Armar pedido</button></div>
+    <div id="armped">
+      <div class="card">
+        <h2>Armar pedido</h2>
+        <div class="two">
+          <div><label>Presupuesto ($)</label><input id="ppres" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0"></div>
+          <div><label>Proveedor</label><select id="pprov"><option value="">Todos (mejor precio)</option></select></div>
+        </div>
+        <div id="pnota" class="note">Cargando…</div>
+        <div class="btns"><button class="btn" id="barmar">Armar pedido</button></div>
+        <div id="pmsgarm" class="note"></div>
+      </div>
+      <div id="pres"></div>
+    </div>
     <div class="card">
       <h2>Simulador de compra</h2>
       <div class="note" style="margin-top:0">Conseguiste un costo fuera de las listas: cargalo y mirá a cuánto venderlo, cuántos tenés que vender y cuántos comprar. (Opcional: elegí el producto para comparar con lo que tenés hoy.)</div>
@@ -296,7 +316,7 @@ function esConsulta(){return CFG.modo==='consulta'||/[?&]consulta\b/.test(locati
 // v61: ícono propio de la versión de consulta (flor naranja sobre blanco). Se elige al agregarla a la pantalla de inicio.
 function aplicarIconos(){var c=esConsulta()||/[?&]consulta\b/.test(location.search),p=c?'consulta-':'';var s=function(id,h){var e=$(id);if(e&&e.getAttribute('href')!==h)e.setAttribute('href',h)};s('ltouch',p+'apple-touch-icon.png');s('lfav',p+'icon-192.png');s('lmanif',c?'manifest-consulta.webmanifest':'manifest.webmanifest');var t=$('mtema');if(t)t.setAttribute('content',c?'#F49820':'#1f3a5f')}
 try{document.addEventListener('DOMContentLoaded',function(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta())})}catch(e){}
-function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&!$('ajustes').classList.contains('oculto'))irA('resumen')}
+function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta())$('simulador').classList.remove('modo-ped');if(esConsulta()&&!$('ajustes').classList.contains('oculto'))irA('resumen')}
 function jsonp(url){
   return new Promise(function(ok,mal){
     var nombre='echu_cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
@@ -1178,6 +1198,12 @@ function armarPDF(PDFLib,arma){
         fila:function(t,v,neg){nueva();t=limpio(t);v=limpio(v);page.drawText(t,{x:44,y:y,size:10,font:R,color:rgb(0.35,0.35,0.35)});
           var w=B.widthOfTextAtSize(v,10);page.drawText(v,{x:551-w,y:y,size:10,font:B,color:neg?rgb(0.75,0.12,0.12):rgb(0.1,0.1,0.1)});
           page.drawLine({start:{x:44,y:y-5},end:{x:551,y:y-5},thickness:0.3,color:rgb(0.85,0.85,0.85)});y-=17},
+        // v67: tabla (columnas con posición y ancho; el texto que no entra se corta).
+        tabla:function(cols,filas){
+          var dib=function(vals,font,size,color){nueva();cols.forEach(function(c,i){var v=limpio(vals[i]==null?'':vals[i]);while(v&&font.widthOfTextAtSize(v,size)>c.w)v=v.slice(0,-1);
+            var x=c.der?c.x+c.w-font.widthOfTextAtSize(v,size):c.x;page.drawText(v,{x:x,y:y,size:size,font:font,color:color})});
+            page.drawLine({start:{x:44,y:y-5},end:{x:551,y:y-5},thickness:0.3,color:rgb(0.85,0.85,0.85)});y-=15};
+          dib(cols.map(function(c){return c.t}),B,8,rgb(0.45,0.45,0.45));filas.forEach(function(f){dib(f,R,9,rgb(0.1,0.1,0.1))});y-=4},
         parrafo:function(t){var pal=limpio(t).split(' '),lin='';pal.forEach(function(w){var prueba=lin?lin+' '+w:w;if(R.widthOfTextAtSize(prueba,8.5)>507){page.drawText(lin,{x:44,y:y,size:8.5,font:R,color:rgb(0.4,0.4,0.4)});y-=12;lin=w}else lin=prueba});if(lin){page.drawText(lin,{x:44,y:y,size:8.5,font:R,color:rgb(0.4,0.4,0.4)});y-=12}}
       };
       y-=0;arma(api);
@@ -1480,11 +1506,20 @@ function cargarPropuestas(){
   if(!CFG.token||esConsulta())return;
   api('propuestas').then(function(l){
     marcarPropuestas(l);
-    PROPS=(l||[]).slice(0,60);
+    PROPS=(l||[]).slice(0,250);
     // v40: sin pedir -> Órdenes de compra; pedidas -> Seguimientos.
     api('ordenes_anuladas').then(pintarAnuladas).catch(function(){});
     var htmlProp=[], htmlSeg=[];
+    // v67: los productos de un pedido armado (sin pedir) van juntos, en una sola orden.
+    var grupos={},ordenGrupos=[];
     PROPS.forEach(function(x,i){
+      if(x.pedido||!(x.datos&&x.datos.grupo&&x.orden))return;
+      if(!grupos[x.orden]){grupos[x.orden]=[];ordenGrupos.push(x.orden)}
+      grupos[x.orden].push(i);
+    });
+    ordenGrupos.forEach(function(o){htmlProp.push(tarjetaPedido(o,grupos[o]))});
+    PROPS.forEach(function(x,i){
+      if(!x.pedido&&x.datos&&x.datos.grupo&&x.orden)return;
       var seg=!!x.pedido;
       var est=x.estado||'', ch=/✔/.test(est)?'v':(/NO LLEG/.test(est)?'r':(/PEDIDA|VENDIENDO/.test(est)?'c':'a'));
       var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)">'+(x.orden?'<span class="chip c" style="margin-right:6px">N° '+esc(x.orden)+'</span>':'')+esc(x.producto)+
@@ -1528,6 +1563,7 @@ function cargarPropuestas(){
       var clave=normBus([x.orden?'n'+x.orden+' orden'+x.orden:'',x.fecha,x.producto,x.codigo,x.proveedor,x.codigoProveedor,est,x.queCargar||'',x.necesitaCarga?(x.cargado?'en sistema cargado':'falta cargar'):''].join(' | '));
       (seg?htmlSeg:htmlProp).push({h:h,k:' '+clave+' ',orden:String(x.orden||'')});
     });
+    htmlProp.sort(function(a,b){return (+b.orden||0)-(+a.orden||0)});
     ORD_ITEMS={prop:htmlProp,seg:htmlSeg};
     pintarOrdenes();
   }).catch(function(){$('lprop').innerHTML='Para ver el seguimiento, actualizá ECHU a la versión 5.18.'});
@@ -1773,6 +1809,223 @@ $('brec').onclick=function(){
   delete b.dataset.seguro;b.textContent='Reconstrucción completa';pedirActualizacionEchu('completa');
 };
 document.querySelector('nav button[data-tab="ajustes"]').addEventListener('click',cargarEstadoEchu);
+/* ---------------- v67: ARMAR PEDIDO (varios productos con un presupuesto) ---------------- */
+var CAND=null, CANDCARGANDO=null, PED=null;
+function modoSim(m){
+  document.querySelectorAll('#simmodo button').forEach(function(b){b.classList.toggle('on',b.dataset.m===m)});
+  $('simulador').classList.toggle('modo-ped',m==='ped');
+  if(m==='ped')cargarCandidatos();
+  try{localStorage.setItem('sasha_sim_modo',m)}catch(e){}
+}
+document.querySelectorAll('#simmodo button').forEach(function(b){b.onclick=function(){modoSim(b.dataset.m);window.scrollTo(0,0)}});
+['ppres'].forEach(function(id){var el=$(id);
+  el.addEventListener('input',formatearMientrasEscribe,true);
+  el.addEventListener('blur',function(){formatearMientrasEscribe({target:el})});
+});
+var TXT_MODO={'SIN STOCK':'sin stock','SE AGOTA':'sin stock o que se agotan pronto','CON STOCK':'con stock','TODOS':'con o sin stock'};
+function cargarCandidatos(forzar){
+  if(esConsulta()||!CFG.token)return Promise.resolve();
+  if(CAND&&!forzar)return Promise.resolve(CAND);
+  if(CANDCARGANDO)return CANDCARGANDO;
+  $('pnota').textContent='Buscando los productos para pedir…';
+  CANDCARGANDO=api('candidatos_pedido').then(function(r){
+    CANDCARGANDO=null;CAND=r||{lista:[]};
+    var provs={};(CAND.lista||[]).forEach(function(x){provs[x.proveedor]=(provs[x.proveedor]||0)+1});
+    var sel=$('pprov').value;
+    $('pprov').innerHTML='<option value="">Todos (mejor precio)</option>'+Object.keys(provs).sort().map(function(p){return '<option value="'+esc(p)+'">'+esc(p)+' ('+provs[p]+')</option>'}).join('');
+    $('pprov').value=sel;
+    $('pnota').innerHTML=CAND.mensaje?esc(CAND.mensaje):('<b>'+(CAND.total||0)+'</b> productos para pedir: '+(TXT_MODO[CAND.modo]||'')+(CAND.modo==='SE AGOTA'?' ('+CAND.dias+' días)':'')+(CAND.soloConVentas?', que se vendieron en los últimos 3 meses':'')+
+      ' (lo cambiás en <a href="#" onclick="irA(\'ajustes\');return false">⚙ Ajustes</a>). Siempre al mejor precio. Primero los que más ganancia dejan por mes. Cantidad: hasta fin de '+esc(CAND.hasta||'el mes que viene')+'.');
+    return CAND;
+  }).catch(function(e){CANDCARGANDO=null;$('pnota').innerHTML=/accion|Acci/i.test(e.message)?'Para armar pedidos, pegá la versión 5.75 de ECHU (Nueva versión).':'<span class="neg">'+esc(e.message)+'</span>';throw e});
+  return CANDCARGANDO;
+}
+function llenarPedido(ped,resto,lista){
+  var dentro={};ped.items.forEach(function(x){dentro[x.codigo]=1});
+  lista.forEach(function(x){
+    if(dentro[x.codigo]||ped.quitados[x.codigo]||resto<x.costo)return;
+    var q=Math.min(x.cantidad,Math.floor(resto/x.costo)); if(q<1)return;
+    ped.items.push(Object.assign({},x,{cant:q}));dentro[x.codigo]=1;resto-=q*x.costo;
+  });
+}
+function candidatosFiltrados(prov){return (CAND&&CAND.lista||[]).filter(function(x){return !prov||normProv(x.proveedor)===normProv(prov)})}
+$('barmar').onclick=function(){
+  var pres=num('ppres'), prov=$('pprov').value;
+  if(!(pres>0)){$('pmsgarm').innerHTML='<b class="neg">Poné cuánto querés gastar.</b>';return}
+  $('pmsgarm').textContent='Armando…';
+  cargarCandidatos().then(function(){
+    PED={pres:pres,prov:prov,items:[],quitados:{},orden:'',firmaGuardada:'',cargar:{}};
+    llenarPedido(PED,pres,candidatosFiltrados(prov));
+    $('pmsgarm').innerHTML=PED.items.length?'':'No hay productos para pedir'+(prov?' en '+esc(prov):'')+' con ese presupuesto.';
+    pintarPedido();
+  }).catch(function(){$('pmsgarm').textContent=''});
+};
+function totalesPedido(){
+  var t=0,g=0,gm=0,provs={};(PED.items||[]).forEach(function(x){t+=x.cant*x.costo;g+=x.cant*x.gananciaUnidad;gm+=x.gananciaMes;provs[x.proveedor]=1});
+  return {total:t,gan:g,ganMes:gm,provs:Object.keys(provs).length};
+}
+function firmaPed(){return PED.items.map(function(x){return x.codigo+'|'+x.proveedor+'|'+x.cant}).sort().join(';')}
+function pintarTotalesPedido(){
+  var T=totalesPedido(), pres=PED.pres, pasa=T.total>pres+0.5;
+  $('ptot').innerHTML='<div class="sum"><div><b>'+pesos(T.total)+'</b><span>de '+pesos(pres)+'</span></div><div><b>'+PED.items.length+'</b><span>productos · '+T.provs+' proveedor'+(T.provs===1?'':'es')+'</span></div><div><b class="'+(T.gan>=0?'pos':'neg')+'">'+pesos(T.gan)+'</b><span>ganás si vendés todo</span></div></div>'+
+    '<div class="bar" style="margin-top:8px"><i style="width:'+Math.min(100,pres?T.total/pres*100:0)+'%;background:'+(pasa?'var(--rojo)':'var(--azul2)')+'"></i></div>'+
+    '<div class="note" style="margin:0">'+(pasa?'<b class="neg">Te pasás '+pesos(T.total-pres)+' del presupuesto.</b>':'Queda '+pesos(pres-T.total)+' del presupuesto.')+'</div>';
+  var porProv={};PED.items.forEach(function(x){porProv[x.proveedor]=(porProv[x.proveedor]||0)+x.cant*x.costo});
+  document.querySelectorAll('[data-psub]').forEach(function(el){el.textContent=pesos(porProv[el.dataset.psub]||0)});
+  PED.items.forEach(function(x,i){var el=$('psub'+i);if(el)el.textContent=pesos(x.cant*x.costo)});
+  var cambio=PED.orden&&PED.firmaGuardada&&PED.firmaGuardada!==firmaPed();
+  $('pguardado').innerHTML=PED.orden?(cambio?'<div class="eval bajo" style="margin:8px 0 0">Cambiaste el pedido: al guardar o bajar el PDF se reemplaza la orden N° '+esc(PED.orden)+'.</div>':'<div class="eval ok" style="margin:8px 0 0">Guardado como <b>orden de compra N° '+esc(PED.orden)+'</b>. Lo ves abajo, en Órdenes de compra.</div>'):'';
+}
+function grupoPorProveedor(items){
+  var g={},orden=[];items.forEach(function(x,i){if(!g[x.proveedor]){g[x.proveedor]=[];orden.push(x.proveedor)}g[x.proveedor].push({x:x,i:i})});
+  return orden.map(function(p){return {prov:p,filas:g[p]}});
+}
+function pintarPedido(){
+  if(!PED||!PED.items.length){$('pres').innerHTML='';return}
+  var h='<div class="card" style="margin-top:12px" id="ptot"></div>';
+  grupoPorProveedor(PED.items).forEach(function(G){
+    h+='<div class="ph"><span>'+esc(G.prov)+'</span><span data-psub="'+esc(G.prov)+'"></span></div>';
+    // v67 (modelo 2): cada producto en su tarjeta, con lo que vende, el stock y el margen a la vista.
+    G.filas.forEach(function(f){var x=f.x,i=f.i,m=x.precio?(x.precio-x.costo)/x.precio:null;
+      h+='<div class="item" style="display:block;cursor:default"><div style="display:flex;justify-content:space-between;gap:8px"><b>'+esc(x.producto)+'</b><button class="x" data-px="'+i+'" aria-label="Sacar">×</button></div>'+
+        '<div class="rk"><b style="color:#000">'+esc(x.codigo)+'</b> · cód. '+esc(x.codigoProveedor||'-')+' · vende '+String(Math.round((x.ventaMensual||0)*10)/10).replace('.',',')+' u./mes · '+
+        (x.stock>0?'stock '+$$(x.stock):'sin stock')+(m!==null?' · margen <b>'+pct(m)+'</b>':'')+'</div>'+
+        (x.otroProveedor?'<div class="rk"><span class="pos">Más barato que en '+esc(x.proveedorActual||'su proveedor')+'</span></div>':'')+
+        '<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span class="rk" style="margin:0">Cantidad</span><input class="qty" type="number" inputmode="numeric" min="0" value="'+x.cant+'" data-pi="'+i+'">'+
+        '<span class="rk" style="margin:0">× '+pesos2(x.costo)+' =</span><b style="margin-left:auto" id="psub'+i+'"></b></div></div>';
+    });
+  });
+  h+='<div class="btns" style="margin-top:8px"><button class="btn sec" id="pcompletar">Completar con más productos</button></div>'+
+    '<div class="btns" style="margin-top:12px"><button class="btn" id="ppdf">⬇ Orden de compra (PDF)</button><button class="btn sec" id="pguardar">Guardar orden</button></div>'+
+    '<div id="pguardado"></div><div id="ppdfmsg" class="note"></div>';
+  $('pres').innerHTML=h;
+  $('pres').querySelectorAll('[data-pi]').forEach(function(el){
+    el.addEventListener('input',function(){var x=PED.items[+el.dataset.pi];x.cant=Math.max(0,Math.round(+el.value||0));pintarTotalesPedido()});
+    el.addEventListener('change',function(){if(!(+el.value>0)){var i=+el.dataset.pi;PED.quitados[PED.items[i].codigo]=1;PED.items.splice(i,1);pintarPedido()}});
+  });
+  $('pres').querySelectorAll('[data-px]').forEach(function(b){b.onclick=function(){var i=+b.dataset.px;PED.quitados[PED.items[i].codigo]=1;PED.items.splice(i,1);pintarPedido()}});
+  $('pcompletar').onclick=function(){var T=totalesPedido();var antes=PED.items.length;llenarPedido(PED,PED.pres-T.total,candidatosFiltrados(PED.prov));pintarPedido();
+    $('ppdfmsg').innerHTML=PED.items.length>antes?'Se agregaron '+(PED.items.length-antes)+' productos.':'No entra ningún otro producto con lo que queda del presupuesto.'};
+  $('pguardar').onclick=function(){guardarPedido().then(function(){$('ppdfmsg').innerHTML='';cargarPropuestas()}).catch(function(e){$('ppdfmsg').innerHTML='<b class="neg">'+esc(e.message)+'</b>'})};
+  $('ppdf').onclick=function(){
+    $('ppdfmsg').textContent='Guardando la orden de compra…';
+    guardarPedido().then(function(){
+      var f=fotoPedido(), nombre=nombrePDFPedido(f);
+      return armarPDFPedido(f).then(function(bytes){
+        ULT_PDF={bytes:bytes,nombre:nombre};try{bajarArchivo(bytes,nombre)}catch(er){}
+        $('ppdfmsg').innerHTML='PDF listo: <b>'+esc(nombre)+'</b>. Si no se bajó solo, tocá:'+BOTON_COMPARTIR;cargarPropuestas();
+      });
+    }).catch(function(e){$('ppdfmsg').innerHTML='<b class="neg">No se pudo guardar la orden: '+esc(e.message)+'</b>'});
+  };
+  pintarTotalesPedido();
+}
+var GUARDANDO_PED=null;
+function guardarPedido(){
+  if(GUARDANDO_PED)return GUARDANDO_PED;
+  var items=PED.items.filter(function(x){return x.cant>0});
+  if(!items.length)return Promise.reject(new Error('El pedido no tiene productos.'));
+  var firma=firmaPed();
+  if(PED.orden&&PED.firmaGuardada===firma)return Promise.resolve({orden:PED.orden});
+  var bs=[$('ppdf'),$('pguardar')];bs.forEach(function(b){if(b)b.disabled=true});
+  var viejo=PED.orden;
+  var antes=viejo?api('borrar_pedido',{orden:viejo}).catch(function(){}):Promise.resolve();
+  GUARDANDO_PED=antes.then(function(){
+    return api('guardar_pedido',{datos:JSON.stringify({presupuesto:PED.pres,items:items.map(function(x){return [x.codigo,x.proveedor,x.codigoProveedor||'',x.costo,x.cant]})})});
+  }).then(function(r){
+    GUARDANDO_PED=null;bs.forEach(function(b){if(b)b.disabled=false});
+    PED.orden=String(r.orden||'');PED.firmaGuardada=firma;PED.cargar=r.cargar||{};PED.fecha=hoyTxt();pintarTotalesPedido();return r;
+  },function(e){GUARDANDO_PED=null;bs.forEach(function(b){if(b)b.disabled=false});throw e});
+  return GUARDANDO_PED;
+}
+/* PDF del pedido: la orden (por proveedor, con cantidades y subtotales) y el desglose de cada producto. */
+function fotoPedido(){
+  return {orden:PED.orden,fecha:PED.fecha||hoyTxt(),pres:PED.pres,items:PED.items.filter(function(x){return x.cant>0}).map(function(x){
+    return {codigo:x.codigo,producto:x.producto,proveedor:x.proveedor,codigoProveedor:x.codigoProveedor,costo:x.costo,cant:x.cant,precio:x.precio,
+      ganU:x.gananciaUnidad,vm:x.ventaMensual,stock:x.stock,queCargar:(PED.cargar||{})[x.codigo]||''}})};
+}
+function nombrePDFPedido(f){var d=new Date(),h=('0'+d.getHours()).slice(-2)+'h'+('0'+d.getMinutes()).slice(-2)+'m';
+  return 'orden_de_compra_'+(f.orden?'N'+f.orden+'_':'')+'pedido_'+f.items.length+'_productos_'+String(f.fecha||hoyTxt()).replace(/\//g,'-')+'_'+h+'.pdf'}
+function armarPDFPedido(f){
+  return cargarLibPDF().then(function(lib){
+    var $f=function(n){return '$ '+Math.round(n||0).toLocaleString('es-AR')};
+    var $c=function(n){return '$ '+Number(n||0).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})};
+    var pc=function(n){return (n*100).toFixed(1).replace('.',',')+'%'};
+    var total=0,gan=0;f.items.forEach(function(x){total+=x.costo*x.cant;gan+=(x.ganU||0)*x.cant});
+    var grupos=grupoPorProveedor(f.items);
+    return armarPDF(lib,function(D){
+      D.titulo('Sasha · Orden de compra'+(f.orden?' N° '+f.orden:' (borrador, sin número)'));
+      D.sub('Pedido armado · '+f.fecha+' · '+f.items.length+' productos · '+grupos.length+' proveedor'+(grupos.length===1?'':'es'));
+      D.seccion('Resumen');
+      if(f.pres)D.fila('Presupuesto',$f(f.pres));
+      D.fila('Total de la orden',$c(total),f.pres&&total>f.pres+0.5);
+      grupos.forEach(function(G){var s=0;G.filas.forEach(function(r){s+=r.x.costo*r.x.cant});D.fila('· '+G.prov,$c(s)+' ('+G.filas.length+' productos)')});
+      D.fila('Ganancia si se vende todo (después de comisiones)',$f(gan),gan<0);
+      grupos.forEach(function(G){
+        var s=0;G.filas.forEach(function(r){s+=r.x.costo*r.x.cant});
+        D.seccion(G.prov+' · '+$c(s));
+        D.tabla([{t:'Cód. prov.',x:44,w:58},{t:'Producto',x:106,w:196},{t:'Cód. int.',x:306,w:44},{t:'Cant.',x:352,w:34,der:true},{t:'Costo c/u',x:390,w:76,der:true},{t:'Subtotal',x:470,w:81,der:true}],
+          G.filas.map(function(r){var x=r.x;return [x.codigoProveedor||'-',x.producto,x.codigo,String(x.cant),$c(x.costo),$c(x.costo*x.cant)]}));
+      });
+      D.seccion('Desglose: márgenes de cada producto');
+      D.tabla([{t:'Producto',x:44,w:206},{t:'Precio venta',x:254,w:66,der:true},{t:'Margen',x:324,w:50,der:true},{t:'Gana c/u',x:378,w:60,der:true},{t:'Vende/mes',x:442,w:50,der:true},{t:'Stock',x:496,w:55,der:true}],
+        f.items.map(function(x){var m=x.precio?(x.precio-x.costo)/x.precio:0;return [x.producto+' ('+x.codigo+')',$f(x.precio),pc(m),$f(x.ganU),String(Math.round((x.vm||0)*10)/10).replace('.',','),String(x.stock||0)]}));
+      var cargar=f.items.filter(function(x){return x.queCargar&&!/^(NO SE CARGA|NADA PARA CARGAR)/.test(x.queCargar)});
+      D.seccion('Para cargar en el sistema');
+      if(!cargar.length)D.parrafo('Nada para cargar: mismos proveedores y costos que en el sistema (o productos de una cabecera, que solo se informan).');
+      cargar.forEach(function(x){D.fila(x.producto.slice(0,48),'cód. '+x.codigo);D.parrafo(x.queCargar)});
+      D.sub('');D.parrafo('Seguimiento: cada producto queda en ECHU (SEGUIMIENTO DE COMPRAS Y PROPUESTAS) y en Gestión de Compras 2026 (el pedido en una fila y sus productos agrupados). Cuando lo pidas, tocá "Lo pedí" en la app.');
+    });
+  });
+}
+try{if(localStorage.getItem('sasha_sim_modo')==='ped'&&!esConsulta()){$('simulador').classList.add('modo-ped');document.querySelectorAll('#simmodo button').forEach(function(b){b.classList.toggle('on',b.dataset.m==='ped')})}}catch(e){}
+document.querySelector('nav button[data-tab="simulador"]').addEventListener('click',function(){if($('simulador').classList.contains('modo-ped'))cargarCandidatos().catch(function(){})});
+/* v67: tarjeta de un pedido armado en Órdenes de compra (todos sus productos juntos). */
+function tarjetaPedido(o,idx){
+  var xs=idx.map(function(i){return PROPS[i]}), g=(xs[0].datos||{}).grupo||{};
+  var total=0,gan=0,falta=0,provs={};xs.forEach(function(x){total+=x.costo*x.cantidad;gan+=x.gananciaTotal||0;if(x.necesitaCarga&&!x.cargado)falta++;provs[x.proveedor]=1});
+  var h='<div style="padding:10px 0;border-bottom:1px dashed var(--linea)"><div style="display:flex;justify-content:space-between;gap:8px"><b style="color:var(--txt)"><span class="chip c" style="margin-right:6px">N° '+esc(o)+'</span>Pedido armado · '+xs.length+' productos</b>'+
+    '<span style="display:flex;flex-direction:column;align-items:flex-end;gap:4px"><span class="chip a">sin pedir</span>'+(falta?'<span class="chip r" style="white-space:nowrap">falta cargar '+falta+'</span>':'')+'</span></div>'+
+    '<div>'+esc(xs[0].fecha)+' · '+esc(Object.keys(provs).join(', '))+'</div>'+
+    '<div>Total <b>'+pesos(total)+'</b>'+(g.presupuesto?' de '+pesos(g.presupuesto):'')+' · si vendés todo ganás <b class="'+(gan>=0?'pos':'neg')+'">'+pesos(gan)+'</b></div>'+
+    '<details style="margin-top:6px"><summary class="note" style="cursor:pointer">Ver los '+xs.length+' productos</summary>';
+  idx.forEach(function(i){var x=PROPS[i];
+    h+='<div style="padding:8px 0;border-top:1px dashed var(--linea)"><b>'+esc(x.producto)+'</b><div>Cód. interno <b style="font-size:16px;user-select:all">'+esc(x.codigo)+'</b> · '+esc(x.proveedor)+(x.codigoProveedor?' (cód. '+esc(x.codigoProveedor)+')':'')+'</div>'+
+      '<div>'+$$(x.cantidad)+' u. a <b>'+pesos2(x.costo)+'</b> = '+pesos(x.costo*x.cantidad)+'</div>';
+    if(x.queCargar){
+      if(x.necesitaCarga&&x.cargado)h+='<div class="note" style="margin-top:4px;color:var(--verde)"><b>✔ Cargado en el sistema</b> · <a href="#" onclick="marcarCargado('+i+',false,null);return false">deshacer</a></div>';
+      else if(x.necesitaCarga)h+='<div class="eval bajo" style="margin-top:6px"><b>Falta cargar:</b> '+esc(x.queCargar)+'</div><div class="btns" style="margin-top:6px"><button class="btn" onclick="marcarCargado('+i+',true,this)">✔ Lo cargué en el sistema</button></div>';
+      else h+='<div class="note" style="margin-top:4px">'+esc(x.queCargar)+'</div>';
+    }
+    h+='<div class="note" id="pmsg'+i+'"></div></div>';
+  });
+  h+='</details><div class="btns" style="margin-top:6px"><button class="btn" onclick="marcarPedidoGrupo(\''+esc(o)+'\',true,this)">✔ Lo pedí</button><button class="btn sec" onclick="pdfPedidoGuardado(\''+esc(o)+'\')">⬇ PDF</button></div>'+
+    '<div class="btns" style="margin-top:6px"><button class="btn sec" style="color:var(--rojo)" onclick="borrarPedidoGrupo(\''+esc(o)+'\',this)">Borrar</button></div>'+
+    '<div class="note" id="pmsgG'+esc(o)+'"></div></div>';
+  var clave=normBus(['n'+o+' orden'+o,xs[0].fecha,'pedido armado'].concat(xs.map(function(x){return [x.producto,x.codigo,x.proveedor,x.codigoProveedor,x.queCargar||'',x.necesitaCarga?(x.cargado?'en sistema cargado':'falta cargar'):''].join(' ')})).join(' | '));
+  return {h:h,k:' '+clave+' ',orden:String(o)};
+}
+function marcarPedidoGrupo(o,valor,btn){
+  if(btn)btn.disabled=true;$('pmsgG'+o).textContent='Pasando a Seguimientos…';
+  api('marcar_pedido_grupo',{orden:o,pedido:valor?1:0}).then(function(){cargarPropuestas()})
+    .catch(function(e){$('pmsgG'+o).innerHTML='<b class="neg">'+esc(e.message)+'</b>';if(btn)btn.disabled=false});
+}
+function borrarPedidoGrupo(o,btn){
+  if(!btn.dataset.seguro){btn.dataset.seguro='1';btn.textContent='¿Seguro? tocá de nuevo';setTimeout(function(){if(btn.isConnected){delete btn.dataset.seguro;btn.textContent='Borrar'}},4000);return}
+  $('pmsgG'+o).textContent='Borrando…';
+  api('borrar_pedido',{orden:o}).then(function(){if(PED&&PED.orden===String(o)){PED.orden='';PED.firmaGuardada='';if($('ptot'))pintarTotalesPedido()}cargarPropuestas()})
+    .catch(function(e){$('pmsgG'+o).innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
+}
+function pdfPedidoGuardado(o){
+  var xs=PROPS.filter(function(x){return String(x.orden)===String(o)&&x.datos&&x.datos.grupo});
+  if(!xs.length)return;
+  var g=xs[0].datos.grupo, msg=$('pmsgG'+o);
+  var f={orden:String(o),fecha:g.fecha||xs[0].fecha,pres:g.presupuesto||0,items:xs.map(function(x){var d=x.datos||{},pr=x.precioConOferta||0;
+    return {codigo:x.codigo,producto:x.producto,proveedor:x.proveedor,codigoProveedor:x.codigoProveedor,costo:x.costo,cant:x.cantidad,precio:pr,
+      ganU:x.cantidad?(x.gananciaTotal||0)/x.cantidad:0,vm:d.ventaMensual||0,stock:d.stock||0,queCargar:x.queCargar||''}})};
+  var nombre=nombrePDFPedido(f);msg.textContent='Armando el PDF…';
+  armarPDFPedido(f).then(function(bytes){ULT_PDF={bytes:bytes,nombre:nombre};bajarArchivo(bytes,nombre);msg.innerHTML='PDF listo: <b>'+esc(nombre)+'</b>. Si no lo ves en Descargas, tocá:'+BOTON_COMPARTIR})
+    .catch(function(e){msg.innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
+}
 </script>
 </body>
 </html>
