@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=87;
+var APP_V=88;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -2675,25 +2675,122 @@ function cDetalle(refrescar){
   $('cajuste').onchange=function(){var v=parsePesos(this.value);api('conta_config_guardar',{ajustePeriodo:m.periodo,ajuste:v}).then(function(){return cCargar()}).catch(function(e){alert(e.message)})};
 }
 /* ---- foto -> lectura -> formulario ---- */
+/* v88: ESCÁNER (como CamScanner): detecta el papel, podés mover las 4 esquinas, lo endereza y lo pasa a blanco y negro.
+   La foto queda más liviana y prolija: se lee más rápido y mejor. */
 function cArchivo(input){
   var f=input.files&&input.files[0];input.value='';if(!f)return;
-  CT.provNuevo=false;CT.form={nuevo:true,leyendo:true};
-  // v86: la foto se ve enseguida, mientras se achica y se lee (con un contador de segundos).
-  var url=URL.createObjectURL(f);CT.foto=url;CT.t0=Date.now();cForm();
-  clearInterval(CT.reloj);CT.reloj=setInterval(function(){var e=$('cf_seg');if(!e||!CT.form||!CT.form.leyendo){clearInterval(CT.reloj);return}e.textContent=Math.round((Date.now()-CT.t0)/1000)+' s'},1000);
-  var hashP=(window.crypto&&crypto.subtle?f.arrayBuffer().then(function(b){return crypto.subtle.digest('SHA-256',b)}).then(function(h){return Array.prototype.map.call(new Uint8Array(h),function(x){return ('0'+x.toString(16)).slice(-2)}).join('')}):Promise.resolve('')).catch(function(){return ''});
-  var img=new Image();
+  CT.provNuevo=false;CT.hash='';
+  (window.crypto&&crypto.subtle?f.arrayBuffer().then(function(b){return crypto.subtle.digest('SHA-256',b)}).then(function(h){return Array.prototype.map.call(new Uint8Array(h),function(x){return ('0'+x.toString(16)).slice(-2)}).join('')}):Promise.resolve('')).then(function(h){CT.hash=h}).catch(function(){});
+  var url=URL.createObjectURL(f),img=new Image();
   img.onload=function(){
-    var k=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');
-    cv.width=Math.round(img.naturalWidth*k);cv.height=Math.round(img.naturalHeight*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-    CT.foto=cv.toDataURL('image/jpeg',0.8);CT.mime='image/jpeg';URL.revokeObjectURL(url);
-    hashP.then(function(h){CT.hash=h;return cPost('conta_leer',{imagen:CT.foto,mime:CT.mime,tipo:CT.tipoFoto||''})}).then(function(r){
-      if(!r.ok){CT.form={nuevo:true,datos:{tipo:CT.tipoFoto||'factura',letra:CT.tipoFoto==='remito'?'R':'A',lado:CT.tipoFoto==='cierre_z'?'venta':'compra',fecha:lHoy(),periodo:CT.per},aviso:r.mensaje};cForm();return}
-      CT.form={nuevo:true,datos:r,aviso:r.dudas&&r.dudas.length?'No se leyó bien: '+r.dudas.join(', ')+'. Revisalo.':''};cForm();
-    }).catch(function(e){CT.form={nuevo:true,datos:{tipo:CT.tipoFoto||'factura',letra:CT.tipoFoto==='remito'?'R':'A',lado:CT.tipoFoto==='cierre_z'?'venta':'compra',fecha:lHoy()},aviso:e.message+' Cargalo a mano.'};cForm()});
+    // fuente de trabajo: hasta 2200 px del lado largo
+    var k=Math.min(1,2200/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');
+    cv.width=Math.round(img.naturalWidth*k);cv.height=Math.round(img.naturalHeight*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);URL.revokeObjectURL(url);
+    CT.scan={src:cv,quad:scanDetectar(cv)};CT.form={nuevo:true,escaneando:true};cForm();
   };
-  img.onerror=function(){CT.form=null;cForm();alert('No se pudo abrir la foto.')};
+  img.onerror=function(){alert('No se pudo abrir la foto.')};
   img.src=url;
+}
+// Detecta el papel: lo más claro de la foto (umbral de Otsu), la mancha más grande y sus 4 esquinas.
+function scanDetectar(cv){
+  var W=cv.width,H=cv.height,k=Math.min(1,720/Math.max(W,H)),w=Math.max(2,Math.round(W*k)),h=Math.max(2,Math.round(H*k));
+  var c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d');x.drawImage(cv,0,0,w,h);
+  var d=x.getImageData(0,0,w,h).data,L=new Uint8Array(w*h),hist=new Array(256).fill(0),i;
+  for(i=0;i<w*h;i++){L[i]=(d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114)|0;hist[L[i]]++}
+  // umbral de Otsu entre a y b (para separar lo claro de lo oscuro)
+  var otsu=function(a,b){var tot=0,sum=0,j;for(j=a;j<=b;j++){tot+=hist[j];sum+=j*hist[j]}var sB=0,wB=0,best=-1,t=a;
+    for(j=a;j<=b;j++){wB+=hist[j];if(!wB)continue;var wF=tot-wB;if(!wF)break;sB+=j*hist[j];var mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;t=j}}return t};
+  var lab=new Int32Array(w*h),q=new Int32Array(w*h);
+  // la mancha clara más grande con ese umbral (la hoja); los pixeles de los bordes de la foto no cuentan (suelen ser mesa)
+  var mancha=function(thr){lab.fill(0);var cur=0,bestN=0,bestL=0;
+    for(var i=0;i<w*h;i++){if(L[i]<=thr||lab[i])continue;cur++;var qh=0,qt=0,n=0,toca=0;q[qt++]=i;lab[i]=cur;
+      while(qh<qt){var p=q[qh++];n++;var px=p%w,py=(p/w)|0;if(px===0||py===0||px===w-1||py===h-1)toca++;
+        for(var o=0;o<4;o++){var nx=px+(o===0?1:o===1?-1:0),ny=py+(o===2?1:o===3?-1:0);if(nx<0||ny<0||nx>=w||ny>=h)continue;var nq=ny*w+nx;if(!lab[nq]&&L[nq]>thr){lab[nq]=cur;q[qt++]=nq}}}
+      var puntos=n-toca*6;if(puntos>bestN){bestN=puntos;bestL=cur}}
+    return {n:bestN,l:bestL}};
+  var t1=otsu(0,255);
+  // 1) donde hay LETRAS sobre fondo claro (bloques claros con muchos bordes): eso es la hoja, no la mesa ni la carpeta.
+  var B=12,bw=Math.floor(w/B),bh=Math.floor(h/B),txt=new Uint8Array(bw*bh),claro=Math.max(90,t1*0.9);
+  for(var by=0;by<bh;by++)for(var bx=0;bx<bw;bx++){var s2=0,gx=0,gy=0,n2=0;
+    for(var yy=by*B;yy<by*B+B;yy++)for(var xx=bx*B;xx<bx*B+B;xx++){var ii=yy*w+xx;s2+=L[ii];if(xx+1<bx*B+B)gx+=Math.abs(L[ii]-L[ii+1]);if(yy+1<by*B+B)gy+=Math.abs(L[ii]-L[ii+w]);n2++}
+    gx/=n2;gy/=n2;
+    // letras: bloque claro con bordes en las dos direcciones (un borde recto de una mesa o carpeta no cuenta)
+    txt[by*bw+bx]=(s2/n2>claro&&gx>4&&gy>4&&Math.min(gx,gy)>0.35*Math.max(gx,gy))?1:0}
+  // se juntan los bloques cercanos (2 bloques de distancia) y se toma el grupo más grande
+  var lb=new Int32Array(bw*bh),cur=0,mejor=0,mejorL=0,qq=new Int32Array(bw*bh);
+  for(var j=0;j<bw*bh;j++){if(!txt[j]||lb[j])continue;cur++;var h1=0,t3=0,cnt=0;qq[t3++]=j;lb[j]=cur;
+    while(h1<t3){var pp=qq[h1++];cnt++;var X0=pp%bw,Y0=(pp/bw)|0;
+      for(var dy=-2;dy<=2;dy++)for(var dx=-2;dx<=2;dx++){var nx2=X0+dx,ny2=Y0+dy;if(nx2<0||ny2<0||nx2>=bw||ny2>=bh)continue;var nn=ny2*bw+nx2;if(txt[nn]&&!lb[nn]){lb[nn]=cur;qq[t3++]=nn}}}
+    if(cnt>mejor){mejor=cnt;mejorL=cur}}
+  var ins=function(){var mm=0.04;return [[W*mm,H*mm],[W*(1-mm),H*mm],[W*(1-mm),H*(1-mm)],[W*mm,H*(1-mm)]]};
+  if(mejor<bw*bh*0.04)return ins();
+  // bloques sueltos (sin otro bloque de letras pegado) no cuentan para las esquinas
+  var vec=function(j3){var X3=j3%bw,Y3=(j3/bw)|0,c3=0;for(var a3=-1;a3<=1;a3++)for(var b3=-1;b3<=1;b3++){if(!a3&&!b3)continue;var x3=X3+b3,y3=Y3+a3;if(x3>=0&&y3>=0&&x3<bw&&y3<bh&&lb[y3*bw+x3]===mejorL)c3++}return c3};
+  // esquinas: el 3er bloque más extremo en cada diagonal (así un par de bloques sueltos de la mesa no la arrastran)
+  var bs=[],cx=0,cy=0;
+  for(var j2=0;j2<bw*bh;j2++){if(lb[j2]!==mejorL||vec(j2)<2)continue;var X=(j2%bw)*B,Y=((j2/bw)|0)*B;bs.push([X,Y]);cx+=X+B/2;cy+=Y+B/2}
+  if(!bs.length)return ins();
+  cx/=bs.length;cy/=bs.length;
+  var kk=0,ext=function(f,mayor,dx,dy){var o2=bs.slice().sort(function(a4,b4){return mayor?f(b4)-f(a4):f(a4)-f(b4)})[kk];return [o2[0]+dx,o2[1]+dy]};
+  var tl=ext(function(p){return p[0]+p[1]},false,0,0),br=ext(function(p){return p[0]+p[1]},true,B,B),
+      tr=ext(function(p){return p[0]-p[1]},true,B,0),bl=ext(function(p){return p[0]-p[1]},false,0,B);
+  // 2) un poco hacia afuera (los márgenes de la hoja no tienen letras)
+  // hacia afuera de sobra: es mejor que entre un poco de mesa a que se corte el número de la factura
+  return [tl,tr,br,bl].map(function(p){var ex=(p[0]-cx)*0.12,ey=(p[1]-cy)*0.10;return [Math.max(0,Math.min(W,(p[0]+ex)/k)),Math.max(0,Math.min(H,(p[1]+ey)/k))]});
+}
+function scanPintar(){
+  var S=CT.scan,cv=$('cscan');if(!S||!cv)return;
+  var W=S.src.width,H=S.src.height,ancho=Math.min(cv.parentNode.clientWidth||320,560),z=ancho/W;
+  cv.width=Math.round(W*z);cv.height=Math.round(H*z);cv.style.width=cv.width+'px';S.z=z;
+  var x=cv.getContext('2d');x.drawImage(S.src,0,0,cv.width,cv.height);
+  x.fillStyle='rgba(0,0,0,0.35)';x.beginPath();x.rect(0,0,cv.width,cv.height);x.moveTo(S.quad[0][0]*z,S.quad[0][1]*z);
+  for(var i=3;i>=0;i--)x.lineTo(S.quad[i][0]*z,S.quad[i][1]*z);x.closePath();x.fill('evenodd');
+  x.strokeStyle='#1a73e8';x.lineWidth=2;x.beginPath();S.quad.forEach(function(p,i){i?x.lineTo(p[0]*z,p[1]*z):x.moveTo(p[0]*z,p[1]*z)});x.closePath();x.stroke();
+  S.quad.forEach(function(p){x.beginPath();x.arc(p[0]*z,p[1]*z,11,0,7);x.fillStyle='rgba(26,115,232,0.85)';x.fill();x.lineWidth=2;x.strokeStyle='#fff';x.stroke()});
+}
+function scanEventos(){
+  var cv=$('cscan');if(!cv)return;var tomado=-1;
+  var pos=function(e){var r=cv.getBoundingClientRect();return [(e.clientX-r.left)/CT.scan.z,(e.clientY-r.top)/CT.scan.z]};
+  cv.addEventListener('pointerdown',function(e){var p=pos(e),dmin=1e9;CT.scan.quad.forEach(function(q,i){var d=Math.hypot(q[0]-p[0],q[1]-p[1]);if(d<dmin){dmin=d;tomado=i}});
+    if(dmin*CT.scan.z>40){tomado=-1;return}cv.setPointerCapture(e.pointerId);e.preventDefault()});
+  cv.addEventListener('pointermove',function(e){if(tomado<0)return;var p=pos(e),S=CT.scan;S.quad[tomado]=[Math.max(0,Math.min(S.src.width,p[0])),Math.max(0,Math.min(S.src.height,p[1]))];scanPintar();e.preventDefault()});
+  cv.addEventListener('pointerup',function(){tomado=-1});cv.addEventListener('pointercancel',function(){tomado=-1});
+}
+// Endereza el papel (perspectiva) y lo deja en blanco y negro prolijo. Devuelve un JPEG liviano.
+function scanResultado(entera){
+  var S=CT.scan,src=S.src,W0=src.width,H0=src.height,Q=entera?[[0,0],[W0,0],[W0,H0],[0,H0]]:S.quad;
+  var dist=function(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1])};
+  var w=Math.max(dist(Q[0],Q[1]),dist(Q[3],Q[2])),h=Math.max(dist(Q[0],Q[3]),dist(Q[1],Q[2])),k=Math.min(1,1600/Math.max(w,h));
+  w=Math.max(50,Math.round(w*k));h=Math.max(50,Math.round(h*k));
+  // homografía de la hoja (rectángulo) a la foto (cuadrilátero)
+  var A=[],B=[],dst=[[0,0],[w,0],[w,h],[0,h]];
+  for(var i=0;i<4;i++){var X=dst[i][0],Y=dst[i][1],u=Q[i][0],v=Q[i][1];A.push([X,Y,1,0,0,0,-X*u,-Y*u]);B.push(u);A.push([0,0,0,X,Y,1,-X*v,-Y*v]);B.push(v)}
+  var n=8;for(var c=0;c<n;c++){var piv=c;for(var r=c+1;r<n;r++)if(Math.abs(A[r][c])>Math.abs(A[piv][c]))piv=r;var t=A[c];A[c]=A[piv];A[piv]=t;t=B[c];B[c]=B[piv];B[piv]=t;
+    for(r=0;r<n;r++){if(r===c)continue;var f=A[r][c]/A[c][c];for(var cc=c;cc<n;cc++)A[r][cc]-=f*A[c][cc];B[r]-=f*B[c]}}
+  var hm=B.map(function(b,i){return b/A[i][i]});
+  var sd=src.getContext('2d').getImageData(0,0,W0,H0).data,out=document.createElement('canvas');out.width=w;out.height=h;
+  var ox=out.getContext('2d'),od=ox.createImageData(w,h),o=od.data,lum=new Uint8Array(w*h),hist=new Array(256).fill(0);
+  for(var y=0;y<h;y++)for(var x=0;x<w;x++){var den=hm[6]*x+hm[7]*y+1,sx=(hm[0]*x+hm[1]*y+hm[2])/den,sy=(hm[3]*x+hm[4]*y+hm[5])/den;
+    var ix=Math.max(0,Math.min(W0-1,sx|0)),iy=Math.max(0,Math.min(H0-1,sy|0)),pi=(iy*W0+ix)*4,l=(sd[pi]*0.299+sd[pi+1]*0.587+sd[pi+2]*0.114)|0;lum[y*w+x]=l;hist[l]++}
+  // estirar el contraste (el papel queda blanco, la tinta negra)
+  var acc=0,lo=0,hi=255,N=w*h;for(i=0;i<256;i++){acc+=hist[i];if(acc<N*0.02)lo=i;if(acc<N*0.85)hi=i}
+  hi=Math.max(hi,lo+40);
+  for(i=0;i<N;i++){var vv=(lum[i]-lo)/(hi-lo);vv=vv<0?0:vv>1?1:Math.pow(vv,1.25);var g=(vv*255)|0;o[i*4]=o[i*4+1]=o[i*4+2]=g;o[i*4+3]=255}
+  ox.putImageData(od,0,0);
+  return out.toDataURL('image/jpeg',0.72);
+}
+function scanUsar(entera){
+  var b=$('cscan_ok');if(b){b.disabled=true;b.textContent='Escaneando…'}
+  setTimeout(function(){
+    try{CT.foto=scanResultado(entera)}catch(e){alert('No se pudo escanear: '+e.message);return}
+    CT.mime='image/jpeg';CT.scan=null;CT.form={nuevo:true,leyendo:true};CT.t0=Date.now();cForm();
+    clearInterval(CT.reloj);CT.reloj=setInterval(function(){var e=$('cf_seg');if(!e||!CT.form||!CT.form.leyendo){clearInterval(CT.reloj);return}e.textContent=Math.round((Date.now()-CT.t0)/1000)+' s'},1000);
+    cPost('conta_leer',{imagen:CT.foto,mime:CT.mime,tipo:CT.tipoFoto||''}).then(function(r){
+      var seg=Math.round((Date.now()-CT.t0)/1000);
+      if(!r.ok){CT.form={nuevo:true,datos:{tipo:CT.tipoFoto||'factura',letra:CT.tipoFoto==='remito'?'R':'A',lado:CT.tipoFoto==='cierre_z'?'venta':'compra',fecha:lHoy(),periodo:CT.per},aviso:r.mensaje};cForm();return}
+      CT.form={nuevo:true,datos:r,aviso:(r.dudas&&r.dudas.length?'No se leyó bien: '+r.dudas.join(', ')+'. Revisalo. ':'')+'(leído en '+seg+' s)'};cForm();
+    }).catch(function(e){CT.form={nuevo:true,datos:{tipo:CT.tipoFoto||'factura',letra:CT.tipoFoto==='remito'?'R':'A',lado:CT.tipoFoto==='cierre_z'?'venta':'compra',fecha:lHoy()},aviso:e.message+' Cargalo a mano.'};cForm()});
+  },30);
 }
 function cPreguntar(inp){CT.inp=inp;$('cque').classList.remove('oculto')}
 document.querySelectorAll('#cque [data-t]').forEach(function(b){b.onclick=function(){CT.tipoFoto=b.dataset.t;$('cque').classList.add('oculto');$(CT.inp||'cadj').click()}});
@@ -2708,6 +2805,11 @@ function cForm(){
   if(!F){box.classList.add('oculto');box.innerHTML='';return}
   box.classList.remove('oculto');
   var fotoH=CT.foto?'<div class="lfoto"><img src="'+CT.foto+'" alt="Foto del comprobante"></div>':'';
+  if(F.escaneando){box.innerHTML='<h2>Escanear</h2><div class="note" style="margin-top:0">Mové los 4 puntos azules a las esquinas del papel. Se endereza y se pasa a blanco y negro: se lee más rápido y mejor.</div>'+
+      '<div style="text-align:center;margin-top:6px"><canvas id="cscan" style="touch-action:none;border-radius:8px;max-width:100%"></canvas></div>'+
+      '<div class="btns"><button class="btn" id="cscan_ok">Escanear y leer</button><button class="btn sec" onclick="scanUsar(true)">Usar la foto entera</button></div>'+
+      '<div class="btns" style="justify-content:center"><button class="lnk" onclick="CT.scan=null;CT.form=null;cForm()">Cancelar</button></div>';
+    scanPintar();scanEventos();$('cscan_ok').onclick=function(){scanUsar(false)};box.scrollIntoView({behavior:'smooth',block:'start'});return}
   if(F.leyendo&&!F.datos){box.innerHTML='<h2>Nuevo comprobante</h2>'+fotoH+'<div class="note">'+(CT.tipoFoto==='remito'?'Leyendo el remito con Google Drive…':'Leyendo la foto…')+' <b id="cf_seg">0 s</b> (suele tardar entre 5 y 20 segundos)</div>';box.scrollIntoView({behavior:'smooth',block:'start'});return}
   var d=F.datos,t=d.tipo||'factura',n=d.neto||{},iv=d.iva||{},nc=d.nc||{};
   var inp=function(id,lab,val,extra){return '<div><label>'+lab+'</label><input id="'+id+'" value="'+esc(val==null?'':val)+'"'+(extra||' inputmode="decimal"')+'></div>'};
