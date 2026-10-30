@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=92;
+var APP_V=93;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -2669,9 +2669,9 @@ function cPintar(){
   var lista=grupos[CT.seg];
   var vacio={compras:'Todavía no cargaste facturas de compra de '+cMesTxt(m.periodo)+'. Sacales foto con el botón de abajo.',ventas:'Sacale foto a cada cierre Z del controlador fiscal. Los días sin Z se calculan con las ventas de control de cajas.',remitos:'No hay remitos en este mes.',revisar:'No hay nada para revisar.'};
   $('clista').innerHTML=lista.length?lista.map(function(o){
-    var chip=(o.tipo!=='cierre_z'&&!o.numero)?'<span class="chip r">sin número: tocalo y cargalo</span>':o.estado==='revisar'?'<span class="chip r">revisar</span>':o.tipo==='remito'?(o.vinculo?'<span class="chip v">con factura</span>':'<span class="chip a">falta la factura</span>'):o.tipo==='nota_credito'?'<span class="chip c">descuenta</span>':
+    var chip=(o.tipo!=='cierre_z'&&!o.numero)?'<span class="chip r">sin número: tocalo y cargalo</span>':o.estado==='revisar'?'<span class="chip r">revisar</span>':o.tipo==='remito'?(o.vinculo?'<span class="chip v">con factura</span>':''):o.tipo==='nota_credito'?'<span class="chip c">descuenta</span>':
       (o.lado==='compra'&&['A','M'].indexOf(o.letra)<0?'<span class="chip a">no da crédito</span>':(o.conRemito?'<span class="chip v">con remito</span>':''));
-    var der=o.tipo==='remito'?'sin IVA':'IVA '+(o.ivaMes<0?'-':'')+pesos(Math.abs(o.ivaMes));
+    var der=o.tipo==='remito'?(o.total>0?pesos(o.total):'sin importe'):'IVA '+(o.ivaMes<0?'-':'')+pesos(Math.abs(o.ivaMes));
     return '<div class="cmp" onclick="cAbrir(\''+o.id+'\')"><div class="t"><b>'+esc(cTitulo(o))+'</b><b>'+der+'</b></div><div class="s">'+esc(o.nombre||'')+' · '+cFecha(o.fecha)+(chip?' · '+chip:'')+'</div></div>'}).join(''):
     '<div class="card"><div class="note" style="margin-top:0">'+vacio[CT.seg]+'</div></div>';
   if(!m.config.cuit&&$('ccfg').classList.contains('oculto'))$('clista').insertAdjacentHTML('afterbegin','<div class="card" style="margin-bottom:8px"><div class="note warn" style="margin-top:0;font-weight:600">Cargá tu CUIT en <button class="lnk" onclick="cVerConfig()">Datos de contabilidad</button> para que la app sepa qué facturas son tuyas (ventas) y cuáles de proveedores (compras).</div></div>');
@@ -2839,8 +2839,9 @@ function cForm(){
     (t==='cierre_z'?inp('cf_num','N° de Z',d.numero,' inputmode="numeric"'):sel('cf_letra','Letra',[['A','A'],['B','B'],['C','C'],['M','M'],['R','R (remito)'],['X','X'],['E','E']],d.letra||(t==='remito'?'R':'A')))+'</div>'+
     (t==='cierre_z'?'':'<div class="g2">'+inp('cf_pv','Punto de venta',d.pv,' inputmode="numeric"')+inp('cf_num','Número',d.numero,' inputmode="numeric"')+'</div>')+
     '<div class="g2"><div><label>Fecha</label><input id="cf_fecha" type="date" value="'+esc(d.fecha||'')+'"></div>'+
-    (t==='cierre_z'?'<div><label>Es</label><input value="Venta (controlador fiscal)" readonly></div>':sel('cf_lado','Es',[['compra','Compra (proveedor)'],['venta','Venta (mía)']],d.lado||'compra'))+'</div>'+
-    (t==='cierre_z'?'':'<div class="g2">'+inp('cf_cuit',(d.lado==='venta'?'CUIT del cliente':'CUIT del proveedor'),d.cuit?String(d.cuit).replace(/^(\d{2})(\d{8})(\d)$/,'$1-$2-$3'):'',' inputmode="numeric"')+
+    (t==='cierre_z'?'<div><label>Es</label><input value="Venta (controlador fiscal)" readonly></div>':t==='remito'?inp('cf_total','Importe del remito',cNum(d.total)):sel('cf_lado','Es',[['compra','Compra (proveedor)'],['venta','Venta (mía)']],d.lado||'compra'))+'</div>'+
+    // v93: el remito va sin CUIT (solo el proveedor y el importe de la hoja)
+    (t==='remito'?cSelProv(d)+'<div class="note" id="cf_provinfo" style="margin-top:2px"></div>':t==='cierre_z'?'':'<div class="g2">'+inp('cf_cuit',(d.lado==='venta'?'CUIT del cliente':'CUIT del proveedor'),d.cuit?String(d.cuit).replace(/^(\d{2})(\d{8})(\d)$/,'$1-$2-$3'):'',' inputmode="numeric"')+
       (d.lado==='venta'?inp('cf_nom','Cliente',d.nombre,' '):cSelProv(d))+'</div>'+(d.lado==='venta'?'':'<div class="note" id="cf_provinfo" style="margin-top:2px"></div>'));
   if(t!=='remito'){
     h+='<div class="g2">'+inp('cf_n21','Neto 21%',cNum(n['21']))+inp('cf_i21','IVA 21%',cNum(iv['21']))+inp('cf_n105','Neto 10,5%',cNum(n['10.5']))+inp('cf_i105','IVA 10,5%',cNum(iv['10.5']))+inp('cf_n27','Neto 27%',cNum(n['27']))+inp('cf_i27','IVA 27%',cNum(iv['27']))+'</div>'+
@@ -2851,7 +2852,7 @@ function cForm(){
     var fs=(CT.mes.facturasParaVincular||[]),mismo=function(x){return (d.cuit&&x.cuit===String(d.cuit).replace(/\D/g,''))||(d.nombre&&String(x.nombre).toUpperCase()===String(d.nombre).toUpperCase())};
     var ops=[['','Todavía no llegó la factura']].concat(fs.filter(mismo).concat(fs.filter(function(x){return !mismo(x)})).map(function(x){return [x.id,'Factura '+x.letra+' '+cNro(x)+' · '+x.nombre+' · '+cFecha(x.fecha)]}));
     var vSel=d.vinculo||'';if(!vSel&&d.facturaMencionada){var fmN=Number(String(d.facturaMencionada).replace(/\D/g,'').slice(-8));var fm=fs.filter(function(x){return Number(x.numero)===fmN&&(mismo(x)||!d.nombre)})[0]||fs.filter(function(x){return Number(x.numero)===fmN})[0];if(fm)vSel=fm.id}
-    h+=sel('cf_vinc','Factura de este remito',ops,vSel);
+    h+=sel('cf_vinc','Factura de este remito (opcional)',ops,vSel);
   }
   if(d.notas)h+='<div class="note">Nota: '+esc(d.notas)+'</div>';
   if(d.estado==='revisar')h+='<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="cf_ok" style="width:auto"> Lo revisé, está bien así</label>';
@@ -2863,10 +2864,10 @@ function cForm(){
   if($('cf_lado'))$('cf_lado').onchange=function(){CT.form.datos=cLeerForm();cForm()};
   // v89: proveedor = un campo para escribir o elegir de la lista (si no está, queda registrado al guardar)
   if($('cf_prov')){var provInfo=function(){var v=$('cf_prov').value.trim(),pr=cProvMatch({nombre:v});
-      $('cf_provinfo').innerHTML=!v?'Escribí las primeras letras y elegilo de la lista.':pr?'<span class="pos">✔ '+esc(pr.nombre)+' (registrado en ECHU'+(pr.cuit?' · CUIT '+cuitTextoJS(pr.cuit):'')+')</span>':'<b>Proveedor nuevo:</b> al guardar queda registrado en ECHU › PROVEEDORES (con el CUIT).';
-      if(pr&&pr.cuit&&!$('cf_cuit').value.replace(/\D/g,''))$('cf_cuit').value=cuitTextoJS(pr.cuit)};
+      $('cf_provinfo').innerHTML=!v?'Escribí las primeras letras y elegilo de la lista.':pr?'<span class="pos">✔ '+esc(pr.nombre)+' (registrado en ECHU'+(pr.cuit?' · CUIT '+cuitTextoJS(pr.cuit):'')+')</span>':'<b>Proveedor nuevo:</b> al guardar queda registrado en ECHU › PROVEEDORES'+($('cf_cuit')?' (con el CUIT).':'.');
+      if(pr&&pr.cuit&&$('cf_cuit')&&!$('cf_cuit').value.replace(/\D/g,''))$('cf_cuit').value=cuitTextoJS(pr.cuit)};
     $('cf_prov').addEventListener('input',provInfo);$('cf_prov').addEventListener('change',provInfo);provInfo();
-    $('cf_cuit').addEventListener('change',function(){var c=this.value.replace(/\D/g,'');var pr=(CT.mes.proveedores||[]).filter(function(x){return x.cuit&&x.cuit===c})[0];if(pr){$('cf_prov').value=pr.nombre;provInfo()}})}
+    if($('cf_cuit'))$('cf_cuit').addEventListener('change',function(){var c=this.value.replace(/\D/g,'');var pr=(CT.mes.proveedores||[]).filter(function(x){return x.cuit&&x.cuit===c})[0];if(pr){$('cf_prov').value=pr.nombre;provInfo()}})}
   [['cf_n21','cf_i21',0.21],['cf_n105','cf_i105',0.105],['cf_n27','cf_i27',0.27]].forEach(function(x){var a=$(x[0]);if(a)a.addEventListener('change',function(){var b=$(x[1]);if(!parsePesos(b.value)&&parsePesos(a.value))b.value=cNum(parsePesos(a.value)*x[2])})});
   $('cf_guardar').onclick=cGuardar;
   if(F.nuevo||F.scroll!==false)box.scrollIntoView({behavior:'smooth',block:'start'});
@@ -2881,7 +2882,8 @@ function cLeerForm(){
   var d=JSON.parse(JSON.stringify(CT.form.datos||{})),v=function(id){var e=$(id);return e?e.value:undefined},n=function(id){var e=$(id);return e?parsePesos(e.value):0};
   d.tipo=v('cf_tipo');d.letra=v('cf_letra')||'';d.pv=v('cf_pv')||'';d.numero=v('cf_num')||'';d.fecha=v('cf_fecha')||'';d.periodo=(d.fecha||'').slice(0,7);
   d.lado=d.tipo==='cierre_z'?'venta':(v('cf_lado')||'compra');
-  if($('cf_cuit')){d.cuit=v('cf_cuit');d.emisorCuit=undefined;d.nombre=$('cf_prov')?(function(){var t=$('cf_prov').value.trim().replace(/\s+/g,' ').toUpperCase(),pr=cProvMatch({nombre:t});return pr?pr.nombre:t})():v('cf_nom')}
+  if(d.tipo==='remito'){d.lado='compra';d.cuit='';d.total=n('cf_total')}
+  if($('cf_cuit')||$('cf_prov')){d.cuit=$('cf_cuit')?v('cf_cuit'):'';d.emisorCuit=undefined;d.nombre=$('cf_prov')?(function(){var t=$('cf_prov').value.trim().replace(/\s+/g,' ').toUpperCase(),pr=cProvMatch({nombre:t});return pr?pr.nombre:t})():v('cf_nom')}
   if(d.tipo!=='remito'){d.neto={'21':n('cf_n21'),'10.5':n('cf_n105'),'27':n('cf_n27')};d.iva={'21':n('cf_i21'),'10.5':n('cf_i105'),'27':n('cf_i27')};
     d.noGravado=n('cf_ng');d.percIVA=n('cf_piva');d.percIIBB=n('cf_piibb');d.otros=n('cf_otros');d.total=n('cf_total');
     if($('cf_rem'))d.remitos=String(v('cf_rem')||'').split(/[,;\s]+/).filter(Boolean);
