@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=90;
+var APP_V=91;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -331,6 +331,12 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
       <label>Más barato en otra lista (al menos este %) · solo Sugerencias de compra</label>
       <input id="cfpct" type="number" inputmode="numeric" min="0" max="90" value="20">
       <div class="note" style="margin-top:2px">0 = muestra todos los que cumplen el stock (si hay una lista más barata, te la muestra igual).</div>
+      <label>¿Cuánto vende por mes un producto?</label>
+      <select id="cfbase">
+        <option value="promedio">Promedio de sus meses (últimos 6)</option>
+        <option value="proyeccion">Con stock todo el mes (proyección)</option>
+      </select>
+      <div class="note" style="margin-top:2px">Lo usan Armar pedido, Sugerencias de compra, la gama y la ficha del producto.</div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input id="cfventas" type="checkbox" checked style="width:auto"> Solo productos que se vendieron este mes, el pasado o el anterior</label>
       <div class="btns"><button class="btn" id="cfguardar">Guardar</button></div>
       <div id="cfmsg" class="note"></div>
@@ -818,7 +824,9 @@ var PRODC={};
 function productoRapido(c){var k=String(c),x=PRODC[k];if(x&&Date.now()-x.t<300000)return Promise.resolve(x.p);
   return api('producto',{codigo:c}).then(function(p){
     // v90: "vende por mes" = promedio de sus meses (hasta 6); la venta con stock todo el mes queda como proyección aparte.
-    if(p&&p.ventaPromedio!=null){p.ventaProyeccion=p.ventaProyeccion!=null?p.ventaProyeccion:p.ventaMensual;p.ventaMensual=p.ventaPromedio}
+    // v91: según Ajustes (por defecto el promedio). Con "proyección", vende por mes = con stock todo el mes.
+    if(p&&p.ventaPromedio!=null){p.ventaProyeccion=p.ventaProyeccion!=null?p.ventaProyeccion:p.ventaMensual;
+      p.esProy=p.baseVentas==='proyeccion'||!(p.ventaPromedio>0);p.ventaMensual=p.esProy?p.ventaProyeccion:p.ventaPromedio}
     PRODC[k]={t:Date.now(),p:p};return p})}
 function verProducto(c){
   DETCOD=c;abrirFicha();
@@ -892,8 +900,9 @@ function verProducto(c){
     var dias=p.diasStock, colorD=dias===null?'':(dias<7?'neg':(dias<20?'warn':'pos'));
     h+='<div class="card"><h2>Stock</h2>'+
       '<div class="row"><span>Stock actual</span><span class="'+(p.stock<=0?'neg':'')+'">'+$$(p.stock)+' u.</span></div>'+
-      '<div class="row"><span>Vendés por mes'+(p.mesesPromedio?' <span class="rk">(promedio de '+p.mesesPromedio+(p.mesesPromedio===1?' mes':' meses')+')</span>':'')+'</span><span>'+(p.ventaMensual?(p.ventaMensual).toFixed(1).replace('.',','):'0')+' u.</span></div>'+
-      (p.ventaProyeccion!=null&&Math.abs(p.ventaProyeccion-(p.ventaMensual||0))>=0.5?'<div class="row"><span>Si tuviera stock todo el mes <span class="rk">(proyección)</span></span><span>'+(p.ventaProyeccion).toFixed(1).replace('.',',')+' u.</span></div>':'')+
+      '<div class="row"><span>Vendés por mes'+(p.esProy?' <span class="rk">(con stock todo el mes)</span>':(p.mesesPromedio?' <span class="rk">(promedio de '+p.mesesPromedio+(p.mesesPromedio===1?' mes':' meses')+')</span>':''))+'</span><span>'+(p.ventaMensual?(p.ventaMensual).toFixed(1).replace('.',','):'0')+' u.</span></div>'+
+      (p.esProy?(p.ventaPromedio>0&&Math.abs(p.ventaPromedio-(p.ventaMensual||0))>=0.5?'<div class="row"><span>Promedio de sus meses'+(p.mesesPromedio?' <span class="rk">('+p.mesesPromedio+(p.mesesPromedio===1?' mes':' meses')+')</span>':'')+'</span><span>'+(p.ventaPromedio).toFixed(1).replace('.',',')+' u.</span></div>':''):
+      (p.ventaProyeccion!=null&&Math.abs(p.ventaProyeccion-(p.ventaMensual||0))>=0.5?'<div class="row"><span>Si tuviera stock todo el mes <span class="rk">(proyección)</span></span><span>'+(p.ventaProyeccion).toFixed(1).replace('.',',')+' u.</span></div>':''))+
       '<div class="row"><span>Te alcanza para</span><span class="'+colorD+'">'+(dias===null?'sin ventas':(p.stock<=0?'SIN STOCK':Math.floor(dias)+' días'))+'</span></div>'+
       (f.sinStockDesde?'<div class="row"><span>Sin stock desde</span><span class="neg">'+esc(f.sinStockDesde)+'</span></div>':'')+
       (f.ultimaCompra?'<div class="row"><span>Última compra</span><span>'+esc(f.ultimaCompra)+'</span></div>':'')+
@@ -967,7 +976,7 @@ function pintarSprod(){
     fila('Precio de venta','<b>'+pesos(bh.precio)+'</b>')+
     fila('Margen hoy',mHoy===null?'-':'<b>'+pct(mHoy)+'</b>')+
     fila('Stock',$$(p.stock)+' u.')+
-    fila('Vende por mes'+(p.mesesPromedio?' (promedio '+p.mesesPromedio+' meses)':''),(p.ventaMensual||0).toFixed(1).replace('.',',')+' u.'+(p.ventaProyeccion!=null&&Math.abs(p.ventaProyeccion-(p.ventaMensual||0))>=0.5?' · con stock todo el mes ~'+(p.ventaProyeccion).toFixed(1).replace('.',','):''))+
+    fila('Vende por mes'+(p.esProy?' (con stock todo el mes)':(p.mesesPromedio?' (promedio '+p.mesesPromedio+' meses)':'')),(p.ventaMensual||0).toFixed(1).replace('.',',')+' u.'+(p.esProy?(p.ventaPromedio>0&&Math.abs(p.ventaPromedio-(p.ventaMensual||0))>=0.5?' · promedio de sus meses ~'+(p.ventaPromedio).toFixed(1).replace('.',','):''):(p.ventaProyeccion!=null&&Math.abs(p.ventaProyeccion-(p.ventaMensual||0))>=0.5?' · con stock todo el mes ~'+(p.ventaProyeccion).toFixed(1).replace('.',','):'')))+
     '<div id="scomp"></div></div>'+
     // v85: producto de una gama: ¿solo este o toda la gama junta?
     (p.cabecera&&p.cabecera.ventas&&p.cabecera.ventas.length>1?(p.__gama==='solo'?
@@ -1985,14 +1994,14 @@ document.querySelector('nav button[data-tab="productos"]').addEventListener('cli
 // v41: configuración de las sugerencias (⚙ Ajustes). Se guarda en ECHU.
 function pintarConfigSug(){
   if(!OPS)return;
-  $('cfmodo').value=OPS.modo||'SIN STOCK';$('cfdias').value=OPS.dias||7;$('cfpct').value=OPS.pct===undefined?20:OPS.pct;$('cfventas').checked=OPS.soloConVentas!==false;
+  $('cfmodo').value=OPS.modo||'SIN STOCK';$('cfdias').value=OPS.dias||7;$('cfpct').value=OPS.pct===undefined?20:OPS.pct;$('cfventas').checked=OPS.soloConVentas!==false;$('cfbase').value=OPS.base==='proyeccion'?'proyeccion':'promedio';
   $('cfdiasbox').classList.toggle('oculto',$('cfmodo').value!=='SE AGOTA');
 }
 $('cfmodo').addEventListener('change',function(){$('cfdiasbox').classList.toggle('oculto',$('cfmodo').value!=='SE AGOTA')});
 $('cfguardar').onclick=function(){
   var b=$('cfguardar');b.disabled=true;$('cfmsg').textContent='Guardando…';
-  OPS=null;CAND=null;CANDP={};
-  cargarOportunidades({guardar:1,modo:$('cfmodo').value,dias:+$('cfdias').value||7,pct:Math.max(0,+$('cfpct').value||0),ventas:$('cfventas').checked?1:0}).then(function(){
+  OPS=null;CAND=null;CANDP={};PRODC={};
+  cargarOportunidades({guardar:1,modo:$('cfmodo').value,dias:+$('cfdias').value||7,pct:Math.max(0,+$('cfpct').value||0),ventas:$('cfventas').checked?1:0,base:$('cfbase').value}).then(function(){
     b.disabled=false;$('cfmsg').innerHTML=OPS?'Listo: <b>'+(OPS.total||0)+'</b> productos cumplen. Los ves en la solapa <a href="#" onclick="irA(\'productos\');return false">Productos</a>.':'';
   }).catch(function(e){b.disabled=false;$('cfmsg').innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
 };
@@ -2673,7 +2682,7 @@ function cDetalle(refrescar){
   var fila=function(a,b,cl){return '<div class="rowb"><span>'+a+'</span><b'+(cl?' class="'+cl+'"':'')+'>'+b+'</b></div>'};
   box.innerHTML='<h2>IVA de '+cMesTxt(m.periodo)+'</h2>'+
     fila('IVA de tus ventas (débito)',pesos(m.debito))+
-    (m.debitoEst?'<div class="note" style="margin:0 0 4px">'+(m.diasZ?pesos(m.debitoComp)+' de '+m.diasZ+(m.diasZ===1?' cierre Z + ':' cierres Z + '):'')+pesos(m.debitoEst)+' estimado de '+m.diasEst+(m.diasEst===1?' día':' días')+' sin Z (ventas de cajas '+pesos(m.ventasSinZ)+' a 21%).</div>':'')+
+    (m.debitoEst?'<div class="note" style="margin:0 0 4px">'+(m.diasZ?pesos(m.debitoComp)+' de '+m.diasZ+(m.diasZ===1?' cierre Z + ':' cierres Z + '):'')+pesos(m.debitoEst)+' estimado de '+m.diasEst+(m.diasEst===1?' día':' días')+' sin Z (ventas de la caja 1 '+pesos(m.ventasSinZ)+' a 21%).</div>':'')+
     fila('IVA de tus compras (crédito)','- '+pesos(m.credito),'pos')+
     fila('Percepciones de IVA que te cobraron','- '+pesos(m.perc),'pos')+
     '<div class="rowb"><span>Otros a favor (retenciones, pagos a cuenta)</span><input id="cajuste" inputmode="decimal" value="'+cNum(m.ajuste)+'" placeholder="$ 0" style="width:120px;padding:6px 8px;text-align:right"></div>'+
