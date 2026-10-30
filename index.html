@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=68;
+var APP_V=69;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -1823,23 +1823,34 @@ document.querySelectorAll('#simmodo button').forEach(function(b){b.onclick=funct
   el.addEventListener('blur',function(){formatearMientrasEscribe({target:el})});
 });
 var TXT_MODO={'SIN STOCK':'sin stock','SE AGOTA':'sin stock o que se agotan pronto','CON STOCK':'con stock','TODOS':'con o sin stock'};
-function cargarCandidatos(forzar){
+// v69: con un proveedor elegido, ECHU trae lo que falta de ESE proveedor (a su costo); sin proveedor, el mejor precio.
+var CANDP={};
+function cargarCandidatos(forzar,prov){
   if(esConsulta()||!CFG.token)return Promise.resolve();
-  if(CAND&&!forzar)return Promise.resolve(CAND);
-  if(CANDCARGANDO)return CANDCARGANDO;
-  $('pnota').textContent='Buscando los productos para pedir…';
-  CANDCARGANDO=api('candidatos_pedido').then(function(r){
-    CANDCARGANDO=null;CAND=r||{lista:[]};
-    var provs={};(CAND.lista||[]).forEach(function(x){provs[x.proveedor]=(provs[x.proveedor]||0)+1});
-    var sel=$('pprov').value;
-    $('pprov').innerHTML='<option value="">Todos (mejor precio)</option>'+Object.keys(provs).sort().map(function(p){return '<option value="'+esc(p)+'">'+esc(p)+' ('+provs[p]+')</option>'}).join('');
-    $('pprov').value=sel;
-    $('pnota').innerHTML=CAND.mensaje?esc(CAND.mensaje):('<b>'+(CAND.total||0)+'</b> productos para pedir: '+(TXT_MODO[CAND.modo]||'')+(CAND.modo==='SE AGOTA'?' ('+CAND.dias+' días)':'')+(CAND.soloConVentas?', que se vendieron en los últimos 3 meses':'')+
-      ' (lo cambiás en <a href="#" onclick="irA(\'ajustes\');return false">⚙ Ajustes</a>). Siempre al mejor precio. Primero los que más ganancia dejan por mes. Cantidad: hasta fin de '+esc(CAND.hasta||'el mes que viene')+'.');
-    return CAND;
-  }).catch(function(e){CANDCARGANDO=null;$('pnota').innerHTML=/accion|Acci/i.test(e.message)?'Para armar pedidos, pegá la versión 5.75 de ECHU (Nueva versión).':'<span class="neg">'+esc(e.message)+'</span>';throw e});
-  return CANDCARGANDO;
+  prov=prov||'';
+  if(!prov&&CAND&&!forzar)return Promise.resolve(CAND);
+  if(prov&&CANDP[prov]&&!forzar)return Promise.resolve(CANDP[prov]);
+  if(!prov&&CANDCARGANDO)return CANDCARGANDO;
+  $('pnota').textContent=prov?'Buscando lo que falta de '+prov+'…':'Buscando los productos para pedir…';
+  var pr=api('candidatos_pedido',prov?{proveedor:prov}:{}).then(function(r){
+    r=r||{lista:[]};
+    if(prov){CANDP[prov]=r}else{CANDCARGANDO=null;CAND=r;
+      var sel=$('pprov').value, L=(r.proveedores&&r.proveedores.length)?r.proveedores:Object.keys((r.lista||[]).reduce(function(a,x){a[x.proveedor]=1;return a},{})).sort();
+      $('pprov').innerHTML='<option value="">Todos (mejor precio)</option>'+L.map(function(p){return '<option value="'+esc(p)+'">'+esc(p)+'</option>'}).join('');
+      $('pprov').value=sel;}
+    pintarNotaCand(r);
+    return r;
+  }).catch(function(e){if(!prov)CANDCARGANDO=null;$('pnota').innerHTML=/accion|Acci/i.test(e.message)?'Para armar pedidos, pegá la versión 5.78 de ECHU (Nueva versión).':'<span class="neg">'+esc(e.message)+'</span>';throw e});
+  if(!prov)CANDCARGANDO=pr;
+  return pr;
 }
+function pintarNotaCand(r){
+  var prov=r.proveedor||'';
+  $('pnota').innerHTML=r.mensaje?esc(r.mensaje):('<b>'+(r.total||0)+'</b> productos para pedir'+(prov?' en <b>'+esc(prov)+'</b> (los que tiene en su lista, a su costo)':'')+': '+(TXT_MODO[r.modo]||'')+(r.modo==='SE AGOTA'?' ('+r.dias+' días)':'')+(r.soloConVentas?', que se vendieron en los últimos 3 meses':'')+
+    ' (lo cambiás en <a href="#" onclick="irA(\'ajustes\');return false">⚙ Ajustes</a>).'+(prov?'':' Siempre al mejor precio.')+' Primero los que más ganancia dejan por mes. Cantidad: hasta fin de '+esc(r.hasta||'el mes que viene')+'.'+
+    (r.revisar?' <span class="neg">'+r.revisar+' no entran porque el costo de la lista no cierra (¿cotiza por caja?): revisalos con CAMBIAR COSTO.</span>':''));
+}
+$('pprov').addEventListener('change',function(){var v=$('pprov').value;if(v)cargarCandidatos(false,v).catch(function(){});else if(CAND)pintarNotaCand(CAND)});
 function llenarPedido(ped,resto,lista){
   var dentro={};ped.items.forEach(function(x){dentro[x.codigo]=1});
   lista.forEach(function(x){
@@ -1848,12 +1859,12 @@ function llenarPedido(ped,resto,lista){
     ped.items.push(Object.assign({},x,{cant:q}));dentro[x.codigo]=1;resto-=q*x.costo;
   });
 }
-function candidatosFiltrados(prov){return (CAND&&CAND.lista||[]).filter(function(x){return !prov||normProv(x.proveedor)===normProv(prov)})}
+function candidatosFiltrados(prov){return prov?((CANDP[prov]&&CANDP[prov].lista)||[]):((CAND&&CAND.lista)||[])}
 $('barmar').onclick=function(){
   var pres=num('ppres'), prov=$('pprov').value;
   if(!(pres>0)){$('pmsgarm').innerHTML='<b class="neg">Poné cuánto querés gastar.</b>';return}
   $('pmsgarm').textContent='Armando…';
-  cargarCandidatos().then(function(){
+  cargarCandidatos(false,prov).then(function(){
     PED={pres:pres,prov:prov,items:[],quitados:{},orden:'',firmaGuardada:'',cargar:{}};
     llenarPedido(PED,pres,candidatosFiltrados(prov));
     $('pmsgarm').innerHTML=PED.items.length?'':'No hay productos para pedir'+(prov?' en '+esc(prov):'')+' con ese presupuesto.';

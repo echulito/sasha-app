@@ -1,5 +1,5 @@
 // Sasha · Mi negocio - guarda solo la "cáscara" de la app (los datos siempre se piden en vivo a ECHU).
-const CACHE = 'sasha-v68';
+const CACHE = 'sasha-v69';
 const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './pdf-lib.min.js'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));
