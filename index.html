@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=85;
+var APP_V=86;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -2371,8 +2371,9 @@ function lDiasMes(y,m){return new Date(Date.UTC(y,m,0)).getUTCDate()}
 function lDow(y,m,d){return new Date(Date.UTC(y,m-1,d)).getUTCDay()}
 function lBlanco(y,m,d){var w=lDow(y,m,d);if(w===0)return 'domingo';if([1,3,5].indexOf(w)<0)return 'no_viene';return (y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2))<=lHoy()?'falta':'sin_marca'}
 function lPost(accion,obj){
-  return fetch(CFG.url,{method:'POST',redirect:'follow',cache:'no-store',body:JSON.stringify(Object.assign({token:CFG.token,accion:accion},obj||{}))})
-    .then(function(r){return r.text()}).catch(function(){throw new Error('No se pudo conectar con ECHU. Probá de nuevo.')})
+  var ctl=window.AbortController?new AbortController():null,tm=ctl?setTimeout(function(){ctl.abort()},150000):0;
+  return fetch(CFG.url,{method:'POST',redirect:'follow',cache:'no-store',signal:ctl?ctl.signal:undefined,body:JSON.stringify(Object.assign({token:CFG.token,accion:accion},obj||{}))})
+    .then(function(r){clearTimeout(tm);return r.text()}).catch(function(e){clearTimeout(tm);throw new Error(e&&e.name==='AbortError'?'ECHU tardó demasiado en responder.':'No se pudo conectar con ECHU. Probá de nuevo.')})
     .then(function(t){var j;try{j=JSON.parse(t)}catch(e){throw new Error('ECHU no respondió bien. ¿Hiciste "Nueva versión" con la 5.83?')}
       if(!j.ok){if(j.error==='PIN')salir(true);throw new Error(j.mensaje||'Error')}return j.datos});
 }
@@ -2676,13 +2677,16 @@ function cDetalle(refrescar){
 /* ---- foto -> lectura -> formulario ---- */
 function cArchivo(input){
   var f=input.files&&input.files[0];input.value='';if(!f)return;
-  CT.provNuevo=false;CT.form={nuevo:true,leyendo:true};cForm();
+  CT.provNuevo=false;CT.form={nuevo:true,leyendo:true};
+  // v86: la foto se ve enseguida, mientras se achica y se lee (con un contador de segundos).
+  var url=URL.createObjectURL(f);CT.foto=url;CT.t0=Date.now();cForm();
+  clearInterval(CT.reloj);CT.reloj=setInterval(function(){var e=$('cf_seg');if(!e||!CT.form||!CT.form.leyendo){clearInterval(CT.reloj);return}e.textContent=Math.round((Date.now()-CT.t0)/1000)+' s'},1000);
   var hashP=(window.crypto&&crypto.subtle?f.arrayBuffer().then(function(b){return crypto.subtle.digest('SHA-256',b)}).then(function(h){return Array.prototype.map.call(new Uint8Array(h),function(x){return ('0'+x.toString(16)).slice(-2)}).join('')}):Promise.resolve('')).catch(function(){return ''});
-  var url=URL.createObjectURL(f),img=new Image();
+  var img=new Image();
   img.onload=function(){
-    var k=Math.min(1,2200/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');
+    var k=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');
     cv.width=Math.round(img.naturalWidth*k);cv.height=Math.round(img.naturalHeight*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
-    CT.foto=cv.toDataURL('image/jpeg',0.85);CT.mime='image/jpeg';URL.revokeObjectURL(url);cForm();
+    CT.foto=cv.toDataURL('image/jpeg',0.8);CT.mime='image/jpeg';URL.revokeObjectURL(url);
     hashP.then(function(h){CT.hash=h;return cPost('conta_leer',{imagen:CT.foto,mime:CT.mime,tipo:CT.tipoFoto||''})}).then(function(r){
       if(!r.ok){CT.form={nuevo:true,datos:{tipo:CT.tipoFoto||'factura',letra:CT.tipoFoto==='remito'?'R':'A',lado:CT.tipoFoto==='cierre_z'?'venta':'compra',fecha:lHoy(),periodo:CT.per},aviso:r.mensaje};cForm();return}
       CT.form={nuevo:true,datos:r,aviso:r.dudas&&r.dudas.length?'No se leyó bien: '+r.dudas.join(', ')+'. Revisalo.':''};cForm();
@@ -2704,7 +2708,7 @@ function cForm(){
   if(!F){box.classList.add('oculto');box.innerHTML='';return}
   box.classList.remove('oculto');
   var fotoH=CT.foto?'<div class="lfoto"><img src="'+CT.foto+'" alt="Foto del comprobante"></div>':'';
-  if(F.leyendo&&!F.datos){box.innerHTML='<h2>Nuevo comprobante</h2>'+fotoH+'<div class="note">'+(CT.tipoFoto==='remito'?'Leyendo el remito con Google Drive…':'Leyendo la foto…')+' (tarda unos segundos)</div>';box.scrollIntoView({behavior:'smooth',block:'start'});return}
+  if(F.leyendo&&!F.datos){box.innerHTML='<h2>Nuevo comprobante</h2>'+fotoH+'<div class="note">'+(CT.tipoFoto==='remito'?'Leyendo el remito con Google Drive…':'Leyendo la foto…')+' <b id="cf_seg">0 s</b> (suele tardar entre 5 y 20 segundos)</div>';box.scrollIntoView({behavior:'smooth',block:'start'});return}
   var d=F.datos,t=d.tipo||'factura',n=d.neto||{},iv=d.iva||{},nc=d.nc||{};
   var inp=function(id,lab,val,extra){return '<div><label>'+lab+'</label><input id="'+id+'" value="'+esc(val==null?'':val)+'"'+(extra||' inputmode="decimal"')+'></div>'};
   var sel=function(id,lab,ops,val){return '<div><label>'+lab+'</label><select id="'+id+'">'+ops.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></div>'};
