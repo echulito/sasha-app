@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=84;
+var APP_V=85;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -960,9 +960,30 @@ function pintarSprod(){
     fila('Margen hoy',mHoy===null?'-':'<b>'+pct(mHoy)+'</b>')+
     fila('Stock',$$(p.stock)+' u.')+
     fila('Vende por mes',(p.ventaMensual||0).toFixed(1).replace('.',',')+' u.')+
-    '<div id="scomp"></div></div>';
+    '<div id="scomp"></div></div>'+
+    // v85: producto de una gama: ¿solo este o toda la gama junta?
+    (p.cabecera&&p.cabecera.ventas&&p.cabecera.ventas.length>1?(p.__gama==='solo'?
+      '<div class="note" style="margin-top:6px">Simulás <b>solo este producto</b> de la gama '+esc(p.cabecera.codigo)+'. El precio de venta y el costo del sistema no cambian (son los de la gama). Si lo comprás a otro costo, ECHU usa ese costo para este producto hasta que se venda lo que entra. <a href="#" onclick="SPROD.__gama=\'\';pintarSprod();return false">cambiar</a></div>':
+      '<div class="card" style="margin-top:8px;border-color:var(--azul2)"><b>Es de la gama '+esc(p.cabecera.codigo)+(p.cabecera.producto?' · '+esc(p.cabecera.producto):'')+'</b> ('+p.cabecera.ventas.length+' productos). ¿Qué querés simular?'+
+      '<div class="seg" style="margin:8px 0 0"><button onclick="SPROD.__gama=\'solo\';pintarSprod()">Solo este producto</button><button onclick="simularGama()">Toda la gama junta</button></div></div>'):'');
   pintarComparacion();
   if(p)$('squitar').onclick=function(e){e.preventDefault();elegirSim(null)};
+}
+// v85: toda la gama en una misma orden: cada uno con lo que vende (el stock no los saca de la lista).
+function simularGama(){
+  var p=SPROD;if(!p)return;
+  $('sprod').insertAdjacentHTML('beforeend','<div class="note" id="sgamamsg">Armando la orden con toda la gama…</div>');
+  var prov=PROV&&PROV.modo==='L'?PROV.sel||'':'';
+  api('candidatos_gama',{codigo:p.codigo,proveedor:prov}).then(function(r){
+    var dias=Math.max(1,Math.min(120,Math.round(+$('pdias').value||30)));
+    PED={manual:true,gama:r.cabecera,pres:0,prov:'',dias:dias,quitados:{},orden:'',firmaGuardada:'',cargar:{},
+      items:(r.lista||[]).map(function(x){var sug=metaPedido(x,dias);return Object.assign({},x,{cant:sug,sugerido:sug})})};
+    modoSim('ped');
+    $('pmsgarm').innerHTML='Orden con <b>toda la gama '+esc(r.cabecera)+(r.producto?' · '+esc(r.producto):'')+'</b> ('+PED.items.length+' productos'+(prov?', en '+esc(prov)+' los que están en su lista':'')+'). '+
+      'Cada uno trae la cantidad según <b>lo que vende</b> en '+dias+' días menos su stock (cambiala si querés; 0 = no lo pedís). Precio de la gama: '+pesos(r.precio)+'.';
+    pintarPedido();
+    setTimeout(function(){try{$('pres').scrollIntoView({behavior:'smooth'})}catch(e){}},100);
+  }).catch(function(e){var m=$('sgamamsg');if(m)m.innerHTML='<b class="neg">'+esc(e.message)+'</b>'+(/accion|Acci/i.test(e.message)?' (pegá la 5.93 de ECHU y hacé Nueva versión)':'')});
 }
 function elegirSim(p){
   SPROD=p;$('sq').value='';
