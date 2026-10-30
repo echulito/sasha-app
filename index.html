@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=72;
+var APP_V=73;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -196,7 +196,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
         <input id="pdias" type="number" inputmode="numeric" min="1" max="120" value="30">
         <div class="seg oculto" id="pmodo" style="margin:8px 0 0"><button data-v="0" class="on">Todo lo que tiene</button><button data-v="1">Solo donde es el más barato</button></div>
         <div id="pnota" class="note">Cargando…</div>
-        <div class="btns"><button class="btn" id="barmar">Armar pedido</button></div>
+        <div class="btns"><button class="btn" id="barmar">Armar pedido</button><button class="btn sec" id="bmanual">Elegir yo los productos</button></div>
         <div id="pmsgarm" class="note"></div>
       </div>
       <div id="pres"></div>
@@ -1982,15 +1982,29 @@ $('barmar').onclick=function(){
   }).catch(function(e){$('pmsgarm').innerHTML='<b class="neg">No se pudo armar: '+esc(e&&e.message||e)+'</b> Probá de nuevo.'});
 };
 function totalesPedido(){
-  var t=0,g=0,gm=0,provs={};(PED.items||[]).forEach(function(x){t+=x.cant*x.costo;g+=x.cant*x.gananciaUnidad;gm+=x.gananciaMes;provs[x.proveedor]=1});
-  return {total:t,gan:g,ganMes:gm,provs:Object.keys(provs).length};
+  var t=0,g=0,gm=0,n=0,provs={};(PED.items||[]).forEach(function(x){if(!(x.cant>0))return;n++;t+=x.cant*x.costo;g+=x.cant*x.gananciaUnidad;gm+=x.gananciaMes;provs[x.proveedor]=1});
+  return {total:t,gan:g,ganMes:gm,n:n,provs:Object.keys(provs).length};
 }
-function firmaPed(){return PED.items.map(function(x){return x.codigo+'|'+x.proveedor+'|'+x.cant+'|'+x.precio}).sort().join(';')}
+function firmaPed(){return PED.items.filter(function(x){return x.cant>0}).map(function(x){return x.codigo+'|'+x.proveedor+'|'+x.cant+'|'+x.precio}).sort().join(';')}
+// v73: ARMAR A MANO. Trae todo lo que falta (según ⚙ Ajustes) del proveedor elegido y vos ponés las cantidades.
+$('bmanual').onclick=function(){
+  var pres=num('ppres'), prov=$('pprov').value;
+  $('pmsgarm').textContent='Buscando los productos…';$('pres').innerHTML='';
+  cargarCandidatos(false,prov).then(function(){
+    var dias=Math.max(1,Math.min(120,Math.round(+$('pdias').value||30)));
+    var lista=candidatosFiltrados(prov);
+    PED={manual:true,pres:pres||0,prov:prov,dias:dias,quitados:{},orden:'',firmaGuardada:'',cargar:{},
+      items:lista.map(function(x){return Object.assign({},x,{cant:0,sugerido:metaPedido(x,dias)})})};
+    $('pmsgarm').innerHTML=PED.items.length?('<b>'+PED.items.length+'</b> productos'+(prov?' de '+esc(prov):'')+' para elegir. Poné la cantidad en los que quieras pedir (abajo de cada uno dice cuánto se vende en '+dias+' días).'):'No hay productos para pedir'+(prov?' en '+esc(prov):'')+'.';
+    pintarPedido();
+  }).catch(function(e){$('pmsgarm').innerHTML='<b class="neg">No se pudo cargar: '+esc(e&&e.message||e)+'</b> Probá de nuevo.'});
+};
 function pintarTotalesPedido(){
-  var T=totalesPedido(), pres=PED.pres, pasa=T.total>pres+0.5;
-  $('ptot').innerHTML='<div class="sum"><div><b>'+pesos(T.total)+'</b><span>de '+pesos(pres)+'</span></div><div><b>'+PED.items.length+'</b><span>productos · '+T.provs+' proveedor'+(T.provs===1?'':'es')+'</span></div><div><b class="'+(T.gan>=0?'pos':'neg')+'">'+pesos(T.gan)+'</b><span>ganás si vendés todo</span></div></div>'+
-    '<div class="bar" style="margin-top:8px"><i style="width:'+Math.min(100,pres?T.total/pres*100:0)+'%;background:'+(pasa?'var(--rojo)':'var(--azul2)')+'"></i></div>'+
-    '<div class="note" style="margin:0">'+(pasa?'<b class="neg">Te pasás '+pesos(T.total-pres)+' del presupuesto.</b>':'Queda '+pesos(pres-T.total)+' del presupuesto.')+'</div>';
+  var T=totalesPedido(), pres=PED.pres, pasa=pres>0&&T.total>pres+0.5;
+  $('ptot').innerHTML='<div class="sum"><div><b>'+pesos(T.total)+'</b><span>'+(pres>0?'de '+pesos(pres):'total del pedido')+'</span></div><div><b>'+T.n+'</b><span>productos · '+T.provs+' proveedor'+(T.provs===1?'':'es')+'</span></div><div><b class="'+(T.gan>=0?'pos':'neg')+'">'+pesos(T.gan)+'</b><span>ganás si vendés todo</span></div></div>'+
+    (pres>0?'<div class="bar" style="margin-top:8px"><i style="width:'+Math.min(100,pres?T.total/pres*100:0)+'%;background:'+(pasa?'var(--rojo)':'var(--azul2)')+'"></i></div>'+
+    '<div class="note" style="margin:0">'+(pasa?'<b class="neg">Te pasás '+pesos(T.total-pres)+' del presupuesto.</b>':'Queda '+pesos(pres-T.total)+' del presupuesto.')+'</div>':
+    (PED.manual?'<div class="note" style="margin:6px 0 0">Elegidos: '+T.n+' de '+PED.items.length+'.</div>':''));
   var porProv={};PED.items.forEach(function(x){porProv[x.proveedor]=(porProv[x.proveedor]||0)+x.cant*x.costo});
   document.querySelectorAll('[data-psub]').forEach(function(el){el.textContent=pesos(porProv[el.dataset.psub]||0)});
   PED.items.forEach(function(x,i){var el=$('psub'+i);if(el)el.textContent=pesos(x.cant*x.costo)});
@@ -2003,31 +2017,38 @@ function grupoPorProveedor(items){
 }
 function pintarPedido(){
   if(!PED||!PED.items.length){$('pres').innerHTML='';return}
-  var h='<div class="card" style="margin-top:12px" id="ptot"></div>';
+  var M=!!PED.manual;
+  var h='<div class="card" style="margin-top:12px" id="ptot"></div>'+
+    (M?'<input id="pbusq" type="search" placeholder="Buscar en la lista: nombre o código" autocomplete="off" style="margin-top:10px">':'');
   grupoPorProveedor(PED.items).forEach(function(G){
     h+='<div class="ph"><span>'+esc(G.prov)+'</span><span data-psub="'+esc(G.prov)+'"></span></div>';
     // v67 (modelo 2): cada producto en su tarjeta, con lo que vende, el stock y el margen a la vista.
     G.filas.forEach(function(f){var x=f.x,i=f.i,m=x.precio?(x.precio-x.costo)/x.precio:null;
-      h+='<div class="item" style="display:block;cursor:default"><div style="display:flex;justify-content:space-between;gap:8px"><b>'+esc(x.producto)+'</b><button class="x" data-px="'+i+'" aria-label="Sacar">×</button></div>'+
+      h+='<div class="item" data-busq="'+esc(normBus(x.producto+' '+x.codigo+' '+(x.codigoProveedor||'')))+'" style="display:block;cursor:default"><div style="display:flex;justify-content:space-between;gap:8px"><b>'+esc(x.producto)+'</b>'+(M?'':'<button class="x" data-px="'+i+'" aria-label="Sacar">×</button>')+'</div>'+
         '<div class="rk"><b style="color:#000">'+esc(x.codigo)+'</b> · cód. '+esc(x.codigoProveedor||'-')+' · vende '+String(Math.round((x.ventaMensual||0)*10)/10).replace('.',',')+' u./mes · '+
         (x.stock>0?'stock '+$$(x.stock):'sin stock')+(x.vendidasMes!=null?' · este mes vendió '+$$(x.vendidasMes):'')+(m!==null?' · margen <b>'+pct(m)+'</b>':'')+'</div>'+
         // v68: precio de venta. Sin stock: el que mantiene el margen de hoy con el costo nuevo; con stock, el de hoy.
         (x.cambiaPrecio?'<div class="rk">Precio de venta <b>'+pesos(x.precio)+'</b> (hoy '+pesos(x.precioHoy)+') · '+esc(x.motivoPrecio||'')+'</div>':'')+
         (x.otroProveedor?'<div class="rk"><span class="pos">Más barato que en '+esc(x.proveedorActual||'su proveedor')+'</span></div>':'')+
+        (M?'<div class="rk">En '+PED.dias+' días se venden ~'+$$(x.sugerido||0)+' u.'+(x.sugerido>0?' · <a href="#" data-pu="'+i+'">poner '+$$(x.sugerido)+'</a>':'')+'</div>':'')+
         '<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span class="rk" style="margin:0">Cantidad</span><input class="qty" type="number" inputmode="numeric" min="0" value="'+x.cant+'" data-pi="'+i+'">'+
         '<span class="rk" style="margin:0">× '+pesos2(x.costo)+' =</span><b style="margin-left:auto" id="psub'+i+'"></b></div></div>';
     });
   });
-  h+='<div class="btns" style="margin-top:8px"><button class="btn sec" id="pcompletar">Completar con más productos</button></div>'+
+  h+=(M?'':'<div class="btns" style="margin-top:8px"><button class="btn sec" id="pcompletar">Completar con más productos</button></div>')+
     '<div class="btns" style="margin-top:12px"><button class="btn" id="ppdf">⬇ Orden de compra (PDF)</button><button class="btn sec" id="pguardar">Guardar orden</button></div>'+
     '<div id="pguardado"></div><div id="ppdfmsg" class="note"></div>';
   $('pres').innerHTML=h;
   $('pres').querySelectorAll('[data-pi]').forEach(function(el){
     el.addEventListener('input',function(){var x=PED.items[+el.dataset.pi];x.cant=Math.max(0,Math.round(+el.value||0));pintarTotalesPedido()});
-    el.addEventListener('change',function(){if(!(+el.value>0)){var i=+el.dataset.pi;PED.quitados[PED.items[i].codigo]=1;PED.items.splice(i,1);pintarPedido()}});
+    el.addEventListener('change',function(){if(!M&&!(+el.value>0)){var i=+el.dataset.pi;PED.quitados[PED.items[i].codigo]=1;PED.items.splice(i,1);pintarPedido()}});
   });
+  $('pres').querySelectorAll('[data-pu]').forEach(function(a){a.onclick=function(ev){ev.preventDefault();var i=+a.dataset.pu,x=PED.items[i];x.cant=x.sugerido||0;
+    var el=$('pres').querySelector('[data-pi="'+i+'"]');if(el)el.value=x.cant;pintarTotalesPedido()}});
+  if(M)$('pbusq').addEventListener('input',function(){var q=normBus($('pbusq').value);
+    $('pres').querySelectorAll('[data-busq]').forEach(function(el){el.style.display=!q||q.split(' ').every(function(t){return el.dataset.busq.indexOf(t)>=0})?'':'none'})});
   $('pres').querySelectorAll('[data-px]').forEach(function(b){b.onclick=function(){var i=+b.dataset.px;PED.quitados[PED.items[i].codigo]=1;PED.items.splice(i,1);pintarPedido()}});
-  $('pcompletar').onclick=function(){var T=totalesPedido();var antes=PED.items.length;llenarPedido(PED,PED.pres-T.total,candidatosFiltrados(PED.prov));pintarPedido();
+  if(!M)$('pcompletar').onclick=function(){var T=totalesPedido();var antes=PED.items.length;llenarPedido(PED,PED.pres-T.total,candidatosFiltrados(PED.prov));pintarPedido();
     $('ppdfmsg').innerHTML=PED.items.length>antes?'Se agregaron '+(PED.items.length-antes)+' productos.':'No entra ningún otro producto con lo que queda del presupuesto.'};
   $('pguardar').onclick=function(){guardarPedido().then(function(){$('ppdfmsg').innerHTML='';cargarPropuestas()}).catch(function(e){$('ppdfmsg').innerHTML='<b class="neg">'+esc(e.message)+'</b>'})};
   $('ppdf').onclick=function(){
