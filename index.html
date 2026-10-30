@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=78;
+var APP_V=79;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -126,6 +126,10 @@ body.consulta .opc .tick{display:none}
 body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
 
 
+/* v79: Gastos (B + C) */
+.stack{display:flex;height:16px;border-radius:8px;overflow:hidden;margin:8px 0;background:#e8eaed}.stack i{display:block;height:100%}
+.leg{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:12px}.leg span{display:flex;align-items:center;gap:6px}.leg b{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+.gr{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px dashed var(--linea);font-size:14px}.gr input{width:130px;padding:7px 9px;text-align:right;flex:none}.gr input[readonly]{background:#f1f3f6}
 /* v77: Contabilidad (modelo C) */
 .tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.tiles .card{margin:0;padding:10px 6px;text-align:center;cursor:pointer}.tiles b{display:block;font-size:15px}
 .mes{display:flex;gap:6px;overflow-x:auto;margin:4px 0 10px;padding-bottom:2px}.mes button{flex:0 0 auto;border:1.5px solid var(--linea);background:#fff;border-radius:999px;padding:6px 12px;font-weight:600;color:var(--gris);font-size:13px;cursor:pointer}.mes button.on{background:var(--azul2);border-color:var(--azul2);color:#fff}
@@ -379,7 +383,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
     </div>
     <!-- v77: Administración › Contabilidad (modelo C): IVA del mes, facturas, cierres Z y remitos por foto. -->
     <div id="a-conta" class="oculto">
-      <div class="seg" style="margin-top:0" id="csub"><button class="on" data-s="iva">IVA</button><button data-s="sue">Sueldos</button><button disabled style="cursor:default">Gastos (pronto)</button></div>
+      <div class="seg" style="margin-top:0" id="csub"><button class="on" data-s="iva">IVA</button><button data-s="sue">Sueldos</button><button data-s="gas">Gastos</button></div>
       <div id="c-iva">
       <div class="mes" id="cmes"></div>
       <div class="tiles" id="ctiles"><div class="card"><span class="rk">IVA ventas</span><b>…</b></div><div class="card"><span class="rk">IVA compras</span><b>…</b></div><div class="card"><span class="rk">A pagar</span><b>…</b></div></div>
@@ -392,6 +396,8 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
       <div class="card oculto" id="ccfg" style="margin-top:8px"></div>
       </div>
       <!-- v78: Contabilidad › Sueldos (modelo A + C) -->
+      <!-- v79: Contabilidad › Gastos (modelo B + C): la solapa ADMINISTRACION de ECHU -->
+      <div id="c-gas" class="oculto"><div class="cargando">Cargando…</div></div>
       <div id="c-sue" class="oculto">
         <div class="mes" id="smes"></div>
         <div id="slista"><div class="cargando">Cargando…</div></div>
@@ -2704,9 +2710,9 @@ function cVerConfig(){
 var SU={per:'',D:null,emp:'',nov:{},vista:'lista'};
 function contaSub(s){
   document.querySelectorAll('#csub button').forEach(function(b){b.classList.toggle('on',b.dataset.s===s)});
-  $('c-iva').classList.toggle('oculto',s!=='iva');$('c-sue').classList.toggle('oculto',s!=='sue');
+  $('c-iva').classList.toggle('oculto',s!=='iva');$('c-sue').classList.toggle('oculto',s!=='sue');$('c-gas').classList.toggle('oculto',s!=='gas');
   try{localStorage.setItem('sasha_csub',s)}catch(e){}
-  if(s==='sue')sCargar();else cCargar();
+  if(s==='sue')sCargar();else if(s==='gas')gCargar();else cCargar();
 }
 document.querySelectorAll('#csub button').forEach(function(b){if(!b.disabled)b.onclick=function(){contaSub(b.dataset.s)}});
 function r2(n){return Math.round((Number(n)||0)*100)/100}
@@ -2922,6 +2928,80 @@ function sPDF(o){
     });
     return pdf.save();
   })})}).then(function(bytes){ULT_PDF={bytes:bytes,nombre:'recibo_'+String(e.nombre).replace(/[^A-Za-z0-9]+/g,'-')+'_'+per+'.pdf'};compartirPDF()}).catch(function(err2){alert(err2.message)});
+}
+/* ---------------- v79: CONTABILIDAD › GASTOS (la solapa ADMINISTRACION de ECHU) ---------------- */
+var GA={D:null,abierto:''};
+var GCATS=[{k:'sue',n:'Sueldos y cargas',c:'#5e97f6'},{k:'alq',n:'Alquiler y servicios',c:'#a8c7fa'},{k:'imp',n:'Impuestos',c:'#f29900'},{k:'otr',n:'Otros gastos',c:'#c6dafc'},{k:'pv',n:'Por cada venta',c:'#fbbc04'}];
+function gCat(f){
+  if(f.grupo||/^sueldo|dueñ|cargas|sindicato/i.test(f.label))return 'sue';
+  if(/alquiler|luz|agua|gas\b|^gas$|internet|tel[eé]fono|seguridad|expensas/i.test(f.label))return 'alq';
+  if(/impuesto|ingresos brutos|iva|municipal|tasa|monotributo|ganancias/i.test(f.label))return 'imp';
+  return 'otr';
+}
+function gCargar(){return api('gastos_datos').then(function(d){GA.D=d;gPintar()}).catch(function(e){$('c-gas').innerHTML=err(e)})}
+function gPintar(){
+  var d=GA.D,R=d.resultado,u=d.ultimo,h='';
+  // B: el resultado
+  if(u){var gano=u.ganancia>=0;
+    h+='<div class="card"><h2>'+cMesTxt(u.mes)+'</h2><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700">'+(gano?'Ganaste':'Perdiste')+'</span><b style="font-size:26px" class="'+(gano?'pos':'neg')+'">'+pesos(Math.abs(u.ganancia))+'</b></div>'+
+      '<div class="rk">Facturación '+pesos(u.fact)+(u.margen!=null?' · margen '+pct(u.margen):'')+'</div>'+
+      (R.ventasMinimas?'<div class="rowb"><span>Para no perder plata en '+LMESES[Number(d.proximo.slice(5,7))-1].toLowerCase()+'</span><b>'+pesos(R.ventasMinimas)+'</b></div>':'')+
+      (R.porDia?'<div class="rowb"><span>Por día abierto (26)</span><b>'+pesos(R.porDia)+'</b></div>':'')+
+      '<div class="rowb"><span>Margen mínimo / tu margen</span><b class="'+(R.actual>=R.minimo?'pos':'neg')+'">'+pct(R.minimo)+' / '+pct(R.actual)+'</b></div></div>';
+  }else h+='<div class="card"><div class="note" style="margin-top:0">El resultado del mes aparece cuando ECHU tenga un mes completo de ventas.</div></div>';
+  // C: a dónde va lo que facturás
+  var tot={sue:0,alq:0,imp:0,otr:0,pv:0},det={sue:[],alq:[],imp:[],otr:[],pv:[]};
+  d.filas.forEach(function(f){if(f.total)return;var k=gCat(f);tot[k]+=Number(f.valor)||0;if(Number(f.valor)||f.auto)det[k].push(f.label)});
+  var D=d.dist;
+  if(D&&D.fact>0){
+    var fijos=tot.sue+tot.alq+tot.imp+tot.otr,esc2=fijos>0?(D.fact-D.repo-D.porVenta-D.ganancia)/fijos:1;
+    var seg=[{n:'Mercadería',c:'#1a73e8',v:D.repo}].concat(GCATS.filter(function(x){return x.k!=='pv'}).map(function(x){return {n:x.n,c:x.c,v:tot[x.k]*esc2}})).concat([{n:'Por cada venta',c:'#fbbc04',v:D.porVenta},{n:D.ganancia>=0?'Ganancia':'Pérdida',c:D.ganancia>=0?'#137333':'#c5221f',v:Math.abs(D.ganancia)}]);
+    var base=seg.reduce(function(a,x){return a+Math.max(0,x.v)},0)||1;
+    h+='<div class="card" style="margin-top:8px"><h2>A dónde va lo que facturás</h2><div class="stack">'+seg.map(function(x){return x.v>0?'<i style="width:'+(x.v/base*100).toFixed(2)+'%;background:'+x.c+'"></i>':''}).join('')+'</div>'+
+      '<div class="leg">'+seg.map(function(x){return x.v>0?'<span><b style="background:'+x.c+'"></b>'+x.n+' '+Math.round(x.v/D.fact*100)+'%</span>':''}).join('')+'</div>'+
+      '<div class="note">Promedio por mes de los últimos meses completos: de cada $100 que facturás.</div></div>';
+  }
+  // C: los gastos por tipo (tocá para ver y editar)
+  GCATS.forEach(function(c){
+    var abierto=GA.abierto===c.k,monto=c.k==='pv'?pct(d.totalPct):pesos(tot[c.k]);
+    var sub=c.k==='pv'?d.pct.filter(function(x){return x.pct>0}).map(function(x){return x.label.split(' (')[0]}).join(', '):det[c.k].join(', ');
+    h+='<div class="cmp" style="margin-top:8px;cursor:default"><div class="t" style="cursor:pointer" onclick="GA.abierto=GA.abierto===\''+c.k+'\'?\'\':\''+c.k+'\';gPintar()"><b>'+c.n+'</b><b>'+monto+' <span class="rk">'+(abierto?'▲':'▼')+'</span></b></div>'+
+      (abierto?gEditor(c.k):'<div class="s">'+esc(sub||'sin cargar')+'</div>')+'</div>';
+  });
+  h+='<div class="btns"><button class="btn sec" onclick="gNuevo()">+ Otro gasto</button></div><div id="gnuevo"></div>'+
+    '<div class="note">Es la solapa ADMINISTRACION de ECHU: lo que cambies acá cambia allá. Los gastos con cartel azul se completan solos.</div>';
+  $('c-gas').innerHTML=h;
+}
+function gEditor(k){
+  var d=GA.D,h='<div style="margin-top:6px">';
+  if(k==='pv'){d.pct.forEach(function(x,i){h+='<div class="gr"><span>'+esc(x.label)+'</span><input data-gp="'+i+'" inputmode="decimal" value="'+(x.pct?String(Math.round(x.pct*1000)/10).replace('.',','):'')+'" placeholder="0 %"></div>'})}
+  else d.filas.forEach(function(f,i){
+    if(f.total||gCat(f)!==k)return;
+    var a=f.auto;
+    h+='<div class="gr"><span>'+(f.grupo?'<span class="rk">'+esc(f.grupo)+' › </span>':'')+esc(f.label)+(a?' <span class="chip c" style="font-size:11px">de '+a.fuente+'</span>':'')+
+      (a?'<br><button class="lnk" style="font-size:12px" onclick="gAuto('+i+','+(!f.autoOn)+')">'+(f.autoOn?'cargarlo a mano':'que se complete solo')+'</button>':'')+'</span>'+
+      '<input data-gf="'+i+'" inputmode="decimal" value="'+(f.valor===''?'':cNum(f.valor))+'" placeholder="$ 0"'+(a&&f.autoOn?' readonly title="'+esc(a.detalle)+'"':'')+'></div>';
+    if(a&&f.autoOn)h+='<div class="note" style="margin:0 0 4px">'+esc(a.detalle)+'</div>';
+  });
+  return h+'<div class="btns"><button class="btn" onclick="gGuardar(this)">Guardar</button></div><div class="note" id="gmsg"></div></div>';
+}
+function gGuardar(b){
+  var d=GA.D,valores=[],pc=[];
+  document.querySelectorAll('#c-gas [data-gf]').forEach(function(i){if(i.readOnly)return;var f=d.filas[Number(i.dataset.gf)],v=i.value.trim()===''?'':parsePesos(i.value);if(String(v)!==String(f.valor))valores.push({label:f.label,valor:v})});
+  document.querySelectorAll('#c-gas [data-gp]').forEach(function(i){var x=d.pct[Number(i.dataset.gp)],v=parsePesos(i.value)/100;if(Math.abs(v-x.pct)>1e-6)pc.push({label:x.label,pct:v})});
+  if(!valores.length&&!pc.length){$('gmsg').textContent='No cambiaste nada.';return}
+  b.disabled=true;b.textContent='Guardando…';
+  lPost('gastos_guardar',{datos:JSON.stringify({valores:valores,pct:pc})}).then(function(r){GA.D=r;gPintar()}).catch(function(e){b.disabled=false;b.textContent='Guardar';$('gmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+}
+function gAuto(i,on){
+  var f=GA.D.filas[i],o={};o[f.label]=on;
+  lPost('gastos_guardar',{datos:JSON.stringify({auto:o})}).then(function(r){GA.D=r;gPintar()}).catch(function(e){alert(e.message)});
+}
+function gNuevo(){
+  $('gnuevo').innerHTML='<div class="card" style="margin-top:8px"><div class="g2"><div><label>Gasto</label><input id="gn_l" placeholder="Ej.: Seguro del local"></div><div><label>Monto por mes</label><input id="gn_v" inputmode="decimal" placeholder="$ 0"></div></div><div class="btns"><button class="btn" id="gn_ok">Agregar</button><button class="btn sec" onclick="$(\'gnuevo\').innerHTML=\'\'">Cancelar</button></div><div class="note" id="gn_msg"></div></div>';
+  $('gn_l').focus();
+  $('gn_ok').onclick=function(){var l=$('gn_l').value.trim(),v=parsePesos($('gn_v').value);if(!l){$('gn_msg').textContent='Poné el nombre del gasto.';return}
+    this.disabled=true;lPost('gastos_guardar',{datos:JSON.stringify({nuevos:[{label:l,valor:v}]})}).then(function(r){GA.D=r;gPintar()}).catch(function(e){$('gn_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>';$('gn_ok').disabled=false})};
 }
 </script>
 </body>
