@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=75;
+var APP_V=76;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -124,6 +124,19 @@ body.consulta .opc .tick{display:none}
 .sum{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center}.sum b{display:block;font-size:17px}.sum span{font-size:11px;color:var(--gris)}
 /* v63: colores de la versión de consulta (modelo 2: naranja de la flor) */
 body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
+
+/* v76: Administración › Limpieza (modelo C, con los colores de la app) */
+.st{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.st div{border-radius:8px;text-align:center;padding:6px 0 5px;font-size:13px;font-weight:700;border:1px solid var(--linea);background:#fff;cursor:pointer;user-select:none;-webkit-user-select:none}
+.st div small{display:block;font-size:9px;font-weight:600;margin-top:1px}
+.st .a{background:#e6f4ea;color:#137333;border-color:#b7dfc2}.st .f{background:#fce8e6;color:#c5221f;border-color:#f3b8b3}.st .d{background:#fef7e0;color:#b06000;border-color:#f2d58a}
+.st .n{color:#9aa0a6}.st .h{background:#f1f3f4;color:#5f6368}.st .x{border:0;background:none;cursor:default}
+.wk{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:10px;color:var(--gris);text-align:center;font-weight:700;margin:8px 0 3px}
+.ph2{display:flex;gap:8px}.ph2 .btn{flex:1;text-align:center}
+.lfoto{min-height:90px;border-radius:10px;background:repeating-linear-gradient(45deg,#eef0f3,#eef0f3 10px,#e3e6ea 10px,#e3e6ea 20px);display:flex;align-items:center;justify-content:center;color:#80868b;font-size:12px;margin:8px 0;overflow:hidden}
+.lfoto img{width:100%;max-height:320px;object-fit:contain;display:block;background:#fff}
+.lsum{display:grid;grid-template-columns:1fr 1fr 1fr;text-align:center}.lsum b{font-size:18px;display:block}
+.lnk{background:none;border:0;color:var(--azul2);font:inherit;font-weight:700;padding:0;cursor:pointer;text-decoration:underline}
+.lpdfs{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px}.lpdfs .btn{font-size:12px;padding:9px 6px}
 </style>
 </head>
 <body>
@@ -148,7 +161,8 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
   <nav>
     <button class="on" data-tab="resumen">Resumen</button>
     <button data-tab="productos">Productos</button>
-    <button data-tab="simulador">Simular compra</button>
+    <button data-tab="simulador">Simular</button>
+    <button data-tab="admin" class="solo-completo">Administración</button>
     <button data-tab="ajustes" class="solo-completo" style="flex:0 0 auto;padding:10px 8px" aria-label="Ajustes">⚙</button>
   </nav>
 </header>
@@ -318,6 +332,40 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
       <div class="note">Los rankings se corrigen enseguida. Lo demás (contribución, márgenes y tareas) en el próximo Actualizar de ECHU.</div>
     </div>
   </section>
+  <!-- v76: Administración › Limpieza (la app Sasha Limpieza, ahora dentro de Sasha). Solo con tu PIN. -->
+  <section id="admin" class="oculto">
+    <div class="seg" style="margin-top:0" id="admsec"><button class="on" data-s="limpieza">Limpieza</button><button disabled style="cursor:default">＋ (próximamente)</button></div>
+    <div class="seg" style="margin-top:0" id="lsub"><button class="on" data-s="nuevo">Nuevo recibo</button><button data-s="registro">Registro</button><button data-s="config">Configuración</button></div>
+    <div id="l-nuevo">
+      <div class="card">
+        <div class="ph2"><label class="btn" style="margin:0;color:#fff;font-size:14px">📷 Sacar foto<input id="lcam" type="file" accept="image/*" capture="environment" class="oculto"></label><label class="btn sec" style="margin:0;font-size:14px">Adjuntar foto<input id="ladj" type="file" accept="image/*" class="oculto"></label></div>
+        <div class="lfoto" id="lfoto">foto de la planilla firmada</div>
+        <div class="note" id="lest" style="margin-top:0"></div>
+        <div id="lcal"></div>
+      </div>
+      <div class="card oculto" id="ltot" style="margin-top:12px"></div>
+      <div class="card oculto" id="lres" style="margin-top:12px"></div>
+    </div>
+    <div id="l-registro" class="oculto"><div class="cargando">Cargando…</div></div>
+    <div id="l-config" class="oculto">
+      <div class="card">
+        <h2>Datos que se repiten en cada recibo</h2>
+        <div class="two"><div><label>Quien recibe</label><input id="lcname"></div><div><label>DNI (opcional)</label><input id="lcdni"></div></div>
+        <div class="two"><div><label>Quien paga</label><input id="lcpayer"></div><div><label>Valor por asistencia</label><input id="lcrate" inputmode="decimal"></div></div>
+        <label>Forma de pago</label><div class="seg" id="lcmet" style="margin-top:0"><button data-m="Efectivo">Efectivo</button><button data-m="Transferencia">Transferencia</button></div>
+        <label>Planilla Limpieza (link o ID)</label><input id="lcsheet">
+        <div class="btns"><button class="btn" id="lcsave">Guardar</button></div><div class="note" id="lcmsg"></div>
+      </div>
+      <div class="card" style="margin-top:12px"><h2>Lectura de fotos</h2><div id="lcvis" class="note" style="margin-top:0"></div></div>
+      <div class="card" style="margin-top:12px">
+        <h2>Traer los recibos de la app vieja</h2>
+        <div class="note" style="margin-top:0">Abrí en el navegador <b>sasha-limpieza.ezecor95.workers.dev/api/receipts</b> con tu contraseña de siempre, copiá todo el texto (empieza con <b>[</b>) y pegalo acá. También podés elegir el archivo si lo guardaste.</div>
+        <textarea id="limptxt" rows="4" style="width:100%;margin-top:8px;font:12px monospace;padding:8px;border:1px solid #c7ccd1;border-radius:10px"></textarea>
+        <div class="btns"><label class="btn sec" style="margin:0;text-align:center">Elegir archivo<input id="limpfile" type="file" accept=".json,application/json,text/plain" class="oculto"></label><button class="btn" id="limpbtn">Importar</button></div>
+        <div class="note" id="limpmsg"></div>
+      </div>
+    </div>
+  </section>
 </main>
 </div>
 
@@ -332,7 +380,7 @@ function esConsulta(){return CFG.modo==='consulta'||/[?&]consulta\b/.test(locati
 // v61: ícono propio de la versión de consulta (flor naranja sobre blanco). Se elige al agregarla a la pantalla de inicio.
 function aplicarIconos(){var c=esConsulta()||/[?&]consulta\b/.test(location.search),p=c?'consulta-':'';var s=function(id,h){var e=$(id);if(e&&e.getAttribute('href')!==h)e.setAttribute('href',h)};s('ltouch',p+'apple-touch-icon.png');s('lfav',p+'icon-192.png');s('lmanif',c?'manifest-consulta.webmanifest':'manifest.webmanifest');var t=$('mtema');if(t)t.setAttribute('content',c?'#F49820':'#1f3a5f')}
 try{document.addEventListener('DOMContentLoaded',function(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta())})}catch(e){}
-function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&!$('ajustes').classList.contains('oculto'))irA('resumen')}
+function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&(!$('ajustes').classList.contains('oculto')||!$('admin').classList.contains('oculto')))irA('resumen')}
 function jsonp(url){
   return new Promise(function(ok,mal){
     var nombre='echu_cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
@@ -389,7 +437,7 @@ function err(e){return '<div class="card"><b class="neg">Error:</b> '+esc(e&&e.m
 
 document.querySelectorAll('nav button').forEach(function(b){b.onclick=function(){
   document.querySelectorAll('nav button').forEach(function(x){x.classList.toggle('on',x===b)});
-  ['resumen','productos','simulador','ajustes'].forEach(function(t){$(t).classList.toggle('oculto',t!==b.dataset.tab)});
+  ['resumen','productos','simulador','admin','ajustes'].forEach(function(t){$(t).classList.toggle('oculto',t!==b.dataset.tab)});
   window.scrollTo(0,0);
 }});
 function irA(tab){document.querySelector('nav button[data-tab="'+tab+'"]').click()}
@@ -2195,6 +2243,258 @@ function pdfPedidoGuardado(o){
   armarPDFPedido(f).then(function(bytes){ULT_PDF={bytes:bytes,nombre:nombre};bajarArchivo(bytes,nombre);msg.innerHTML='PDF listo: <b>'+esc(nombre)+'</b>. Si no lo ves en Descargas, tocá:'+BOTON_COMPARTIR})
     .catch(function(e){msg.innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
 }
+/* ---------------- v76: ADMINISTRACIÓN › LIMPIEZA (la app Sasha Limpieza, ahora acá) ----------------
+   Foto del registro firmado -> ECHU la lee con OpenAI -> revisás los días -> 5 PDF (se arman acá) -> se registra en la planilla Limpieza. */
+var LMP={cfg:null,recs:null,y:0,m:0,days:[],foto:'',mime:'',hash:'',nombre:'',notas:'',datos:false,pagado:false,met:'',rate:0,ocupado:false,pdfs:{}};
+var LMESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+var LTXT={asistencia:'asistió',falta:'faltó',no_viene:'no viene',domingo:'domingo',feriado:'feriado',sin_marca:'sin firma',dudoso:'revisar'};
+var LCLS={asistencia:'a',falta:'f',dudoso:'d',no_viene:'n',domingo:'h',feriado:'h',sin_marca:''};
+var LCICLO=['asistencia','falta','no_viene','feriado','domingo'];
+function lPesos(n){n=Number(n)||0;return '$ '+n.toLocaleString('es-AR',{minimumFractionDigits:Number.isInteger(n)?0:2,maximumFractionDigits:2})}
+function lHoy(){try{return new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}catch(e){var d=new Date();return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}}
+function lDiasMes(y,m){return new Date(Date.UTC(y,m,0)).getUTCDate()}
+function lDow(y,m,d){return new Date(Date.UTC(y,m-1,d)).getUTCDay()}
+function lBlanco(y,m,d){var w=lDow(y,m,d);if(w===0)return 'domingo';if([1,3,5].indexOf(w)<0)return 'no_viene';return (y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2))<=lHoy()?'falta':'sin_marca'}
+function lPost(accion,obj){
+  return fetch(CFG.url,{method:'POST',redirect:'follow',cache:'no-store',body:JSON.stringify(Object.assign({token:CFG.token,accion:accion},obj||{}))})
+    .then(function(r){return r.text()}).catch(function(){throw new Error('No se pudo conectar con ECHU. Probá de nuevo.')})
+    .then(function(t){var j;try{j=JSON.parse(t)}catch(e){throw new Error('ECHU no respondió bien. ¿Hiciste "Nueva versión" con la 5.83?')}
+      if(!j.ok){if(j.error==='PIN')salir(true);throw new Error(j.mensaje||'Error')}return j.datos});
+}
+function lSub(s){
+  document.querySelectorAll('#lsub button').forEach(function(b){b.classList.toggle('on',b.dataset.s===s)});
+  ['nuevo','registro','config'].forEach(function(x){$('l-'+x).classList.toggle('oculto',x!==s)});
+  if(s==='registro')lRegistro();
+  if(s==='config')lPintarCfg();
+}
+document.querySelectorAll('#lsub button').forEach(function(b){b.onclick=function(){lSub(b.dataset.s)}});
+function lCargarCfg(forzar){
+  if(LMP.cfg&&!forzar)return Promise.resolve(LMP.cfg);
+  return api('limpieza_config').then(function(c){LMP.cfg=c;if(!LMP.rate)LMP.rate=c.rate;if(!LMP.met)LMP.met=c.method;return c});
+}
+function lEntrar(){
+  if(esConsulta()){irA('resumen');return}
+  lCargarCfg().then(function(){if(!LMP.days.length)lEstado('');}).catch(function(e){$('lest').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+}
+function lEstado(t){
+  if(t){$('lest').innerHTML=t;return}
+  var c=LMP.cfg;
+  $('lest').innerHTML=LMP.days.length?'':(c&&!c.vision?'Sacá la foto o <button class="lnk" onclick="lManual()">cargá los días a mano</button>. Para que se lean solas falta la clave de lectura (ver Configuración).':
+    'Sacá la foto de la planilla firmada: se leen solas las firmas. También podés <button class="lnk" onclick="lManual()">cargar los días a mano</button>.');
+}
+function lArchivo(input){
+  var f=input.files&&input.files[0];input.value='';if(!f)return;
+  LMP.pdfs={};$('lres').classList.add('oculto');
+  lEstado('Preparando la foto…');
+  var hashP=(window.crypto&&crypto.subtle?f.arrayBuffer().then(function(b){return crypto.subtle.digest('SHA-256',b)}).then(function(h){return Array.prototype.map.call(new Uint8Array(h),function(x){return ('0'+x.toString(16)).slice(-2)}).join('')}):Promise.resolve('')).catch(function(){return ''});
+  var url=URL.createObjectURL(f),img=new Image();
+  img.onload=function(){
+    var max=2000,k=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');
+    cv.width=Math.round(img.naturalWidth*k);cv.height=Math.round(img.naturalHeight*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+    LMP.foto=cv.toDataURL('image/jpeg',0.85);LMP.mime='image/jpeg';URL.revokeObjectURL(url);
+    $('lfoto').innerHTML='<img src="'+LMP.foto+'" alt="Foto de la planilla">';
+    hashP.then(function(h){LMP.hash=h;lCargarCfg().then(function(c){if(c.vision)lLeer();else lManual()})});
+  };
+  img.onerror=function(){lEstado('<span class="neg">No se pudo abrir la foto. Probá con otra (JPG o PNG).</span>')};
+  img.src=url;
+}
+$('lcam').addEventListener('change',function(){lArchivo(this)});
+$('ladj').addEventListener('change',function(){lArchivo(this)});
+function lLeer(){
+  LMP.ocupado=true;lEstado('Leyendo la foto… (tarda unos segundos)');$('lcal').innerHTML='';$('ltot').classList.add('oculto');
+  lPost('limpieza_leer',{imagen:LMP.foto,mime:LMP.mime}).then(function(r){
+    LMP.ocupado=false;
+    if(!r.ok){lManual();lEstado(esc(r.mensaje));return}
+    LMP.nombre=r.name||'';LMP.notas=r.notes||'';
+    if(!r.year){lManual();lEstado(esc(r.mensaje||'No se pudo leer el mes: elegilo y revisá los días.'));return}
+    LMP.y=r.year;LMP.m=r.month;LMP.days=r.days;lPintar();
+  }).catch(function(e){LMP.ocupado=false;lManual();lEstado('<span class="neg">'+esc(e.message)+'</span> Cargá los días a mano.')});
+}
+function lManual(y,m){
+  var h=lHoy().split('-').map(Number);
+  if(!y){y=LMP.y||h[0];m=LMP.m||h[1];if(!LMP.y&&h[2]<20){m--;if(!m){m=12;y--}}}
+  LMP.y=y;LMP.m=m;LMP.days=[];
+  for(var d=1;d<=lDiasMes(y,m);d++)LMP.days.push({day:d,status:lBlanco(y,m,d)});
+  lPintar();
+}
+function lPintar(){
+  var c=LMP.cfg||{},y=LMP.y,m=LMP.m,dudosos=LMP.days.filter(function(x){return x.status==='dudoso'}).length;
+  lEstado(' ');
+  var h='<div class="note" style="margin-top:0"><b>'+LMESES[m-1]+' '+y+'</b> · '+esc(c.name||'Lita')+' · '+lPesos(LMP.rate||c.rate)+' por día · tocá un día para cambiarlo · <button class="lnk" onclick="LMP.datos=!LMP.datos;lPintar()">'+(LMP.datos?'listo':'cambiar datos')+'</button></div>';
+  if(LMP.datos){
+    h+='<div class="two"><div><label>Mes</label><select id="lmes">'+LMESES.map(function(n,i){return '<option value="'+(i+1)+'"'+(i+1===m?' selected':'')+'>'+n+'</option>'}).join('')+'</select></div><div><label>Año</label><input id="lanio" inputmode="numeric" value="'+y+'"></div></div>'+
+       '<div class="two"><div><label>Valor por asistencia</label><input id="lrate" inputmode="decimal" value="'+(LMP.rate||c.rate)+'"></div><div><label>Forma de pago</label><select id="lmet"><option'+((LMP.met||c.method)==='Efectivo'?' selected':'')+'>Efectivo</option><option'+((LMP.met||c.method)==='Transferencia'?' selected':'')+'>Transferencia</option></select></div></div>';
+  }
+  if(LMP.notas)h+='<div class="note" style="background:var(--amarF);color:var(--amar);padding:8px 10px;border-radius:8px">Nota de la lectura: '+esc(LMP.notas)+'</div>';
+  h+='<div class="wk"><div>L</div><div>M</div><div>M</div><div>J</div><div>V</div><div>S</div><div>D</div></div><div class="st">';
+  var off=(lDow(y,m,1)+6)%7;for(var i=0;i<off;i++)h+='<div class="x"></div>';
+  LMP.days.forEach(function(x,i){h+='<div class="'+(LCLS[x.status]||'')+'" onclick="lTocar('+i+')"'+(x.observed?' title="'+esc(x.observed)+'"':'')+'>'+x.day+'<small>'+LTXT[x.status]+'</small></div>'});
+  h+='</div>';
+  if(dudosos)h+='<div class="note warn" style="font-weight:600">Hay '+dudosos+(dudosos===1?' día':' días')+' para revisar (en amarillo): tocalos hasta que quede lo que dice la planilla.</div>';
+  $('lcal').innerHTML=h;
+  if(LMP.datos){
+    $('lmes').onchange=$('lanio').onchange=function(){var nm=Number($('lmes').value),ny=Number($('lanio').value);if(ny>=2020&&ny<=2100&&(nm!==LMP.m||ny!==LMP.y)){LMP.notas='';lManual(ny,nm)}};
+    $('lrate').oninput=function(){LMP.rate=parsePesos(this.value);lTotales()};
+    $('lmet').onchange=function(){LMP.met=this.value};
+  }
+  lTotales();
+}
+function lTocar(i){
+  var x=LMP.days[i],k=LCICLO.indexOf(x.status);
+  x.status=x.status==='dudoso'||k<0?'asistencia':LCICLO[(k+1)%LCICLO.length];
+  if(x.status==='falta'&&lBlanco(LMP.y,LMP.m,x.day)==='sin_marca')x.status='sin_marca';
+  var y=window.scrollY;lPintar();window.scrollTo(0,y);
+}
+function lTotales(){
+  var c=LMP.cfg||{},n=LMP.days.filter(function(x){return x.status==='asistencia'}).length,f=LMP.days.filter(function(x){return x.status==='falta'}).length,
+      dud=LMP.days.filter(function(x){return x.status==='dudoso'}).length,rate=LMP.rate||c.rate||0,tot=Math.round(rate*100)*n/100;
+  $('ltot').classList.remove('oculto');
+  $('ltot').innerHTML='<div class="lsum"><div><b>'+n+'</b><span class="rk">asistencias</span></div><div><b>'+f+'</b><span class="rk">'+(f===1?'falta':'faltas')+'</span></div><div><b class="pos">'+lPesos(tot)+'</b><span class="rk">a pagar</span></div></div>'+
+    '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="lpag" style="width:auto"'+(LMP.pagado?' checked':'')+'> Confirmo que este importe fue pagado</label>'+
+    '<div class="note" style="margin-top:2px">Sin tildarlo sale como liquidación pendiente de pago.</div>'+
+    '<div class="btns"><button class="btn" id="lgen"'+(dud||!n?' disabled':'')+'>Generar los 5 PDF</button></div>'+
+    (dud?'<div class="note">Primero revisá los días en amarillo.</div>':(!n?'<div class="note">Marcá al menos una asistencia.</div>':''));
+  $('lpag').onchange=function(){LMP.pagado=this.checked};
+  $('lgen').onclick=lEmitir;
+}
+function lEmitir(){
+  var c=LMP.cfg||{},b=$('lgen');if(b.disabled)return;
+  if(!c.payer){alert('Falta el nombre de quien paga: completalo en Configuración.');lSub('config');return}
+  b.disabled=true;b.textContent='Generando…';
+  var cuerpo={name:c.name,payer:c.payer,dni:c.dni,method:LMP.met||c.method,rate:LMP.rate||c.rate,year:LMP.y,month:LMP.m,paid:!!LMP.pagado,hash:LMP.hash,
+    days:LMP.days.map(function(x){return {day:x.day,status:x.status}})};
+  lPost('limpieza_emitir',{datos:JSON.stringify(cuerpo)}).then(function(r){
+    LMP.recs=null;
+    var rec=r.recibo;
+    lMostrarResultado(rec,r.duplicado?'Esta foto ya tenía un recibo: te muestro ese.':'');
+    if(!r.duplicado){LMP.days=[];LMP.foto='';LMP.hash='';LMP.notas='';LMP.pagado=false;LMP.datos=false;$('lcal').innerHTML='';$('ltot').classList.add('oculto');$('lfoto').innerHTML='foto de la planilla firmada';lEstado('')}
+    else lTotales();
+  }).catch(function(e){b.disabled=false;b.textContent='Generar los 5 PDF';alert(e.message)});
+}
+function lChipPlanilla(s){s=String(s||'pendiente');return s==='registrado'?'<span class="chip v">planilla: registrado</span>':(/^revisar/.test(s)?'<span class="chip r">planilla: revisar</span>':'<span class="chip a">planilla: '+esc(s)+'</span>')}
+function lMostrarResultado(rec,aviso){
+  var d=rec.data;
+  $('lres').classList.remove('oculto');
+  $('lres').innerHTML=(aviso?'<div class="note warn" style="margin-top:0;font-weight:600">'+esc(aviso)+'</div>':'')+
+    '<div class="opc-h"><b>'+LMESES[d.month-1]+' '+d.year+' · '+lPesos(d.total)+'</b><span class="chip '+(d.paid?'v':'a')+'">'+(d.paid?'pagado':'pago pendiente')+'</span></div>'+
+    '<div class="rk">'+d.count+' asistencias · '+lPesos(d.rate)+' por día · '+lChipPlanilla(rec.sheets)+'</div>'+
+    (/^revisar/.test(rec.sheets)?'<div class="note neg">'+esc(rec.sheets.replace(/^revisar:\s*/,''))+'</div>':'')+
+    '<div id="lpdf-'+rec.id+'"><div class="note">Armando los PDF…</div></div>';
+  lArmarYMostrar(rec);
+  $('lres').scrollIntoView({behavior:'smooth',block:'start'});
+}
+/* ---- los 5 PDF (mismo contenido que la app vieja, con los colores de Sasha) ---- */
+function lPDFs(rec){
+  if(LMP.pdfs[rec.id])return Promise.resolve(LMP.pdfs[rec.id]);
+  var d=rec.data,id=String(rec.id);
+  return cargarLibPDF().then(function(L){
+    var rgb=L.rgb,AZ=rgb(0.12,0.23,0.37),INK=rgb(0.14,0.14,0.16);
+    var safe=function(s){return String(s).replace(/[−–]/g,'-').replace(/[^\x20-\x7e\xa0-\xff]/g,'?')};
+    var doc=function(){return L.PDFDocument.create().then(function(pdf){return Promise.all([pdf.embedFont(L.StandardFonts.Helvetica),pdf.embedFont(L.StandardFonts.HelveticaBold)]).then(function(f){return {pdf:pdf,font:f[0],bold:f[1]}})})};
+    var line=function(p,font,t,x,y,size){p.drawText(safe(t),{x:x,y:y,size:size||11,font:font,color:INK})};
+    var header=function(p,bold,t){p.drawRectangle({x:0,y:757,width:595,height:85,color:AZ});p.drawText(t,{x:40,y:795,size:Math.min(21,515/bold.widthOfTextAtSize(t,1)),font:bold,color:rgb(1,1,1)});p.drawText('SASHA LIMPIEZA',{x:40,y:774,size:10,font:bold,color:rgb(1,1,1)})};
+    var files={};
+    var recibo=function(kind,label,firma){return doc().then(function(a){
+      var p=a.pdf.addPage([595,842]);header(p,a.bold,d.paid?'RECIBO DE PAGO':'LIQUIDACION - PAGO PENDIENTE');line(p,a.bold,label,40,720,12);
+      var ls=['Comprobante: '+id.slice(0,8),(d.paid?'Fecha de pago':'Fecha prevista')+': '+(d.paymentDate||''),(d.paid?'Recibi de':'A pagar por')+': '+d.payer,'Beneficiario/a: '+d.name,'DNI: '+(d.dni||'____________________'),
+        'Importe: '+lPesos(d.total)+' pesos argentinos',LMESES[d.month-1]+' '+d.year+': '+d.count+' asistencias x '+lPesos(d.rate)+'.','Dias: '+d.days.filter(function(x){return x.status==='asistencia'}).map(function(x){return x.day}).join(', '),'Forma de pago: '+(d.method||'____________________')];
+      var cur=696;ls.forEach(function(text){var part='';safe(text).split(' ').forEach(function(w){var nx=part?part+' '+w:w;if(a.font.widthOfTextAtSize(nx,10)>510&&part){line(p,a.font,part,40,cur,10);cur-=17;part=w}else part=nx});if(part){line(p,a.font,part,40,cur,10);cur-=17}});
+      if(!d.paid)line(p,a.bold,'Borrador: no acredita recepcion del pago.',40,450,10);
+      if(firma){line(p,a.bold,'Recibi conforme',40,410,12);p.drawLine({start:{x:40,y:350},end:{x:275,y:350},thickness:.6});p.drawLine({start:{x:330,y:350},end:{x:555,y:350},thickness:.6});line(p,a.font,'Firma de la beneficiaria',40,334,10);line(p,a.font,'Aclaracion',330,334,10)}
+      return a.pdf.save().then(function(b){files[kind]=b})})};
+    var LAB={asistencia:'Asistencia',no_viene:'No viene',domingo:'Domingo',sin_marca:'Día futuro sin firma',falta:'Falta confirmada',feriado:'Feriado - no viene'};
+    var detalle=function(kind,label){return doc().then(function(b){
+      var q=b.pdf.addPage([595,842]);header(q,b.bold,'DETALLE DE ASISTENCIAS');line(q,b.bold,label,40,735,11);
+      var tt=d.name+' | '+LMESES[d.month-1]+' '+d.year;line(q,b.bold,tt,40,715,Math.min(12,515/b.bold.widthOfTextAtSize(safe(tt),1)));
+      var y=685;line(q,b.bold,'Dia',40,y);line(q,b.bold,'Registro',100,y);line(q,b.bold,'Importe ARS',450,y);y-=24;
+      d.days.forEach(function(x){if(x.status==='asistencia')q.drawRectangle({x:35,y:y-4,width:525,height:18,color:rgb(0.91,0.94,0.99)});line(q,b.font,x.day,40,y,10);line(q,b.font,LAB[x.status]||x.status,100,y,10);line(q,b.font,x.status==='asistencia'?lPesos(d.rate):'$ 0',450,y,10);y-=18});
+      line(q,b.bold,'TOTAL: '+d.count+' asistencias - '+lPesos(d.total),40,y-20,13);line(q,b.font,'Blanco en dia previsto transcurrido = falta. No se paga ese dia.',40,55,9);
+      return b.pdf.save().then(function(x){files[kind]=x})})};
+    var planilla=function(){if(!d.plan)return Promise.resolve();var plan=d.plan;return doc().then(function(a){
+      var page=a.pdf.addPage([595,842]),font=a.font,bold=a.bold,gray=rgb(.95,.95,.95);
+      var center=function(t,y,size,f){f=f||bold;page.drawText(t,{x:(595-f.widthOfTextAtSize(t,size))/2,y:y,size:size,font:f,color:INK})};
+      center('SASHA LIMPIEZA',792,20);center('REGISTRO DE ASISTENCIAS',770,10,font);
+      var x=132,w=331,split=45,rh=19,top=738;
+      for(var i=0;i<3;i++)page.drawRectangle({x:x,y:top-(i+1)*rh,width:w,height:rh,color:gray,borderColor:INK,borderWidth:.7});
+      center(String(plan.year),top-14,11);center(LMESES[plan.month-1].toUpperCase(),top-rh-14,11);
+      page.drawLine({start:{x:x+split,y:top-3*rh},end:{x:x+split,y:top-2*rh},thickness:.7,color:INK});
+      page.drawText('DIA',{x:x+13,y:top-2*rh-14,size:9,font:bold,color:INK});var nm=safe(d.name||'Lita').slice(0,40).toUpperCase();page.drawText(nm,{x:x+split+(w-split-bold.widthOfTextAtSize(nm,10))/2,y:top-2*rh-14,size:10,font:bold,color:INK});
+      plan.days.forEach(function(dd,i){var y=top-(i+4)*rh,o={x:x,y:y,width:w,height:rh,borderColor:INK,borderWidth:.6};if(dd.status==='feriado')o.color=rgb(0.91,0.94,0.99);page.drawRectangle(o);page.drawLine({start:{x:x+split,y:y},end:{x:x+split,y:y+rh},thickness:.6,color:INK});
+        page.drawText(String(dd.day),{x:x+16,y:y+5,size:10,font:bold,color:INK});if(dd.print)page.drawText(dd.print,{x:x+split+9,y:y+5,size:dd.print.length>28?8:10,font:bold,color:INK})});
+      var bottom=top-(plan.days.length+3)*rh;page.drawText('Casillas en blanco: lunes, miercoles y viernes, excepto feriados.',{x:100,y:bottom-25,size:9,font:font,color:INK});
+      var y=bottom-43;plan.days.filter(function(v){return v.status==='feriado'}).forEach(function(hh){page.drawText(safe(hh.day+'/'+plan.month+': '+hh.holiday).slice(0,95),{x:100,y:y,size:8,font:font,color:INK});y-=13});
+      return a.pdf.save().then(function(b){files.planilla=b})})};
+    return recibo('recibo','ORIGINAL - PARA EL PAGADOR',true).then(function(){return recibo('recibo_duplicado','DUPLICADO - PARA LA BENEFICIARIA',false)})
+      .then(function(){return detalle('detalle','COPIA PARA EL PAGADOR')}).then(function(){return detalle('detalle_beneficiaria','COPIA PARA LA BENEFICIARIA')})
+      .then(planilla).then(function(){LMP.pdfs[rec.id]=files;return files});
+  });
+}
+var LPDFN={recibo:'Recibo original',recibo_duplicado:'Recibo duplicado',detalle:'Detalle (pagador)',detalle_beneficiaria:'Detalle (beneficiaria)',planilla:'Planilla del mes que viene'};
+function lNombrePDF(rec,k){var d=rec.data;return k+'_'+String(d.name||'Lita').replace(/[^A-Za-z0-9]+/g,'-')+'_'+LMESES[d.month-1]+'-'+d.year+'.pdf'}
+function lArmarYMostrar(rec){
+  var box=$('lpdf-'+rec.id);if(box)box.innerHTML='<div class="note">Armando los PDF…</div>';
+  LMP.recById=LMP.recById||{};LMP.recById[rec.id]=rec;
+  lPDFs(rec).then(function(files){
+    var box=$('lpdf-'+rec.id);if(!box)return;
+    var ks=Object.keys(LPDFN).filter(function(k){return files[k]});
+    box.innerHTML='<div class="lpdfs">'+ks.map(function(k){return '<button class="btn sec" onclick="lAbrirPDF(\''+rec.id+'\',\''+k+'\')">'+LPDFN[k]+'</button>'}).join('')+
+      '<button class="btn" onclick="lCompartirTodos(\''+rec.id+'\')">Compartir los '+ks.length+'</button></div>';
+  }).catch(function(e){var box=$('lpdf-'+rec.id);if(box)box.innerHTML='<div class="note neg">'+esc(e.message)+'</div>'});
+}
+function lAbrirPDF(id,k){var rec=LMP.recById[id],f=LMP.pdfs[id];if(!f||!f[k])return;ULT_PDF={bytes:f[k],nombre:lNombrePDF(rec,k)};compartirPDF()}
+function lCompartirTodos(id){
+  var rec=LMP.recById[id],f=LMP.pdfs[id];if(!f)return;
+  var arch=Object.keys(LPDFN).filter(function(k){return f[k]}).map(function(k){try{return new File([f[k]],lNombrePDF(rec,k),{type:'application/pdf'})}catch(e){return null}}).filter(Boolean);
+  if(arch.length&&navigator.canShare&&navigator.canShare({files:arch})){navigator.share({files:arch,title:'Limpieza '+LMESES[rec.data.month-1]+' '+rec.data.year}).catch(function(){});return}
+  Object.keys(LPDFN).forEach(function(k,i){if(f[k])setTimeout(function(){bajarArchivo(f[k],lNombrePDF(rec,k))},i*600)});
+}
+/* ---- Registro ---- */
+function lRegistro(forzar){
+  var box=$('l-registro');
+  if(!LMP.recs||forzar)box.innerHTML='<div class="cargando">Cargando…</div>';
+  (LMP.recs&&!forzar?Promise.resolve(LMP.recs):api('limpieza_recibos')).then(function(r){
+    LMP.recs=r;LMP.recById=LMP.recById||{};
+    if(!r.length){box.innerHTML='<div class="card"><div class="note" style="margin-top:0">Todavía no hay recibos. Si tenías en la app vieja, traelos desde Configuración.</div></div>';return}
+    box.innerHTML=r.map(function(rec){var d=rec.data||{};LMP.recById[rec.id]=rec;
+      return '<div class="card" style="margin-bottom:8px"><div class="opc-h"><b>'+(LMESES[d.month-1]||'')+' '+d.year+' · '+lPesos(d.total)+'</b><span class="chip '+(d.paid?'v':'a')+'">'+(d.paid?'pagado':'pago pendiente')+'</span></div>'+
+        '<div class="rk">'+(d.count||0)+' asistencias · '+lPesos(d.rate)+' por día · '+esc(d.name||'')+(d.importado?' · <span class="chip c">de la app vieja</span>':'')+'</div>'+
+        '<div style="margin-top:4px">'+lChipPlanilla(rec.sheets)+'</div>'+
+        (/^revisar/.test(rec.sheets)?'<div class="note neg">'+esc(String(rec.sheets).replace(/^revisar:\s*/,''))+'</div><div class="btns"><button class="btn sec" onclick="lReintentar(\''+rec.id+'\',this)">Revisé la planilla: volver a registrar</button></div>':'')+
+        '<div id="lpdf-'+rec.id+'"><div class="btns"><button class="btn sec" onclick="lArmarYMostrar(LMP.recById[\''+rec.id+'\'])">Ver los PDF</button></div></div></div>'}).join('')+
+      '<div class="btns"><button class="btn sec" onclick="lRegistro(true)">↻ Actualizar el registro</button></div>';
+  }).catch(function(e){box.innerHTML=err(e)});
+}
+function lReintentar(id,b){
+  if(!confirm('¿Ya revisaste la planilla Limpieza? Se vuelve a registrar este mes.'))return;
+  b.disabled=true;b.textContent='Registrando…';
+  api('limpieza_sync',{id:id}).then(function(){lRegistro(true)}).catch(function(e){b.disabled=false;b.textContent='Volver a registrar';alert(e.message)});
+}
+/* ---- Configuración ---- */
+function lPintarCfg(){
+  lCargarCfg().then(function(c){
+    $('lcname').value=c.name||'';$('lcdni').value=c.dni||'';$('lcpayer').value=c.payer||'';$('lcrate').value=c.rate||'';
+    $('lcsheet').value=c.sheetId?'https://docs.google.com/spreadsheets/d/'+c.sheetId:'';
+    document.querySelectorAll('#lcmet button').forEach(function(b){b.classList.toggle('on',b.dataset.m===(c.method||'Efectivo'))});
+    $('lcvis').innerHTML=c.vision?'<span class="chip v">conectada</span> Las fotos se leen solas. Siempre podés corregir los días antes de generar.':
+      '<span class="chip a">falta la clave</span> En la planilla ECHU: menú <b>ECHU › Limpieza: configurar clave de lectura (OpenAI)</b>. Mientras tanto, los días se cargan a mano.';
+  }).catch(function(e){$('lcmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+}
+document.querySelectorAll('#lcmet button').forEach(function(b){b.onclick=function(){document.querySelectorAll('#lcmet button').forEach(function(x){x.classList.toggle('on',x===b)})}});
+$('lcsave').onclick=function(){
+  var met=(document.querySelector('#lcmet button.on')||{}).dataset||{};
+  $('lcmsg').textContent='Guardando…';
+  api('limpieza_config_guardar',{name:$('lcname').value,dni:$('lcdni').value,payer:$('lcpayer').value,rate:parsePesos($('lcrate').value),method:met.m||'Efectivo',sheetId:$('lcsheet').value})
+    .then(function(c){LMP.cfg=c;LMP.rate=c.rate;LMP.met=c.method;$('lcmsg').innerHTML='<span class="pos">Guardado.</span>';if(LMP.days.length)lPintar()})
+    .catch(function(e){$('lcmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+};
+$('limpfile').addEventListener('change',function(){var f=this.files&&this.files[0];this.value='';if(!f)return;f.text().then(function(t){$('limptxt').value=t})});
+$('limpbtn').onclick=function(){
+  var t=$('limptxt').value.trim();if(!t){$('limpmsg').textContent='Pegá el texto o elegí el archivo.';return}
+  $('limpmsg').textContent='Importando…';
+  lPost('limpieza_importar',{datos:t}).then(function(r){LMP.recs=null;$('limptxt').value='';$('limpmsg').innerHTML='<span class="pos">Listo: se trajeron '+r.importados+' recibos'+(r.total>r.importados?' (los otros '+(r.total-r.importados)+' ya estaban)':'')+'.</span>'})
+    .catch(function(e){$('limpmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+};
+document.querySelector('nav button[data-tab="admin"]').addEventListener('click',lEntrar);
 </script>
 </body>
 </html>
