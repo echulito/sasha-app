@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=79;
+var APP_V=80;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -2601,7 +2601,7 @@ function cDetalle(refrescar){
 /* ---- foto -> lectura -> formulario ---- */
 function cArchivo(input){
   var f=input.files&&input.files[0];input.value='';if(!f)return;
-  CT.form={nuevo:true,leyendo:true};cForm();
+  CT.provNuevo=false;CT.form={nuevo:true,leyendo:true};cForm();
   var hashP=(window.crypto&&crypto.subtle?f.arrayBuffer().then(function(b){return crypto.subtle.digest('SHA-256',b)}).then(function(h){return Array.prototype.map.call(new Uint8Array(h),function(x){return ('0'+x.toString(16)).slice(-2)}).join('')}):Promise.resolve('')).catch(function(){return ''});
   var url=URL.createObjectURL(f),img=new Image();
   img.onload=function(){
@@ -2619,8 +2619,8 @@ function cArchivo(input){
 $('ccam').addEventListener('change',function(){cArchivo(this)});
 $('cadj').addEventListener('change',function(){cArchivo(this)});
 function cPost(accion,obj){return lPost(accion,obj)}
-function cNuevoManual(){CT.foto='';CT.hash='';CT.form={nuevo:true,datos:{tipo:'factura',letra:'A',lado:'compra',fecha:lHoy()}};cForm()}
-function cAbrir(id){var o=(CT.mes.comps||[]).filter(function(x){return x.id===id})[0];if(!o)return;CT.foto='';CT.hash='';CT.form={nuevo:false,datos:JSON.parse(JSON.stringify(o))};cForm()}
+function cNuevoManual(){CT.provNuevo=false;CT.foto='';CT.hash='';CT.form={nuevo:true,datos:{tipo:'factura',letra:'A',lado:'compra',fecha:lHoy()}};cForm()}
+function cAbrir(id){CT.provNuevo=false;var o=(CT.mes.comps||[]).filter(function(x){return x.id===id})[0];if(!o)return;CT.foto='';CT.hash='';CT.form={nuevo:false,datos:JSON.parse(JSON.stringify(o))};cForm()}
 function cForm(){
   var box=$('cform'),F=CT.form,fab=document.querySelector('#a-conta .fab');
   if(fab)fab.classList.toggle('oculto',!!F);
@@ -2639,7 +2639,8 @@ function cForm(){
     (t==='cierre_z'?'':'<div class="g2">'+inp('cf_pv','Punto de venta',d.pv,' inputmode="numeric"')+inp('cf_num','Número',d.numero,' inputmode="numeric"')+'</div>')+
     '<div class="g2"><div><label>Fecha</label><input id="cf_fecha" type="date" value="'+esc(d.fecha||'')+'"></div>'+
     (t==='cierre_z'?'<div><label>Es</label><input value="Venta (controlador fiscal)" readonly></div>':sel('cf_lado','Es',[['compra','Compra (proveedor)'],['venta','Venta (mía)']],d.lado||'compra'))+'</div>'+
-    (t==='cierre_z'?'':'<div class="g2">'+inp('cf_cuit',(d.lado==='venta'?'CUIT del cliente':'CUIT del proveedor'),d.cuit?String(d.cuit).replace(/^(\d{2})(\d{8})(\d)$/,'$1-$2-$3'):'',' inputmode="numeric"')+inp('cf_nom',(d.lado==='venta'?'Cliente':'Proveedor'),d.nombre,' ')+'</div>');
+    (t==='cierre_z'?'':'<div class="g2">'+inp('cf_cuit',(d.lado==='venta'?'CUIT del cliente':'CUIT del proveedor'),d.cuit?String(d.cuit).replace(/^(\d{2})(\d{8})(\d)$/,'$1-$2-$3'):'',' inputmode="numeric"')+
+      (d.lado==='venta'?inp('cf_nom','Cliente',d.nombre,' '):cSelProv(d))+'</div>'+(d.lado==='venta'?'':'<div id="cf_provnew_box"'+(cProvMatch(d)||!d.nombre&&!CT.provNuevo?' class="oculto"':'')+'><label>Nombre del proveedor nuevo</label><input id="cf_provnew" value="'+esc(cProvMatch(d)?'':d.nombre||'')+'" placeholder="Así queda registrado en ECHU"><div class="note" style="margin-top:2px">Al guardar queda registrado en ECHU › PROVEEDORES (con el CUIT).</div></div>'));
   if(t!=='remito'){
     h+='<div class="g2">'+inp('cf_n21','Neto 21%',cNum(n['21']))+inp('cf_i21','IVA 21%',cNum(iv['21']))+inp('cf_n105','Neto 10,5%',cNum(n['10.5']))+inp('cf_i105','IVA 10,5%',cNum(iv['10.5']))+inp('cf_n27','Neto 27%',cNum(n['27']))+inp('cf_i27','IVA 27%',cNum(iv['27']))+'</div>'+
       '<div class="g2">'+inp('cf_ng','No gravado / exento',cNum(d.noGravado))+inp('cf_piva','Percepción IVA',cNum(d.percIVA))+inp('cf_piibb','Percepción IIBB',cNum(d.percIIBB))+inp('cf_otros','Otros impuestos',cNum(d.otros))+'</div>'+
@@ -2658,15 +2659,25 @@ function cForm(){
   box.innerHTML=h;
   $('cf_tipo').onchange=function(){CT.form.datos=cLeerForm();CT.form.datos.tipo=this.value;if(this.value==='remito')CT.form.datos.letra='R';else if(CT.form.datos.letra==='R')CT.form.datos.letra='A';cForm()};
   if($('cf_lado'))$('cf_lado').onchange=function(){CT.form.datos=cLeerForm();cForm()};
+  if($('cf_prov'))$('cf_prov').onchange=function(){var v=this.value;$('cf_provnew_box').classList.toggle('oculto',v!=='__nuevo');CT.provNuevo=v==='__nuevo';
+    var pr=(CT.mes.proveedores||[]).filter(function(x){return x.nombre===v})[0];if(pr&&pr.cuit&&!$('cf_cuit').value.replace(/\D/g,''))$('cf_cuit').value=cuitTextoJS(pr.cuit);if(v==='__nuevo')$('cf_provnew').focus()};
+  if($('cf_cuit')&&$('cf_prov'))$('cf_cuit').addEventListener('change',function(){var c=this.value.replace(/\D/g,'');var pr=(CT.mes.proveedores||[]).filter(function(x){return x.cuit&&x.cuit===c})[0];
+    if(pr){$('cf_prov').value=pr.nombre;$('cf_provnew_box').classList.add('oculto');CT.provNuevo=false}});
   [['cf_n21','cf_i21',0.21],['cf_n105','cf_i105',0.105],['cf_n27','cf_i27',0.27]].forEach(function(x){var a=$(x[0]);if(a)a.addEventListener('change',function(){var b=$(x[1]);if(!parsePesos(b.value)&&parsePesos(a.value))b.value=cNum(parsePesos(a.value)*x[2])})});
   $('cf_guardar').onclick=cGuardar;
   if(F.nuevo||F.scroll!==false)box.scrollIntoView({behavior:'smooth',block:'start'});
 }
+function cNormP(t){return String(t||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'')}
+function cProvMatch(d){var L=(CT.mes&&CT.mes.proveedores)||[],c=String(d.cuit||'').replace(/\D/g,'');
+  return (c&&L.filter(function(x){return x.cuit===c})[0])||L.filter(function(x){return d.nombre&&cNormP(x.nombre)===cNormP(d.nombre)})[0]||null}
+function cSelProv(d){var L=(CT.mes&&CT.mes.proveedores)||[],m=cProvMatch(d),sel=m?m.nombre:(d.nombre||CT.provNuevo?'__nuevo':'');
+  return '<div><label>Proveedor</label><select id="cf_prov"><option value="">Elegí el proveedor…</option>'+L.map(function(x){return '<option value="'+esc(x.nombre)+'"'+(x.nombre===sel?' selected':'')+'>'+esc(x.nombre)+'</option>'}).join('')+
+    '<option value="__nuevo"'+(sel==='__nuevo'?' selected':'')+'>＋ Nuevo proveedor…</option></select></div>'}
 function cLeerForm(){
   var d=JSON.parse(JSON.stringify(CT.form.datos||{})),v=function(id){var e=$(id);return e?e.value:undefined},n=function(id){var e=$(id);return e?parsePesos(e.value):0};
   d.tipo=v('cf_tipo');d.letra=v('cf_letra')||'';d.pv=v('cf_pv')||'';d.numero=v('cf_num')||'';d.fecha=v('cf_fecha')||'';d.periodo=(d.fecha||'').slice(0,7);
   d.lado=d.tipo==='cierre_z'?'venta':(v('cf_lado')||'compra');
-  if($('cf_cuit')){d.cuit=v('cf_cuit');d.emisorCuit=undefined;d.nombre=v('cf_nom')}
+  if($('cf_cuit')){d.cuit=v('cf_cuit');d.emisorCuit=undefined;d.nombre=$('cf_prov')?($('cf_prov').value==='__nuevo'?v('cf_provnew'):$('cf_prov').value):v('cf_nom')}
   if(d.tipo!=='remito'){d.neto={'21':n('cf_n21'),'10.5':n('cf_n105'),'27':n('cf_n27')};d.iva={'21':n('cf_i21'),'10.5':n('cf_i105'),'27':n('cf_i27')};
     d.noGravado=n('cf_ng');d.percIVA=n('cf_piva');d.percIIBB=n('cf_piibb');d.otros=n('cf_otros');d.total=n('cf_total');
     if($('cf_rem'))d.remitos=String(v('cf_rem')||'').split(/[,;\s]+/).filter(Boolean);
@@ -2677,6 +2688,7 @@ function cLeerForm(){
 function cGuardar(){
   var d=cLeerForm(),b=$('cf_guardar');
   if(!d.fecha){$('cf_msg').innerHTML='<span class="neg">Falta la fecha.</span>';return}
+  if($('cf_prov')&&!String(d.nombre||'').trim()){$('cf_msg').innerHTML='<span class="neg">Elegí el proveedor (o registrá uno nuevo).</span>';return}
   var envio={tipo:d.tipo,letra:d.letra,pv:d.pv,numero:d.numero,fecha:d.fecha,periodo:d.periodo,lado:d.lado,neto:d.neto,iva:d.iva,noGravado:d.noGravado,percIVA:d.percIVA,percIIBB:d.percIIBB,otros:d.otros,total:d.total,
     remitos:d.remitos,facturaMencionada:d.facturaMencionada,notas:d.notas,cae:d.cae,nc:d.nc,vinculo:d.tipo==='remito'?d.vinculo:undefined,revisado:$('cf_ok')?$('cf_ok').checked:false,id:CT.form.nuevo?'':d.id,hash:CT.hash};
   if(d.lado==='venta'){envio.receptorCuit=d.cuit;envio.receptorNombre=d.nombre}else{envio.emisorCuit=d.cuit;envio.emisorNombre=d.nombre}
