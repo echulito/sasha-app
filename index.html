@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=86;
+var APP_V=87;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -2651,7 +2651,7 @@ function cPintar(){
   var lista=grupos[CT.seg];
   var vacio={compras:'Todavía no cargaste facturas de compra de '+cMesTxt(m.periodo)+'. Sacales foto con el botón de abajo.',ventas:'Sacale foto a cada cierre Z del controlador fiscal. Los días sin Z se calculan con las ventas de control de cajas.',remitos:'No hay remitos en este mes.',revisar:'No hay nada para revisar.'};
   $('clista').innerHTML=lista.length?lista.map(function(o){
-    var chip=o.estado==='revisar'?'<span class="chip r">revisar</span>':o.tipo==='remito'?(o.vinculo?'<span class="chip v">con factura</span>':'<span class="chip a">falta la factura</span>'):o.tipo==='nota_credito'?'<span class="chip c">descuenta</span>':
+    var chip=(o.tipo!=='cierre_z'&&!o.numero)?'<span class="chip r">sin número: tocalo y cargalo</span>':o.estado==='revisar'?'<span class="chip r">revisar</span>':o.tipo==='remito'?(o.vinculo?'<span class="chip v">con factura</span>':'<span class="chip a">falta la factura</span>'):o.tipo==='nota_credito'?'<span class="chip c">descuenta</span>':
       (o.lado==='compra'&&['A','M'].indexOf(o.letra)<0?'<span class="chip a">no da crédito</span>':(o.conRemito?'<span class="chip v">con remito</span>':''));
     var der=o.tipo==='remito'?'sin IVA':'IVA '+(o.ivaMes<0?'-':'')+pesos(Math.abs(o.ivaMes));
     return '<div class="cmp" onclick="cAbrir(\''+o.id+'\')"><div class="t"><b>'+esc(cTitulo(o))+'</b><b>'+der+'</b></div><div class="s">'+esc(o.nombre||'')+' · '+cFecha(o.fecha)+(chip?' · '+chip:'')+'</div></div>'}).join(''):
