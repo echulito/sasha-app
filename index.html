@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=81;
+var APP_V=82;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -2123,7 +2123,9 @@ function pintarPedido(){
         (x.stock>0?'stock '+$$(x.stock):'sin stock')+(x.vendidasMes!=null?' · este mes vendió '+$$(x.vendidasMes):'')+(m!==null?' · margen <b>'+pct(m)+'</b>':'')+'</div>'+
         // v68: precio de venta. Sin stock: el que mantiene el margen de hoy con el costo nuevo; con stock, el de hoy.
         (x.cambiaPrecio?'<div class="rk">Precio de venta <b>'+pesos(x.precio)+'</b> (hoy '+pesos(x.precioHoy)+') · '+esc(x.motivoPrecio||'')+'</div>':'')+
-        (x.otroProveedor?'<div class="rk"><span class="pos">Más barato que en '+esc(x.proveedorActual||'su proveedor')+'</span></div>':'')+
+        (x.compara==='barato'?'<div class="rk"><span class="pos">Más barato que '+esc(x.compDonde)+' ('+pesos2(x.compCosto)+')</span></div>':
+          x.compara==='caro'?'<div class="rk"><span class="neg">Más caro que '+esc(x.compDonde)+' ('+pesos2(x.compCosto)+'): conviene comprarlo allá</span></div>':
+          (x.compara==='igual'?'<div class="rk">Mismo costo que '+esc(x.compDonde)+'</div>':''))+
         (M?'<div class="rk">En '+PED.dias+' días se venden ~'+$$(x.sugerido||0)+' u.'+(x.sugerido>0?' · <a href="#" data-pu="'+i+'">poner '+$$(x.sugerido)+'</a>':'')+'</div>':'')+
         '<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span class="rk" style="margin:0">Cantidad</span><input class="qty" type="number" inputmode="numeric" min="0" value="'+x.cant+'" data-pi="'+i+'">'+
         '<span class="rk" style="margin:0">× '+pesos2(x.costo)+' =</span><b style="margin-left:auto" id="psub'+i+'"></b></div></div>';
