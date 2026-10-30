@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=80;
+var APP_V=81;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -391,7 +391,11 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
       <div class="card oculto" id="cform" style="margin-top:8px"></div>
       <div class="seg seg4c" id="cseg"><button class="on" data-s="compras">Facturas</button><button data-s="ventas">Ventas Z</button><button data-s="remitos">Remitos</button><button data-s="revisar">Revisar</button></div>
       <div id="clista"><div class="cargando">Cargando…</div></div>
-      <div class="fab"><div class="ph2"><label class="btn" style="margin:0;color:#fff;font-size:14px">📷 Factura o remito<input id="ccam" type="file" accept="image/*" capture="environment" class="oculto"></label><label class="btn sec" style="margin:0;font-size:14px">Adjuntar<input id="cadj" type="file" accept="image/*" class="oculto"></label></div></div>
+      <input id="ccam" type="file" accept="image/*" capture="environment" class="oculto"><input id="cadj" type="file" accept="image/*" class="oculto">
+      <div class="fab"><div class="card oculto" id="cque" style="margin-bottom:6px;padding:10px 12px"><div style="font-weight:700;margin-bottom:6px">¿Qué es?</div><div class="ph2" style="flex-wrap:wrap">
+        <button class="btn" data-t="factura">Factura / nota de crédito</button><button class="btn" data-t="remito">Remito</button><button class="btn" data-t="cierre_z">Cierre Z</button></div>
+        <div class="btns" style="margin-top:4px"><button class="lnk" onclick="$('cque').classList.add('oculto')">Cancelar</button></div></div>
+        <div class="ph2"><button class="btn" style="font-size:14px" onclick="cPreguntar('ccam')">📷 Sacar foto</button><button class="btn sec" style="font-size:14px" onclick="cPreguntar('cadj')">Adjuntar</button></div></div>
       <div class="btns" style="justify-content:center"><button class="lnk" onclick="cNuevoManual()">Cargar uno a mano</button><span class="rk" style="margin:0 6px">·</span><button class="lnk" onclick="cVerConfig()">Datos de contabilidad</button></div>
       <div class="card oculto" id="ccfg" style="margin-top:8px"></div>
       </div>
@@ -2516,7 +2520,7 @@ function lPintarCfg(){
     $('lcsheet').value=c.sheetId?'https://docs.google.com/spreadsheets/d/'+c.sheetId:'';
     document.querySelectorAll('#lcmet button').forEach(function(b){b.classList.toggle('on',b.dataset.m===(c.method||'Efectivo'))});
     $('lcvis').innerHTML=c.vision?'<span class="chip v">conectada</span> Las fotos se leen solas. Siempre podés corregir los días antes de generar.':
-      '<span class="chip a">falta la clave</span> En la planilla ECHU: menú <b>ECHU › Limpieza: configurar clave de lectura (OpenAI)</b>. Mientras tanto, los días se cargan a mano.';
+      '<span class="chip a">falta la clave</span> En la planilla ECHU: menú <b>ECHU › Lectura de fotos: clave de Gemini (gratis)</b>. Mientras tanto, los días se cargan a mano.';
   }).catch(function(e){$('lcmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
 document.querySelectorAll('#lcmet button').forEach(function(b){b.onclick=function(){document.querySelectorAll('#lcmet button').forEach(function(x){x.classList.toggle('on',x===b)})}});
@@ -2608,14 +2612,16 @@ function cArchivo(input){
     var k=Math.min(1,2200/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');
     cv.width=Math.round(img.naturalWidth*k);cv.height=Math.round(img.naturalHeight*k);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
     CT.foto=cv.toDataURL('image/jpeg',0.85);CT.mime='image/jpeg';URL.revokeObjectURL(url);cForm();
-    hashP.then(function(h){CT.hash=h;return cPost('conta_leer',{imagen:CT.foto,mime:CT.mime})}).then(function(r){
-      if(!r.ok){CT.form={nuevo:true,datos:{tipo:'factura',lado:'compra',fecha:lHoy(),periodo:CT.per},aviso:r.mensaje};cForm();return}
+    hashP.then(function(h){CT.hash=h;return cPost('conta_leer',{imagen:CT.foto,mime:CT.mime,tipo:CT.tipoFoto||''})}).then(function(r){
+      if(!r.ok){CT.form={nuevo:true,datos:{tipo:CT.tipoFoto||'factura',letra:CT.tipoFoto==='remito'?'R':'A',lado:CT.tipoFoto==='cierre_z'?'venta':'compra',fecha:lHoy(),periodo:CT.per},aviso:r.mensaje};cForm();return}
       CT.form={nuevo:true,datos:r,aviso:r.dudas&&r.dudas.length?'No se leyó bien: '+r.dudas.join(', ')+'. Revisalo.':''};cForm();
-    }).catch(function(e){CT.form={nuevo:true,datos:{tipo:'factura',lado:'compra',fecha:lHoy()},aviso:e.message+' Cargalo a mano.'};cForm()});
+    }).catch(function(e){CT.form={nuevo:true,datos:{tipo:CT.tipoFoto||'factura',letra:CT.tipoFoto==='remito'?'R':'A',lado:CT.tipoFoto==='cierre_z'?'venta':'compra',fecha:lHoy()},aviso:e.message+' Cargalo a mano.'};cForm()});
   };
   img.onerror=function(){CT.form=null;cForm();alert('No se pudo abrir la foto.')};
   img.src=url;
 }
+function cPreguntar(inp){CT.inp=inp;$('cque').classList.remove('oculto')}
+document.querySelectorAll('#cque [data-t]').forEach(function(b){b.onclick=function(){CT.tipoFoto=b.dataset.t;$('cque').classList.add('oculto');$(CT.inp||'cadj').click()}});
 $('ccam').addEventListener('change',function(){cArchivo(this)});
 $('cadj').addEventListener('change',function(){cArchivo(this)});
 function cPost(accion,obj){return lPost(accion,obj)}
@@ -2627,7 +2633,7 @@ function cForm(){
   if(!F){box.classList.add('oculto');box.innerHTML='';return}
   box.classList.remove('oculto');
   var fotoH=CT.foto?'<div class="lfoto"><img src="'+CT.foto+'" alt="Foto del comprobante"></div>':'';
-  if(F.leyendo&&!F.datos){box.innerHTML='<h2>Nuevo comprobante</h2>'+fotoH+'<div class="note">Leyendo la foto… (tarda unos segundos)</div>';box.scrollIntoView({behavior:'smooth',block:'start'});return}
+  if(F.leyendo&&!F.datos){box.innerHTML='<h2>Nuevo comprobante</h2>'+fotoH+'<div class="note">'+(CT.tipoFoto==='remito'?'Leyendo el remito con Google Drive…':'Leyendo la foto…')+' (tarda unos segundos)</div>';box.scrollIntoView({behavior:'smooth',block:'start'});return}
   var d=F.datos,t=d.tipo||'factura',n=d.neto||{},iv=d.iva||{},nc=d.nc||{};
   var inp=function(id,lab,val,extra){return '<div><label>'+lab+'</label><input id="'+id+'" value="'+esc(val==null?'':val)+'"'+(extra||' inputmode="decimal"')+'></div>'};
   var sel=function(id,lab,ops,val){return '<div><label>'+lab+'</label><select id="'+id+'">'+ops.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></div>'};
@@ -2649,7 +2655,8 @@ function cForm(){
   }else{
     var fs=(CT.mes.facturasParaVincular||[]),mismo=function(x){return (d.cuit&&x.cuit===String(d.cuit).replace(/\D/g,''))||(d.nombre&&String(x.nombre).toUpperCase()===String(d.nombre).toUpperCase())};
     var ops=[['','Todavía no llegó la factura']].concat(fs.filter(mismo).concat(fs.filter(function(x){return !mismo(x)})).map(function(x){return [x.id,'Factura '+x.letra+' '+cNro(x)+' · '+x.nombre+' · '+cFecha(x.fecha)]}));
-    h+=sel('cf_vinc','Factura de este remito',ops,d.vinculo||'');
+    var vSel=d.vinculo||'';if(!vSel&&d.facturaMencionada){var fmN=Number(String(d.facturaMencionada).replace(/\D/g,'').slice(-8));var fm=fs.filter(function(x){return Number(x.numero)===fmN&&(mismo(x)||!d.nombre)})[0]||fs.filter(function(x){return Number(x.numero)===fmN})[0];if(fm)vSel=fm.id}
+    h+=sel('cf_vinc','Factura de este remito',ops,vSel);
   }
   if(d.notas)h+='<div class="note">Nota: '+esc(d.notas)+'</div>';
   if(d.estado==='revisar')h+='<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="cf_ok" style="width:auto"> Lo revisé, está bien así</label>';
@@ -2710,7 +2717,7 @@ function cVerConfig(){
   var c=(CT.mes&&CT.mes.config)||{};box.classList.remove('oculto');
   box.innerHTML='<h2>Datos de contabilidad</h2><div class="g2"><div><label>Tu CUIT</label><input id="cc_cuit" inputmode="numeric" value="'+esc(c.cuit?String(c.cuit).replace(/^(\d{2})(\d{8})(\d)$/,'$1-$2-$3'):'')+'"></div><div><label>Razón social</label><input id="cc_raz" value="'+esc(c.razon||'')+'"></div></div>'+
     '<div class="g2"><div><label>Empezar la cuenta desde</label><input id="cc_desde" type="month" value="'+esc(c.desde||'')+'"></div><div><label>Saldo a favor de IVA en ese mes</label><input id="cc_saldo" inputmode="decimal" value="'+cNum(c.saldoInicial)+'"></div></div>'+
-    '<div class="note">El saldo a favor lo sacás de tu última declaración de IVA (o te lo pasa el contador). Lectura de fotos: '+(c.vision?'<span class="chip v">conectada</span>':'<span class="chip a">falta la clave</span> (la misma de Limpieza)')+'</div>'+
+    '<div class="note">El saldo a favor lo sacás de tu última declaración de IVA (o te lo pasa el contador). Lectura de fotos: '+(c.vision?'<span class="chip v">conectada</span>':'<span class="chip a">falta la clave</span> (menú ECHU › Lectura de fotos: clave de Gemini, gratis)')+'</div>'+
     '<div class="btns"><button class="btn" id="cc_ok">Guardar</button></div><div class="note" id="cc_msg"></div>';
   box.scrollIntoView({behavior:'smooth',block:'start'});
   $('cc_ok').onclick=function(){$('cc_msg').textContent='Guardando…';
