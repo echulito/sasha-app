@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=71;
+var APP_V=72;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -192,6 +192,9 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
           <div><label>Presupuesto ($)</label><input id="ppres" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0"></div>
           <div><label>Proveedor</label><select id="pprov"><option value="">Todos (mejor precio)</option></select></div>
         </div>
+        <label>¿Para cuántos días tiene que alcanzar?</label>
+        <input id="pdias" type="number" inputmode="numeric" min="1" max="120" value="30">
+        <div class="seg oculto" id="pmodo" style="margin:8px 0 0"><button data-v="0" class="on">Todo lo que tiene</button><button data-v="1">Solo donde es el más barato</button></div>
         <div id="pnota" class="note">Cargando…</div>
         <div class="btns"><button class="btn" id="barmar">Armar pedido</button></div>
         <div id="pmsgarm" class="note"></div>
@@ -284,8 +287,8 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
       <div class="note">Actualizar lee los archivos nuevos (listas, stock, ventas, productos). Reconstrucción completa relee <b>todas</b> las listas desde cero, tarda más y vuelve a mostrar las tareas que tildaste como hechas.</div>
     </div>
     <div class="card" style="margin-top:12px">
-      <h2>Sugerencias de compra</h2>
-      <div class="note" style="margin-top:0">Qué productos te sugiere comprar la solapa Productos.</div>
+      <h2>Sugerencias de compra y Armar pedido</h2>
+      <div class="note" style="margin-top:0">Qué productos entran en <b>Sugerencias de compra</b> (solapa Productos) y en <b>Armar pedido</b> (Simular compra). Es el mismo criterio para los dos.</div>
       <label>¿Qué stock?</label>
       <select id="cfmodo">
         <option value="SIN STOCK">Sin stock</option>
@@ -295,7 +298,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
       </select>
       <div id="cfdiasbox"><label>Se agota dentro de (días)</label>
       <input id="cfdias" type="number" inputmode="numeric" min="1" max="120" value="7"></div>
-      <label>Más barato en otra lista (al menos este %)</label>
+      <label>Más barato en otra lista (al menos este %) · solo Sugerencias de compra</label>
       <input id="cfpct" type="number" inputmode="numeric" min="0" max="90" value="20">
       <div class="note" style="margin-top:2px">0 = muestra todos los que cumplen el stock (si hay una lista más barata, te la muestra igual).</div>
       <label style="display:flex;align-items:center;gap:8px;margin-top:10px"><input id="cfventas" type="checkbox" checked style="width:auto"> Solo productos que se vendieron este mes, el pasado o el anterior</label>
@@ -1817,7 +1820,7 @@ function pintarConfigSug(){
 $('cfmodo').addEventListener('change',function(){$('cfdiasbox').classList.toggle('oculto',$('cfmodo').value!=='SE AGOTA')});
 $('cfguardar').onclick=function(){
   var b=$('cfguardar');b.disabled=true;$('cfmsg').textContent='Guardando…';
-  OPS=null;
+  OPS=null;CAND=null;CANDP={};
   cargarOportunidades({guardar:1,modo:$('cfmodo').value,dias:+$('cfdias').value||7,pct:Math.max(0,+$('cfpct').value||0),ventas:$('cfventas').checked?1:0}).then(function(){
     b.disabled=false;$('cfmsg').innerHTML=OPS?'Listo: <b>'+(OPS.total||0)+'</b> productos cumplen. Los ves en la solapa <a href="#" onclick="irA(\'productos\');return false">Productos</a>.':'';
   }).catch(function(e){b.disabled=false;$('cfmsg').innerHTML='<b class="neg">'+esc(e.message)+'</b>'});
@@ -1909,17 +1912,19 @@ document.querySelectorAll('#simmodo button').forEach(function(b){b.onclick=funct
 });
 var TXT_MODO={'SIN STOCK':'sin stock','SE AGOTA':'sin stock o que se agotan pronto','CON STOCK':'con stock','TODOS':'con o sin stock'};
 // v69: con un proveedor elegido, ECHU trae lo que falta de ESE proveedor (a su costo); sin proveedor, el mejor precio.
-var CANDP={};
+var CANDP={}, PMB=false;
+// v72: con un proveedor: "todo lo que tiene" (a su costo) o "solo donde es el más barato" de todas las listas.
+function claveProv(prov){return prov?prov+(PMB?'|mb':''):''}
 function cargarCandidatos(forzar,prov){
   if(esConsulta()||!CFG.token)return Promise.resolve();
-  prov=prov||'';
+  prov=prov||'';var kp=claveProv(prov);
   if(!prov&&CAND&&!forzar)return Promise.resolve(CAND);
-  if(prov&&CANDP[prov]&&!forzar)return Promise.resolve(CANDP[prov]);
+  if(prov&&CANDP[kp]&&!forzar)return Promise.resolve(CANDP[kp]);
   if(!prov&&CANDCARGANDO)return CANDCARGANDO;
-  $('pnota').textContent=prov?'Buscando lo que falta de '+prov+'…':'Buscando los productos para pedir…';
-  var pr=api('candidatos_pedido',prov?{proveedor:prov}:{}).then(function(r){
+  $('pnota').textContent=prov?'Buscando '+(PMB?'dónde '+prov+' es el más barato':'lo que falta de '+prov)+'… (puede tardar unos segundos)':'Buscando los productos para pedir…';
+  var pr=api('candidatos_pedido',prov?{proveedor:prov,masBarato:PMB?1:0}:{}).then(function(r){
     r=r||{lista:[]};
-    if(prov){CANDP[prov]=r}else{CANDCARGANDO=null;CAND=r;
+    if(prov){CANDP[kp]=r}else{CANDCARGANDO=null;CAND=r;
       var sel=$('pprov').value, L=(r.proveedores&&r.proveedores.length)?r.proveedores:Object.keys((r.lista||[]).reduce(function(a,x){a[x.proveedor]=1;return a},{})).sort();
       $('pprov').innerHTML='<option value="">Todos (mejor precio)</option>'+L.map(function(p){return '<option value="'+esc(p)+'">'+esc(p)+'</option>'}).join('');
       $('pprov').value=sel;}
@@ -1931,30 +1936,50 @@ function cargarCandidatos(forzar,prov){
 }
 function pintarNotaCand(r){
   var prov=r.proveedor||'';
-  $('pnota').innerHTML=r.mensaje?esc(r.mensaje):('<b>'+(r.total||0)+'</b> productos para pedir'+(prov?' en <b>'+esc(prov)+'</b> (los que tiene en su lista, a su costo)':'')+': '+(TXT_MODO[r.modo]||'')+(r.modo==='SE AGOTA'?' ('+r.dias+' días)':'')+(r.soloConVentas?', que se vendieron en los últimos 3 meses':'')+
-    ' (lo cambiás en <a href="#" onclick="irA(\'ajustes\');return false">⚙ Ajustes</a>).'+(prov?'':' Siempre al mejor precio.')+' Primero los que más ganancia dejan por mes. Cantidad: hasta fin de '+esc(r.hasta||'el mes que viene')+'.'+
+  $('pnota').innerHTML=r.mensaje?esc(r.mensaje):('<b>'+(r.total||0)+'</b> productos para pedir'+(prov?' en <b>'+esc(prov)+'</b> ('+(r.soloMasBarato?'donde es el más barato de todas las listas':'todo lo que tiene en su lista, a su costo')+')':'')+': '+(TXT_MODO[r.modo]||'')+(r.modo==='SE AGOTA'?' ('+r.dias+' días)':'')+(r.soloConVentas?', que se vendieron en los últimos 3 meses':'')+
+    ' (lo cambiás en <a href="#" onclick="irA(\'ajustes\');return false">⚙ Ajustes</a>).'+(prov?'':' Siempre al mejor precio.')+' Primero los que más ganancia dejan por mes. Cantidad: lo que se vende en los días que pongas (menos el stock).'+
     (r.revisar?' <span class="neg">'+r.revisar+' no entran porque el costo de la lista no cierra (¿cotiza por caja?): revisalos con CAMBIAR COSTO.</span>':''));
 }
-$('pprov').addEventListener('change',function(){var v=$('pprov').value;if(v)cargarCandidatos(false,v).catch(function(){});else if(CAND)pintarNotaCand(CAND)});
-function llenarPedido(ped,resto,lista){
-  var dentro={};ped.items.forEach(function(x){dentro[x.codigo]=1});
-  lista.forEach(function(x){
-    if(dentro[x.codigo]||ped.quitados[x.codigo]||resto<x.costo)return;
-    var q=Math.min(x.cantidad,Math.floor(resto/x.costo)); if(q<1)return;
-    ped.items.push(Object.assign({},x,{cant:q}));dentro[x.codigo]=1;resto-=q*x.costo;
-  });
+$('pprov').addEventListener('change',function(){var v=$('pprov').value;$('pmodo').classList.toggle('oculto',!v);if(v)cargarCandidatos(false,v).catch(function(){});else if(CAND)pintarNotaCand(CAND)});
+document.querySelectorAll('#pmodo button').forEach(function(b){b.onclick=function(){PMB=b.dataset.v==='1';
+  document.querySelectorAll('#pmodo button').forEach(function(x){x.classList.toggle('on',x===b)});
+  var v=$('pprov').value;if(v)cargarCandidatos(false,v).catch(function(){})}});
+// v72: cada producto apunta a lo que vende en los días elegidos (menos su stock). La plata se reparte por
+// vueltas: primero un poco a cada uno (en orden de ganancia), después más, hasta cubrir los días. Así el pedido
+// abarca muchos productos y no se va todo el presupuesto en uno o dos.
+function metaPedido(x,dias){
+  if(!(dias>0))return x.cantidad;
+  return Math.max(0,Math.ceil((x.ventaMensual||0)/30*dias-Math.max(0,x.stock||0)));
 }
-function candidatosFiltrados(prov){return prov?((CANDP[prov]&&CANDP[prov].lista)||[]):((CAND&&CAND.lista)||[])}
+function llenarPedido(ped,resto,lista){
+  var dias=ped.dias||0, porCod={};ped.items.forEach(function(x){porCod[x.codigo]=x});
+  var cands=lista.filter(function(x){return !ped.quitados[x.codigo]&&x.costo>0}).map(function(x){return {x:x,meta:metaPedido(x,dias)}}).filter(function(c){return c.meta>0});
+  var V=4;
+  for(var v=1;v<=V&&resto>0;v++){
+    cands.forEach(function(c){
+      var x=c.x; if(resto<x.costo)return;
+      var meta=Math.min(c.meta,Math.max(1,Math.ceil(c.meta*v/V)));
+      var it=porCod[x.codigo], ya=it?it.cant:0, falta=meta-ya; if(falta<1)return;
+      var q=Math.min(falta,Math.floor(resto/x.costo)); if(q<1)return;
+      if(it)it.cant+=q;else{it=Object.assign({},x,{cant:q});porCod[x.codigo]=it;ped.items.push(it)}
+      resto-=q*x.costo;
+    });
+  }
+  var orden={};lista.forEach(function(x,i){orden[x.codigo]=i});
+  ped.items.sort(function(a,b){return (orden[a.codigo]===undefined?1e9:orden[a.codigo])-(orden[b.codigo]===undefined?1e9:orden[b.codigo])});
+}
+function candidatosFiltrados(prov){var k=claveProv(prov);return prov?((CANDP[k]&&CANDP[k].lista)||[]):((CAND&&CAND.lista)||[])}
 $('barmar').onclick=function(){
   var pres=num('ppres'), prov=$('pprov').value;
   if(!(pres>0)){$('pmsgarm').innerHTML='<b class="neg">Poné cuánto querés gastar.</b>';return}
-  $('pmsgarm').textContent='Armando…';
+  $('pmsgarm').textContent='Armando…';$('pres').innerHTML='';
   cargarCandidatos(false,prov).then(function(){
-    PED={pres:pres,prov:prov,items:[],quitados:{},orden:'',firmaGuardada:'',cargar:{}};
+    PED={pres:pres,prov:prov,dias:Math.max(1,Math.min(120,Math.round(+$('pdias').value||30))),items:[],quitados:{},orden:'',firmaGuardada:'',cargar:{}};
     llenarPedido(PED,pres,candidatosFiltrados(prov));
-    $('pmsgarm').innerHTML=PED.items.length?'':'No hay productos para pedir'+(prov?' en '+esc(prov):'')+' con ese presupuesto.';
+    var nC=candidatosFiltrados(prov).filter(function(x){return metaPedido(x,PED.dias)>0}).length;
+    $('pmsgarm').innerHTML=PED.items.length?('Entran <b>'+PED.items.length+'</b> de '+nC+' productos que faltan para '+PED.dias+' días'+(PED.items.length<nC?' (no alcanza el presupuesto para todos: primero los que más ganancia dejan)':'')+'.'):'No hay productos para pedir'+(prov?' en '+esc(prov):'')+' con ese presupuesto.';
     pintarPedido();
-  }).catch(function(){$('pmsgarm').textContent=''});
+  }).catch(function(e){$('pmsgarm').innerHTML='<b class="neg">No se pudo armar: '+esc(e&&e.message||e)+'</b> Probá de nuevo.'});
 };
 function totalesPedido(){
   var t=0,g=0,gm=0,provs={};(PED.items||[]).forEach(function(x){t+=x.cant*x.costo;g+=x.cant*x.gananciaUnidad;gm+=x.gananciaMes;provs[x.proveedor]=1});
