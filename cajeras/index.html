@@ -1,0 +1,24 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#1f3a5f"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="../icon-192.png"><link rel="apple-touch-icon" href="../apple-touch-icon.png"><title>Sasha · Cajeras</title>
+<style>
+:root{--azul:#1f3a5f;--azul2:#1a73e8;--fondo:#f4f6f9;--txt:#202124;--gris:#5f6368;--linea:#e3e6ea;--verde:#137333;--verdeF:#e6f4ea;--amarF:#fef7e0;--celeste:#e8f0fe}
+*{box-sizing:border-box}body{margin:0;background:var(--fondo);color:var(--txt);font:16px Roboto,Arial,sans-serif}
+header{background:var(--azul);color:#fff;padding:calc(14px + env(safe-area-inset-top)) 16px 14px}header h1{margin:0;font-size:19px;font-weight:600}
+main{max-width:650px;margin:auto;padding:12px 14px 40px}h2{font-size:16px;margin:0 0 6px}
+.panel{background:#fff;border:1px solid var(--linea);border-radius:12px;padding:14px;margin:10px 0;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.panel .panel{box-shadow:none;background:#fafbfc}
+label{display:block;font-size:13px;font-weight:600;color:var(--gris);margin:12px 0 0}
+input,textarea,select,button{box-sizing:border-box;width:100%;font:inherit;padding:12px;border:1px solid #c7ccd1;border-radius:10px;background:#fff;color:var(--txt);margin-top:4px}
+input:focus,textarea:focus,select:focus{outline:2px solid var(--azul2);border-color:transparent}
+input[type=checkbox]{width:auto;margin:0 8px 0 0;vertical-align:middle}
+button{cursor:pointer;margin:8px 0 0;font-weight:700;border:0;background:var(--celeste);color:var(--azul2)}
+.primary{background:var(--azul2);color:#fff}
+.notice{background:var(--amarF);color:#7a4b00;padding:12px;border-radius:10px;font-size:14px;font-weight:600}.notice:empty{display:none}.success{background:var(--verdeF);color:var(--verde)}
+small{display:block;color:var(--gris);margin:6px 0;font-size:13px}p{color:var(--gris);margin:4px 0}
+.photo{display:flex;gap:8px}.photo label{flex:1;margin-top:8px;text-align:center;background:var(--celeste);color:var(--azul2);border-radius:10px;padding:11px;cursor:pointer}
+img{max-width:100%;max-height:180px}#status{position:sticky;bottom:10px}button:disabled{opacity:.5}
+#logout{background:none;color:var(--gris);text-decoration:underline;font-weight:600;padding:4px;width:auto;display:block;margin:0 0 0 auto}
+</style></head><body><header><h1>Sasha · Cajeras</h1></header><main>
+<form id="loginForm" class="panel"><h2>Ingresar</h2><label>Usuario<input id="username" autocomplete="username" autocapitalize="none" required></label><button class="primary">Ingresar</button></form>
+<button type="button" id="logout" hidden>Cerrar sesión</button><div id="identity" class="panel">Conectando…</div>
+<form id="closeForm" hidden><div class="panel"><label style="margin-top:0">Turno<select id="shift"><option value="mañana">Mañana</option><option value="tarde">Tarde</option><option value="cover">Cubrir por ausencia</option></select></label><small id="shiftInfo"></small><label>Fecha del cierre<input id="date" type="date" required></label><small>Revisá la fecha y las cajas antes de enviar. Los importes se cargan en pesos.</small></div><div id="boxes"></div><div class="panel"><label style="margin-top:0">Observaciones<textarea id="note" maxlength="500" rows="2"></textarea></label></div><button id="send" class="primary">Enviar cierre</button><small>El envío queda guardado en Google. La confirmación final del día la hace el encargado.</small></form>
+<p id="status" class="notice" role="status" aria-live="polite"></p></main><script type="module" src="app.mjs?v=94"></script></body></html>

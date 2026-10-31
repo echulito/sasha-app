@@ -1,0 +1,1 @@
+export function draftForToday(saved,today,person,newId){const archived=saved&&saved.date!==today?saved:null;return {archived,draft:saved?.date===today?saved:{id:newId,date:today,shift:person.shift,note:'',boxes:[{box:'0001',worked:true,mercadoPago:0,cuentaDni:0,other:0,pendingOrders:0,expenses:[]}]}};}

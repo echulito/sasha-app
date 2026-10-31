@@ -1,0 +1,90 @@
+/* Sasha · Administración › Cajeras (modelo A + C, con los colores de la app) */
+:root{--azul:#1f3a5f;--azul2:#1a73e8;--fondo:#f4f6f9;--card:#fff;--txt:#202124;--gris:#5f6368;--linea:#e3e6ea;
+--verde:#137333;--verdeF:#e6f4ea;--rojo:#c5221f;--rojoF:#fce8e6;--amar:#b06000;--amarF:#fef7e0;--celeste:#e8f0fe}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--fondo);color:var(--txt);font:14px Roboto,Arial,sans-serif}
+main{padding:0 0 40px}
+h1{font-size:20px;margin:0 0 8px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--gris);margin:0 0 10px;font-weight:600}
+h3{font-size:15px;margin:10px 0 6px}
+p{line-height:1.45;color:var(--gris);margin:6px 0}
+b,strong{color:inherit}
+/* pestañas de la sección (como los botones de Administración) */
+nav{display:flex;gap:6px;margin:0 0 10px}
+nav button{flex:1;border:2px solid var(--linea);background:#fff;border-radius:10px;padding:8px 4px;font-weight:700;color:var(--gris);cursor:pointer;font-size:13px}
+nav button.active{border-color:var(--azul2);background:var(--celeste);color:var(--azul2)}
+/* filtros: día · caja · cajera en una fila */
+.filt{display:grid;grid-template-columns:1.35fr 1fr 1fr;gap:6px;margin-bottom:6px}
+.filters{display:flex;gap:8px;margin:0 0 10px;flex-wrap:wrap}.filters label{flex:1;min-width:130px}
+label{display:grid;gap:4px;font-size:12px;font-weight:600;color:var(--gris)}
+input,select,textarea{font:inherit;padding:10px 10px;border:1px solid #c7ccd1;border-radius:10px;background:#fff;color:var(--txt);width:100%;min-width:0}
+.filt select{padding:9px 6px;font-size:13px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--azul2);border-color:transparent}
+.mes-linea{font-size:12px;margin:2px 2px 8px}.mes-linea b{color:var(--txt)}
+/* tarjetas de números: 2 x 2 */
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.card{background:var(--card);border:1px solid var(--linea);border-radius:12px;padding:10px 12px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.card .label{color:var(--gris);font-size:12px;display:block}
+.card strong{display:block;font-size:19px;margin:2px 0 2px;letter-spacing:-.01em}
+.card small{color:var(--gris);font-size:11px;display:block;line-height:1.35}
+.card.metric-positive strong,.metric-positive .metric-state{color:var(--verde)}.card.metric-negative strong,.metric-negative .metric-state{color:var(--rojo)}
+.metric-state,.goal-caption{display:block;margin-top:4px;font-size:11px}.metric-state{font-weight:700}
+.goal-progress{display:block;width:100%;height:6px;margin-top:6px;appearance:none;border:0;border-radius:6px;overflow:hidden;background:#e8eaed}
+.goal-progress::-webkit-progress-bar{background:#e8eaed}.goal-progress::-webkit-progress-value{background:var(--verde);border-radius:6px}
+.metric-negative .goal-progress::-webkit-progress-value{background:var(--rojo)}
+/* paneles */
+.panel{background:var(--card);border:1px solid var(--linea);border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.panel .panel{border:1px solid var(--linea);box-shadow:none;padding:10px 12px}
+.panel h2{font-size:13px}
+details>summary{cursor:pointer;font-weight:700;color:var(--azul2)}
+.report-detail>summary{font-size:14px;color:var(--txt)}.report-detail[open]>summary{margin-bottom:8px}
+.management-section>summary{font-size:15px;color:var(--txt);padding:2px 0}.management-section[open]>summary{margin-bottom:10px}
+.management-section>.panel{box-shadow:none}
+/* botones */
+.button{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;background:var(--celeste);color:var(--azul2);border-radius:10px;padding:10px 14px;font:700 13px Roboto,Arial,sans-serif;text-decoration:none;cursor:pointer;margin:4px 0}
+.button.primary,.primary{background:var(--azul2);color:#fff}
+.subtle{background:var(--celeste)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.acc{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.acc .button{margin:0;padding:12px}
+/* tablas */
+.tablewrap{overflow:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--gris);font-size:11px;text-transform:uppercase;padding:7px 6px;border-bottom:1px solid var(--linea);font-weight:600;white-space:nowrap}
+td{border-bottom:1px solid var(--linea);padding:8px 6px;white-space:nowrap}
+td:last-child,th:last-child{text-align:right}
+.bad{color:var(--rojo)}.good{color:var(--verde)}.status-ok{color:var(--verde);font-weight:700}
+/* avisos */
+.notice{display:block;border:0;border-radius:10px;background:var(--amarF);color:var(--amar);padding:10px 12px;font-size:13px;margin:6px 0;line-height:1.4}
+.notice.info{background:#f1f3f4;color:var(--gris)}.notice.success{background:var(--verdeF);color:var(--verde);font-weight:700}
+.notice-action{width:100%;text-align:left;font:inherit;cursor:pointer}.notice-action strong{display:block;margin-top:6px;text-decoration:underline}
+.action-highlight{outline:3px solid var(--azul2);outline-offset:3px;scroll-margin-top:16px}
+.save-toast{position:fixed;left:12px;right:12px;bottom:14px;z-index:1000;max-width:640px;margin:auto;padding:12px 14px;border-radius:12px;box-shadow:0 4px 18px #0003;background:var(--amarF);color:#7a4b00;font-weight:700;transition:transform .3s,opacity .3s}
+.save-toast.success{background:var(--verdeF);color:var(--verde)}.save-toast.toast-exit{transform:translateY(35px);opacity:0}.save-toast[hidden]{display:none}
+#message:not(.notice){display:none}
+/* control del día por pasos (modelo C) */
+.ph{display:flex;justify-content:space-between;align-items:baseline;margin:12px 2px 6px;font-weight:700;color:var(--azul2);font-size:13px;letter-spacing:.3px}
+.paso{background:#fff;border:1px solid var(--linea);border-radius:12px;margin-bottom:6px}
+.paso.act{border:2px solid var(--azul2)}
+.paso>summary{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;list-style:none;color:var(--txt);font-weight:400}
+.paso>summary::-webkit-details-marker{display:none}
+.paso .ic{width:24px;height:24px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;background:#f1f3f4;color:#9aa0a6}
+.paso.ok .ic{background:var(--verdeF);color:var(--verde)}.paso.act .ic{background:var(--azul2);color:#fff}
+.paso .tx{flex:1;min-width:0}.paso .tx b{font-size:14px;display:block}.paso .tx small{font-size:12px;color:var(--gris);display:block;margin-top:2px}
+.paso-b{padding:0 12px 12px 46px}
+.paso-b .panel{border:0;box-shadow:none;padding:0;margin:8px 0}
+.ctl-ok{margin:10px 0}.ctl-ok>summary{font-size:12px;color:var(--verde);font-weight:700;padding:4px 2px}.ctl-ok>summary u{color:var(--gris);font-weight:600}
+.coupon-summary{display:grid;margin:8px 0}.coupon-summary>div{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px dashed var(--linea)}.coupon-summary b{white-space:nowrap;color:var(--verde)}
+.coupon-total{display:block;font-size:18px;margin-top:4px}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px dashed var(--linea)}
+.pill{font-size:11px;background:var(--celeste);color:var(--azul2);padding:3px 8px;border-radius:20px;font-weight:700}
+.check{display:flex;align-items:center;gap:8px;font-size:14px}.check input{width:20px;min-width:20px}
+.attendance-row{flex-wrap:wrap}.attendance-row label{flex:1;min-width:110px}
+.expense-month{border-top:1px solid var(--linea);padding-top:8px;margin-top:8px}
+.expense-month summary{display:flex;justify-content:space-between;gap:10px;color:var(--txt);font-size:15px;padding:6px 0}
+.empty{padding:20px;text-align:center;color:var(--gris)}
+.bar{height:10px;background:#e8eaed;border-radius:6px;overflow:hidden;margin:8px 0}.bar span{display:block;height:100%;background:var(--azul2)}
+.split{display:grid;grid-template-columns:1fr;gap:10px}
+.pie{font-size:11px;text-align:center;margin-top:16px}
+[hidden]{display:none!important}
+@media(min-width:760px){.cards{grid-template-columns:repeat(4,1fr)}.split{grid-template-columns:1fr 1fr}.formgrid{grid-template-columns:repeat(3,1fr)}}

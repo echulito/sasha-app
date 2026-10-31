@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=93;
+var APP_V=94;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -355,7 +355,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
   </section>
   <!-- v76: Administración › Limpieza (la app Sasha Limpieza, ahora dentro de Sasha). Solo con tu PIN. -->
   <section id="admin" class="oculto">
-    <div class="seg" style="margin-top:0" id="admsec"><button class="on" data-s="limpieza">Limpieza</button><button data-s="conta">Contabilidad</button></div>
+    <div class="seg" style="margin-top:0" id="admsec"><button class="on" data-s="limpieza">Limpieza</button><button data-s="conta">Contabilidad</button><button data-s="cajeras">Cajeras</button></div>
     <div id="a-limpieza">
     <div class="seg" style="margin-top:0" id="lsub"><button class="on" data-s="nuevo">Nuevo recibo</button><button data-s="registro">Registro</button><button data-s="config">Configuración</button></div>
     <div id="l-nuevo">
@@ -388,6 +388,8 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
       </div>
     </div>
     </div>
+    <!-- v94: Administración › Cajeras (la app "Control de cajas", ahora dentro de Sasha; modelo A + C). -->
+    <div id="a-cajeras" class="oculto"><iframe id="cajframe" title="Cajeras" style="width:100%;border:0;display:block;background:transparent"></iframe></div>
     <!-- v77: Administración › Contabilidad (modelo C): IVA del mes, facturas, cierres Z y remitos por foto. -->
     <div id="a-conta" class="oculto">
       <div class="seg" style="margin-top:0" id="csub"><button class="on" data-s="iva">IVA</button><button data-s="sue">Sueldos</button><button data-s="gas">Gastos</button></div>
@@ -2640,11 +2642,16 @@ function cFecha(f){return f?f.slice(8,10)+'/'+f.slice(5,7):'sin fecha'}
 function cNum(n){n=Math.round((Number(n)||0)*100)/100;return n?n.toLocaleString('es-AR',{minimumFractionDigits:Number.isInteger(n)?0:2,maximumFractionDigits:2}):''}
 function admSec(s){
   document.querySelectorAll('#admsec button').forEach(function(b){b.classList.toggle('on',b.dataset.s===s)});
-  $('a-limpieza').classList.toggle('oculto',s!=='limpieza');$('a-conta').classList.toggle('oculto',s!=='conta');
+  $('a-limpieza').classList.toggle('oculto',s!=='limpieza');$('a-conta').classList.toggle('oculto',s!=='conta');$('a-cajeras').classList.toggle('oculto',s!=='cajeras');
   try{localStorage.setItem('sasha_admsec',s)}catch(e){}
+  if(s==='cajeras'){cajAbrir();return}
   if(s==='conta'){var cs='iva';try{cs=localStorage.getItem('sasha_csub')||'iva'}catch(e){}contaSub(cs)}else lEntrar();
 }
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
+// v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
+function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0);f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4)+'px'}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=94');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
   CT.per=per||CT.per||cPerHoy();
