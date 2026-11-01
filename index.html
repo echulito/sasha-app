@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=94;
+var APP_V=95;
 (function(){
   if(window.__remota)return;
   var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
@@ -485,7 +485,9 @@ function pesos(n){if(n===null||n===undefined||isNaN(n))return '-';return (n<0?'-
 function pesos2(n){if(n===null||n===undefined||isNaN(n))return '-';return (n<0?'-$ ':'$ ')+Math.abs(n).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function pct(n,d){if(n===null||n===undefined||isNaN(n))return '-';return (n*100).toFixed(d===undefined?1:d).replace('.',',')+'%'}
 function esc(s){return String(s===undefined||s===null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
-function variacion(a,b){if(!b)return '';var v=a/b-1;return '<span class="'+(v>=0?'pos':'neg')+'">'+(v>=0?'▲ ':'▼ ')+pct(Math.abs(v),0)+'</span>'}
+function variacion(a,b){if(!b)return '';var v=a/b-1;return '<b class="'+(v>=0?'pos':'neg')+'">'+(v>=0?'▲ ':'▼ ')+pct(Math.abs(v),0)+'</b>'}
+// v95: flecha con 1 decimal (verde ▲ mejor, rojo ▼ peor)
+function flecha(a,b){if(!(b>0))return '';var v=a/b-1;return '<b class="'+(v>=0?'pos':'neg')+'">'+(v>=0?'▲ ':'▼ ')+pct(Math.abs(v),1)+'</b>'}
 function err(e){return '<div class="card"><b class="neg">Error:</b> '+esc(e&&e.message||e)+'</div>'}
 
 document.querySelectorAll('nav button').forEach(function(b){b.onclick=function(){
@@ -555,6 +557,18 @@ function pintarResumen(d){
   var avance=m.objetivo?Math.min(1,m.proyeccion/m.objetivo):0;
   var llega=m.proyeccion>=m.objetivo;
   h+='<div class="grid">';
+  // v95 (modelo A): el último mes cerrado contra el anterior y contra el mismo mes del año pasado.
+  var PA=d.porAnio||{},MN=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var factDe=function(y,mm){var a=PA[String(y)];return a&&a[mm]>0?a[mm]:0};
+  var cer=(d.meses||[]).filter(function(x){return x.fact>0}).slice(-1)[0];
+  if(cer){
+    var cy=Number(cer.mes.slice(0,4)),cm=Number(cer.mes.slice(5,7)),py=cm===1?cy-1:cy,pm=cm===1?12:cm-1;
+    var fPrev=factDe(py,pm),fAnio=factDe(cy-1,cm),nom=MN[cm-1];
+    h+='<div class="card"><h2>'+esc(nom.charAt(0).toUpperCase()+nom.slice(1))+' '+cy+' · cerrado</h2><div class="big">'+pesos(cer.fact)+'</div>'+
+      (fPrev?'<div class="row"><span>vs '+MN[pm-1]+(py!==cy?' '+py:'')+' ('+pesos(fPrev)+')</span><span>'+flecha(cer.fact,fPrev)+'</span></div>':'')+
+      (fAnio?'<div class="row"><span>vs '+nom+' '+(cy-1)+' ('+pesos(fAnio)+')</span><span>'+flecha(cer.fact,fAnio)+'</span></div>':'<div class="row"><span>vs '+nom+' '+(cy-1)+'</span><span class="note" style="margin:0">sin datos</span></div>')+
+      '<div class="row"><span>Resultado del mes'+(cer.estimado?' (estimado)':'')+'</span><span class="'+(cer.ganancia>=0?'pos':'neg')+'">'+pesos(cer.ganancia)+'</span></div></div>';
+  }
   h+='<div class="card"><h2>Este mes · '+esc(d.mesActual)+'</h2><div class="big">'+pesos(m.fact)+'</div>'+
      '<div class="note" style="margin-top:2px">'+m.diasConVenta+' días con venta de '+m.abiertos+' · promedio '+pesos(m.promedioDia)+' por día</div>'+
      '<div class="row"><span>Proyección del mes</span><span>'+pesos(m.proyeccion)+'</span></div>'+
@@ -577,10 +591,17 @@ function pintarResumen(d){
   }
 
   var a=d.anioDatos;
-  h+='<div class="card"><h2>El año '+esc(d.anio)+'</h2><div class="big">'+pesos(a.fact)+'</div>'+
+  // v95 (modelo A): el año contra el año pasado a la misma altura (solo los meses cerrados que están en los dos años).
+  var yA=Number(d.anio),cerr=(d.meses||[]).filter(function(x){return x.mes.slice(0,4)===String(yA)&&x.fact>0}),nA=0,nB=0,comp=0,mesesY=[];
+  cerr.forEach(function(x){var mm=Number(x.mes.slice(5,7)),b=factDe(yA-1,mm);mesesY.push(mm);if(b>0){nA+=x.fact;nB+=b;comp++}});
+  var totPrev=0,mesesPrev=0;for(var i=1;i<=12;i++){var v=factDe(yA-1,i);if(v>0){totPrev+=v;mesesPrev++}}
+  var ultM=mesesY.length?Math.max.apply(null,mesesY):0;
+  h+='<div class="card"><h2>El año '+esc(d.anio)+(ultM?' · '+MN[Math.min.apply(null,mesesY)-1]+' a '+MN[ultM-1]:'')+'</h2><div class="big">'+pesos(a.fact)+'</div>'+
     '<div class="note" style="margin-top:2px">'+a.meses+' meses cerrados + lo que va de '+esc(d.mesActual)+'</div>'+
+    (comp?'<div class="row"><span>'+(yA-1)+' a la misma altura ('+pesos(nB)+(comp<cerr.length?' · '+comp+' meses':'')+')</span><span>'+flecha(nA,nB)+'</span></div>':'')+
     '<div class="row"><span>Resultado de los meses cerrados</span><span class="'+(a.ganancia>=0?'pos':'neg')+'">'+pesos(a.ganancia)+'</span></div>'+
-    '<div class="row"><span>Promedio por mes</span><span>'+pesos(a.meses?(a.fact-m.fact)/a.meses:0)+'</span></div>'+
+    '<div class="row"><span>Promedio por mes</span><span>'+pesos(a.meses?(a.fact-m.fact)/a.meses:0)+(comp&&a.meses?' '+flecha((a.fact-m.fact)/a.meses,nB/comp):'')+'</span></div>'+
+    (mesesPrev===12?'<div class="row"><span>Año '+(yA-1)+' completo</span><span>'+pesos(totPrev)+'</span></div>':'')+
     '<div class="row"><span>Gastos fijos por mes</span><span>'+pesos(d.admin.fijos)+'</span></div></div>';
 
   h+='<div class="card"><h2>Margen</h2>'+
@@ -597,9 +618,11 @@ function pintarResumen(d){
     var max=Math.max.apply(null,meses.map(function(x){return x.fact}).concat([m.objetivo||0, m.fact]))||1;
     h+='<div class="card" style="margin-top:12px"><h2>Facturación por mes</h2><div class="chart">';
     if(m.objetivo)h+='<div class="meta" style="bottom:'+(m.objetivo/max*140+20)+'px"><span>para no perder '+pesos(m.objetivo)+'</span></div>';
-    meses.forEach(function(x){h+='<div class="col"><em>'+(x.fact/1e6).toFixed(1).replace('.',',')+'M</em><b style="height:'+(x.fact/max*140)+'px;background:'+(x.ganancia>=0?'var(--verde)':'#e57373')+'" title="'+esc(x.etiqueta)+': '+pesos(x.fact)+' · resultado '+pesos(x.ganancia)+'"></b><small>'+esc(x.etiqueta)+'</small></div>'});
-    h+='<div class="col"><em>'+(m.fact/1e6).toFixed(1).replace('.',',')+'M</em><b style="height:'+(m.fact/max*140)+'px;background:var(--azul2);opacity:.55"></b><small>'+esc(d.mesActual)+' (va)</small></div>';
-    h+='</div><div class="note">Rojo = mes con pérdida · verde = mes con ganancia · línea = ventas mínimas para no perder.</div></div>';
+    meses.forEach(function(x){var yy=Number(x.mes.slice(0,4)),mm=Number(x.mes.slice(5,7)),ant=factDe(mm===1?yy-1:yy,mm===1?12:mm-1),vv=ant?x.fact/ant-1:null;
+      h+='<div class="col"><em>'+(x.fact/1e6).toFixed(1).replace('.',',')+'M</em><b style="height:'+(x.fact/max*140)+'px;background:'+(x.ganancia>=0?'var(--verde)':'#e57373')+'" title="'+esc(x.etiqueta)+': '+pesos(x.fact)+' · resultado '+pesos(x.ganancia)+'"></b><small>'+esc(x.etiqueta)+'</small>'+
+      (vv===null?'<small>&nbsp;</small>':'<small style="font-weight:700;color:'+(vv>=0?'var(--verde)':'var(--rojo)')+'">'+(vv>=0?'▲':'▼')+Math.round(Math.abs(vv)*100)+'%</small>')+'</div>'});
+    h+='<div class="col"><em>'+(m.fact/1e6).toFixed(1).replace('.',',')+'M</em><b style="height:'+(m.fact/max*140)+'px;background:var(--azul2);opacity:.55"></b><small>'+esc(d.mesActual)+' (va)</small><small>&nbsp;</small></div>';
+    h+='</div><div class="note">Debajo de cada mes: contra el mes anterior. Rojo = mes con pérdida · verde = mes con ganancia · línea = ventas mínimas para no perder.</div></div>';
   }
   // Gráfico por día
   var dm=d.dias;
