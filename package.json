@@ -1,0 +1,9 @@
+{
+  "name": "sasha-app",
+  "private": true,
+  "description": "App Sasha · Mi negocio (pruebas: npm test)",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:aprobar-capturas": "ACTUALIZAR=1 node --test tests/*.test.mjs"
+  }
+}

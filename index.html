@@ -3,19 +3,11 @@
 <head>
 <meta charset="utf-8">
 <script>
-/* Se actualiza sola: si ECHU tiene una versión más nueva de la app, la usa (no hace falta volver a subir nada a GitHub). */
-var APP_V=96;
-(function(){
-  if(window.__remota)return;
-  var u='';try{u=localStorage.getItem('echu_url')||''}catch(e){}
-  if(!u)return;
-  fetch(u+(u.indexOf('?')>=0?'&':'?')+'accion=app&_='+Date.now(),{cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
-    if(j&&j.ok&&j.v>APP_V&&j.html){
-      document.open();document.write(j.html.replace('<head>','<head><script>window.__remota=1<\/script>'));document.close();
-    }
-  }).catch(function(){});
-})();
+/* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
+var APP_V=97;
 </script>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sasha · Mi negocio</title>
 <link rel="manifest" id="lmanif" href="manifest.webmanifest">
@@ -46,6 +38,10 @@ main{max-width:980px;margin:0 auto;padding:14px 16px 40px}
 .row span:first-child{color:var(--gris)}
 .row span:last-child{font-weight:600;text-align:right}
 .pos{color:var(--verde)}.neg{color:var(--rojo)}.warn{color:var(--amar)}
+/* v97: aviso "llegó bien" (modelo C) */
+button.okEchu{background:var(--verdeF)!important;color:var(--verde)!important;border:1px solid #b7dfc2!important}
+.okEchuMini{font-size:11px;color:var(--verde);text-align:center;margin-top:6px}
+.okEchuSub{color:#81c995}
 .chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700}
 .chip.v{background:var(--verdeF);color:var(--verde)}.chip.r{background:var(--rojoF);color:var(--rojo)}
 .chip.a{background:var(--amarF);color:var(--amar)}.chip.c{background:var(--celeste);color:var(--azul2)}
@@ -172,7 +168,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
 <div id="app" class="oculto">
 <header>
   <button class="recargar" onclick="actualizarApp()">↻ Actualizar</button><h1>Sasha · Mi negocio</h1>
-  <div class="sub"><span id="sub">Cargando…</span><button class="salir" onclick="salir()">salir</button><span style="opacity:.55;font-size:11px;margin-left:6px" id="verapp"></span></div>
+  <div class="sub"><span id="avisoSub" class="okEchuSub" style="display:none"></span><span id="sub">Cargando…</span><button class="salir" onclick="salir()">salir</button><span style="opacity:.55;font-size:11px;margin-left:6px" id="verapp"></span></div>
   <nav>
     <button class="on" data-tab="resumen">Resumen</button>
     <button data-tab="productos">Productos</button>
@@ -446,25 +442,96 @@ function jsonp(url){
     document.head.appendChild(s);
   });
 }
+/* v97: SEGURIDAD Y "LLEGÓ COMPLETO".
+   - Todo viaja por POST (el PIN y la sesión no van en la dirección). El respaldo del celular (JSONP) sigue por GET.
+   - Lo que se manda lleva su huella (SHA-256): ECHU la compara con lo que le llegó.
+   - Lo que llega trae su huella: la app la recalcula y, si no coincide, reintenta (no usa datos incompletos).
+   - Al guardar, el botón se pone verde "✓ Guardado en ECHU · Llegó completo" (modelo C). */
+function huella(t){
+  try{if(!(window.crypto&&crypto.subtle&&window.TextEncoder))return Promise.resolve('');
+    return crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)).then(function(b){var s='',a=new Uint8Array(b);for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}).catch(function(){return ''})}
+  catch(e){return Promise.resolve('')}
+}
+// Devuelve la respuesta con __completo=true si la huella coincide; si no coincide, error INCOMPLETO.
+function verificarLlegada(j){
+  if(!j||!j.ok||!j.h||j.datos===undefined)return Promise.resolve(j);
+  return huella(JSON.stringify(j.datos)).then(function(h){if(h&&h!==j.h)throw new Error('INCOMPLETO');j.__completo=!!h;return j});
+}
+function postECHU(cuerpoObj,ms){
+  var cuerpo=JSON.stringify(cuerpoObj);
+  var ctl=window.AbortController?new AbortController():null,tm=ctl?setTimeout(function(){ctl.abort()},ms||150000):0;
+  return huella(cuerpo).then(function(h){
+    var u=CFG.url+(h?(CFG.url.indexOf('?')>=0?'&':'?')+'h='+h:'');
+    return fetch(u,{method:'POST',redirect:'follow',cache:'no-store',body:cuerpo,signal:ctl?ctl.signal:undefined});
+  }).then(function(r){clearTimeout(tm);return r.text()},function(e){clearTimeout(tm);throw new Error(e&&e.name==='AbortError'?'TARDA':'RED')})
+    .then(function(t){var j;try{j=JSON.parse(t)}catch(e){throw new Error('RED')}return verificarLlegada(j)});
+}
+// Acciones que guardan algo en ECHU (para el aviso verde).
+var ESCRITURAS={guardar_propuesta:'Guardado',borrar_propuesta:'Borrado',marcar_pedido:'Guardado',marcar_cargado:'Guardado',marcar_pedido_grupo:'Guardado',
+  guardar_pedido:'Guardado',borrar_pedido:'Borrado',limpieza_config_guardar:'Guardado',limpieza_sync:'Guardado',conta_config_guardar:'Guardado',
+  conta_proveedor:'Guardado',conta_borrar:'Borrado',sue_empleado:'Guardado',sue_borrar_liq:'Borrado',actualizar_echu:'Pedido',
+  limpieza_importar:'Guardado',limpieza_emitir:'Guardado',gastos_guardar:'Guardado',sue_liquidar:'Guardado',sue_config:'Guardado',conta_guardar:'Guardado'};
+// Cargas que muestran "Llegó completo" arriba (no las que corren solas de fondo).
+var CARGAS_AVISO={resumen:1,producto:1,oportunidades:1,sugerencias:1,ranking:1,propuestas:1,conta_mes:1,sue_datos:1,gastos_datos:1,limpieza_recibos:1,candidatos_pedido:1,candidatos_gama:1};
 function api(accion,params,intento){
   intento=intento||1;
-  var q='accion='+encodeURIComponent(accion)+(CFG.token?'&token='+encodeURIComponent(CFG.token):'');
-  Object.keys(params||{}).forEach(function(k){q+='&'+k+'='+encodeURIComponent(params[k])});
-  q+='&_='+Date.now();
-  var url=CFG.url+(CFG.url.indexOf('?')>=0?'&':'?')+q;
-  // 1er intento: consulta normal. Si el celular la corta, 2do y 3ro por el otro camino (JSONP).
-  var pedido=intento===1
-    ? fetch(url,{redirect:'follow',cache:'no-store'}).then(function(r){return r.text()}).then(function(t){try{return JSON.parse(t)}catch(e){throw new Error('RED')}})
-    : jsonp(url);
+  var p={};Object.keys(params||{}).forEach(function(k){var v=params[k];p[k]=v===undefined||v===null?'':String(v)});
+  var pedido;
+  if(intento===1){
+    // 1er intento: POST con huella. Si ECHU todavía es la versión anterior (no conoce la acción por POST), va por el camino viejo.
+    pedido=postECHU(Object.assign({token:CFG.token||'',accion:accion},p),70000).then(function(j){
+      if(j&&!j.ok&&(j.error==='ACCION'||(accion==='login'&&j.error==='PIN'&&j.mensaje!=='PIN incorrecto.')))return apiGetViejo(accion,p);
+      return j;
+    });
+  }else pedido=apiGetViejo(accion,p,true);
   return pedido.catch(function(e){
       if(intento<3)return new Promise(function(ok){setTimeout(ok,800*intento)}).then(function(){return api(accion,params,intento+1)}).then(function(d){return {__ok:true,d:d}});
+      if(e&&e.message==='INCOMPLETO')throw new Error('La información llegó incompleta. Probá de nuevo.');
       throw new Error('ECHU no respondió (puede estar ocupado actualizándose). Probá de nuevo en un momento.');
     })
     .then(function(j){
       if(j&&j.__ok)return j.d;
       if(!j.ok){ if(j.error==='PIN'&&accion!=='login'){salir(true)} throw new Error(j.mensaje||j.error||'Error') }
+      if(ESCRITURAS[accion]||(accion==='sin_estadistica'&&p.codigo))avisoLlego(ESCRITURAS[accion]||'Guardado',j.__completo);
+      else if(CARGAS_AVISO[accion])avisoCarga(j.__completo);
       return accion==='login'?j:j.datos;
     });
+}
+// Camino viejo (GET): respaldo del celular (JSONP) o ECHU sin actualizar.
+function apiGetViejo(accion,p,porJsonp){
+  var q='accion='+encodeURIComponent(accion)+(CFG.token?'&token='+encodeURIComponent(CFG.token):'');
+  Object.keys(p||{}).forEach(function(k){q+='&'+k+'='+encodeURIComponent(p[k])});
+  q+='&_='+Date.now();
+  var url=CFG.url+(CFG.url.indexOf('?')>=0?'&':'?')+q;
+  var pedido=porJsonp?jsonp(url):fetch(url,{redirect:'follow',cache:'no-store'}).then(function(r){return r.text()}).then(function(t){try{return JSON.parse(t)}catch(e){throw new Error('RED')}});
+  return pedido.then(verificarLlegada);
+}
+/* ---- aviso "llegó bien" (modelo C) ---- */
+var ULTBOTON=null;
+document.addEventListener('click',function(e){var b=e.target&&e.target.closest&&e.target.closest('button,.btn,[onclick]');if(b)ULTBOTON={el:b,t:Date.now()}},true);
+function horaCorta(){var d=new Date();return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)}
+function avisoLlego(que,completo){
+  // Se aplica después de que la pantalla termine de reaccionar al guardado (así no se pisa con su propio texto).
+  var ult=ULTBOTON;ULTBOTON=null;
+  setTimeout(function(){
+    var txt=(completo?'Llegó completo':'Llegó a ECHU')+' · '+horaCorta();
+    var b=ult&&Date.now()-ult.t<120000&&document.body.contains(ult.el)&&ult.el.offsetParent?ult.el:null;
+    if(b&&b.tagName==='BUTTON'&&!b.classList.contains('okEchu')){
+      var antes=b.innerHTML,marca='✓ '+que+' en ECHU',mini=document.createElement('div');
+      b.classList.add('okEchu');b.innerHTML=marca;
+      mini.className='okEchuMini';mini.textContent=txt;b.insertAdjacentElement('afterend',mini);
+      setTimeout(function(){b.classList.remove('okEchu');if(b.innerHTML===marca)b.innerHTML=antes;if(mini.parentNode)mini.parentNode.removeChild(mini)},3000);
+      return;
+    }
+    avisoArriba('✓ '+que+' en ECHU · '+txt);
+  },0);
+}
+var AVISO_CARGA_T=0;
+function avisoCarga(completo){if(!completo||Date.now()-AVISO_CARGA_T<4000)return;AVISO_CARGA_T=Date.now();avisoArriba('✓ Llegó completo · '+horaCorta())}
+function avisoArriba(txt){
+  var a=$('avisoSub'),s=$('sub');if(!a||!s)return;
+  a.textContent=txt;a.style.display='';s.style.display='none';
+  clearTimeout(avisoArriba.t);avisoArriba.t=setTimeout(function(){a.style.display='none';s.style.display=''},3000);
 }
 function mostrarLogin(msg){$('app').classList.add('oculto');$('login').classList.remove('oculto');$('campoUrl').style.display=CFG.url?'none':'';$('lerr').textContent=msg||'';}
 function salir(vencido){CFG.token='';guardarCfg();mostrarLogin(vencido?'La sesión venció: volvé a poner el PIN.':'')}
@@ -2414,11 +2481,10 @@ function lDiasMes(y,m){return new Date(Date.UTC(y,m,0)).getUTCDate()}
 function lDow(y,m,d){return new Date(Date.UTC(y,m-1,d)).getUTCDay()}
 function lBlanco(y,m,d){var w=lDow(y,m,d);if(w===0)return 'domingo';if([1,3,5].indexOf(w)<0)return 'no_viene';return (y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2))<=lHoy()?'falta':'sin_marca'}
 function lPost(accion,obj){
-  var ctl=window.AbortController?new AbortController():null,tm=ctl?setTimeout(function(){ctl.abort()},150000):0;
-  return fetch(CFG.url,{method:'POST',redirect:'follow',cache:'no-store',signal:ctl?ctl.signal:undefined,body:JSON.stringify(Object.assign({token:CFG.token,accion:accion},obj||{}))})
-    .then(function(r){clearTimeout(tm);return r.text()}).catch(function(e){clearTimeout(tm);throw new Error(e&&e.name==='AbortError'?'ECHU tardó demasiado en responder.':'No se pudo conectar con ECHU. Probá de nuevo.')})
-    .then(function(t){var j;try{j=JSON.parse(t)}catch(e){throw new Error('ECHU no respondió bien. ¿Hiciste "Nueva versión" con la 5.83?')}
-      if(!j.ok){if(j.error==='PIN')salir(true);throw new Error(j.mensaje||'Error')}return j.datos});
+  return postECHU(Object.assign({token:CFG.token,accion:accion},obj||{}),150000)
+    .catch(function(e){throw new Error(e&&e.message==='TARDA'?'ECHU tardó demasiado en responder.':e&&e.message==='INCOMPLETO'?'La información llegó incompleta. Probá de nuevo.':'No se pudo conectar con ECHU. Probá de nuevo.')})
+    .then(function(j){if(!j.ok){if(j.error==='PIN')salir(true);throw new Error(j.mensaje||'Error')}
+      if(ESCRITURAS[accion])avisoLlego(ESCRITURAS[accion],j.__completo);return j.datos});
 }
 function lSub(s){
   document.querySelectorAll('#lsub button').forEach(function(b){b.classList.toggle('on',b.dataset.s===s)});
@@ -2673,7 +2739,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0);f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=96');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=97');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;

@@ -10,12 +10,19 @@ import {isClosedDay,normalizeState,reportKey,roster,assign,allTurns,dailyCloses,
 // Sasha v94: transporte a ECHU (Apps Script) en lugar del servidor de Cloudflare. Las rutas ./api/... se atienden acá.
 let SHEET_URL='';
 const ECHU={url:'',token:''};try{ECHU.url=localStorage.getItem('echu_url')||'';ECHU.token=localStorage.getItem('echu_token')||'';}catch{}
+// v97: huella SHA-256 de ida (ECHU verifica lo que le llegó) y de vuelta (acá se verifica lo que llegó).
+async function huella(t){try{const b=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)));let s='';for(const x of b)s+=String.fromCharCode(x);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}catch{return '';}}
+let LLEGO_COMPLETO=false;
+const horaCorta=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
 async function echu(accion,datos,extra){
  if(!ECHU.url||!ECHU.token)throw Object.assign(Error('Entrá a la app Sasha con tu PIN'),{status:401});
  const body=Object.assign({token:ECHU.token,accion},datos===undefined?{}:{datos:typeof datos==='string'?datos:JSON.stringify(datos)},extra||{});
- let r;try{r=await window.fetch(ECHU.url,{method:'POST',redirect:'follow',cache:'no-store',body:JSON.stringify(body)});}catch(e){throw Object.assign(Error('Sin conexión con ECHU'),{status:503});}
+ const cuerpo=JSON.stringify(body),h=await huella(cuerpo);
+ let r;try{r=await window.fetch(ECHU.url+(h?(ECHU.url.includes('?')?'&':'?')+'h='+h:''),{method:'POST',redirect:'follow',cache:'no-store',body:cuerpo});}catch(e){throw Object.assign(Error('Sin conexión con ECHU'),{status:503});}
  let d;try{d=await r.json();}catch{throw Object.assign(Error('ECHU no respondió (HTTP '+r.status+')'),{status:503});}
  if(!d.ok){if(d.error==='PIN')throw Object.assign(Error('Volvé a poner el PIN en la app'),{status:401});throw Object.assign(Error(d.mensaje||'Error de ECHU'),{status:d.status||400});}
+ LLEGO_COMPLETO=false;
+ if(d.h&&d.datos!==undefined){const hv=await huella(JSON.stringify(d.datos));if(hv&&hv!==d.h)throw Object.assign(Error('La información llegó incompleta. Probá de nuevo.'),{status:503});LLEGO_COMPLETO=!!hv;}
  return d.datos;
 }
 const respuesta=(status,body)=>{const text=JSON.stringify(body);return {ok:status<400,status,json:async()=>JSON.parse(text),text:async()=>text};};
@@ -46,7 +53,7 @@ async function syncGoogle(){if(syncing)return;syncing=true;let again=false;try{
  if(!online){const check=await fetch('./api/state'),remote=await apiJSON(check);if(!check.ok)throw Error(remote.error);if(remote.revision!==revision){const merged=mergeRemoteReviews(state,remote.state);state=merged.state;if(!merged.sameData){showRemoteRecovery(remote);throw Error('Google tiene otra revisión. Conservamos los cambios locales para evitar sobrescribir datos');}revision=remote.revision;localStorage.setItem('cajasRevision',revision);}online=true;}
  const snapshot=JSON.stringify(state),projection=sheetProjection(JSON.parse(snapshot)),r=await fetch('./api/state',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state:JSON.parse(snapshot),revision,projection})}),d=await apiJSON(r);
  if(!r.ok){if(r.status===409){online=false;const check=await fetch('./api/state',{cache:'no-store'}),remote=await apiJSON(check);if(check.ok)showRemoteRecovery(remote);}const error=Error(d.error);error.transient=[429,502,503,504].includes(r.status);throw error;}revision=d.revision;localStorage.setItem('cajasRevision',revision);
- syncFailures=0;clearTimeout(syncRetryTimer);if(snapshot===JSON.stringify(state)){localStorage.removeItem('cajasPending');msg(saveFeedback+' · Guardado en Google Sheets',true)}else again=true;
+ syncFailures=0;clearTimeout(syncRetryTimer);if(snapshot===JSON.stringify(state)){localStorage.removeItem('cajasPending');msg(saveFeedback+' · ✓ Guardado en ECHU · '+(LLEGO_COMPLETO?'Llegó completo':'Llegó')+' · '+horaCorta(),true)}else again=true;
  }catch(e){msg('Pendiente de sincronizar: '+e.message+'. Tu respaldo local se conserva.');if(e.transient&&syncFailures<3){syncFailures++;clearTimeout(syncRetryTimer);syncRetryTimer=setTimeout(()=>syncGoogle(),[5000,15000,30000][syncFailures-1]);}}finally{syncing=false}
  if(again)syncGoogle();
 }
