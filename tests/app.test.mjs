@@ -14,11 +14,11 @@ let navegador, web;
 test.before(async () => { navegador = await chromium.launch(); web = await servir(); });
 test.after(async () => { await navegador?.close(); web?.cerrar(); });
 
-async function abrir({modo = 'normal', logueado = true, ruta = ''} = {}) {
+async function abrir({modo = 'normal', logueado = true, ruta = '', consulta = false} = {}) {
   const ctx = await navegador.newContext({viewport: {width: 390, height: 844}, deviceScaleFactor: 1, serviceWorkers: 'block', locale: 'es-AR', timezoneId: 'America/Argentina/Buenos_Aires'});
   const echu = crearECHU(modo);
   await ctx.route(URL_ECHU + '**', r => echu.manejar(r));
-  await ctx.addInitScript(([u, t]) => { try { localStorage.setItem('echu_url', u); if (t) localStorage.setItem('echu_token', t); } catch (e) {} }, [URL_ECHU, logueado ? TOKEN : '']);
+  await ctx.addInitScript(([u, t, cq]) => { try { localStorage.setItem('echu_url', u); if (t) localStorage.setItem('echu_token', t); if (cq) localStorage.setItem('echu_modo', 'consulta'); } catch (e) {} }, [URL_ECHU, logueado ? TOKEN : '', consulta]);
   const page = await ctx.newPage();
   const errores = [];
   page.on('pageerror', e => errores.push('JS: ' + e.message));
@@ -142,6 +142,18 @@ test('recorre todas las pestañas sin errores ni bloqueos de seguridad', async (
   const {ctx, page, errores} = await abrir();
   await page.getByText('Este mes · noviembre').waitFor();
   for (const t of ['productos', 'simulador', 'admin', 'ajustes', 'resumen']) { await page.click('nav button[data-tab="' + t + '"]'); await page.waitForTimeout(400); }
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('versión de consulta: es la misma app (Resumen, Productos y Simular) sin Administración ni Ajustes', async () => {
+  const {ctx, page, echu, errores} = await abrir({consulta: true, ruta: '?consulta'});
+  await page.getByText('Este mes · noviembre').waitFor();
+  assert.equal(await page.evaluate(() => document.body.classList.contains('consulta')), true);
+  const visibles = await page.$$eval('nav button', bs => bs.filter(b => b.offsetParent).map(b => b.dataset.tab));
+  assert.deepEqual(visibles, ['resumen', 'productos', 'simulador']);
+  for (const t of visibles) { await page.click('nav button[data-tab="' + t + '"]'); await page.waitForTimeout(300); }
+  assert.ok(echu.pedidos.every(p => p.metodo !== 'POST' || /[?&]h=/.test(p.url)));
   assert.deepEqual(errores, []);
   await ctx.close();
 });
