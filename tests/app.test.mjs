@@ -102,6 +102,42 @@ test('guardar: el botón se pone verde "✓ … en ECHU · Llegó completo" y vu
   await ctx.close();
 });
 
+async function irAGastos(page) {
+  await page.getByText('Este mes · noviembre').waitFor();
+  await page.click('nav button[data-tab="admin"]'); await page.click('#admsec button[data-s="conta"]'); await page.click('#csub button[data-s="gas"]');
+  await page.locator('#c-gas .cmp').first().waitFor();
+}
+test('gastos › inflación: muestra qué pasó en el mes, los meses anteriores y se guarda la inflación', async () => {
+  const {ctx, page, echu, errores} = await abrir();
+  await irAGastos(page);
+  await page.getByText('Inflación de octubre').waitFor();
+  assert.match(await page.locator('#c-gas').innerText(), /Tus precios de venta\s*\+3,1%\s*▲ 0,4 sobre la inflación/);
+  assert.match(await page.locator('#c-gas').innerText(), /Ventas sin inflación\s*−2,0%/);
+  await page.click('#c-gas tr[data-m="2026-09"]');
+  await page.getByText('Inflación de septiembre').waitFor();
+  await page.fill('#gi_v', '2,9'); await page.click('#gi_ok');
+  await page.waitForTimeout(500);
+  const g = echu.pedidos.filter(p => p.metodo === 'POST' && /gastos_guardar/.test(p.cuerpo)).pop();
+  assert.deepEqual(JSON.parse(JSON.parse(g.cuerpo).datos), {inflacion: {mes: '2026-09', valor: 0.029}});
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+test('gastos › aumento de cada gasto: con el % se calcula el monto y con el monto el %', async () => {
+  const {ctx, page, errores} = await abrir();
+  await irAGastos(page);
+  await page.locator('#c-gas .cmp .t', {hasText: 'Alquiler y servicios'}).click();
+  const i = await page.evaluate(() => GA.D.filas.findIndex(f => f.label === 'Luz'));
+  const j = await page.evaluate(() => GA.D.filas.findIndex(f => f.label === 'Alquiler'));
+  assert.equal(await page.inputValue('[data-ga="' + j + '"]'), '5');
+  await page.fill('[data-ga="' + i + '"]', '10');
+  await page.dispatchEvent('[data-ga="' + i + '"]', 'input');
+  assert.equal(await page.inputValue('[data-gf="' + i + '"]'), '198.000');
+  await page.fill('[data-gf="' + j + '"]', '1.575.000'); await page.dispatchEvent('[data-gf="' + j + '"]', 'input');
+  assert.match(await page.inputValue('[data-ga="' + j + '"]'), /^10,[23]$/);
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
 test('recorre todas las pestañas sin errores ni bloqueos de seguridad', async () => {
   const {ctx, page, errores} = await abrir();
   await page.getByText('Este mes · noviembre').waitFor();
@@ -145,6 +181,14 @@ test('pantallas iguales a las aprobadas (regresión visual)', {skip: !CON_CAPTUR
     if (ACTUALIZAR || !fs.existsSync(ruta)) { fs.writeFileSync(ruta, png); continue; }
     const d = await diferencia(page, fs.readFileSync(ruta), png);
     if (d > 0.002) { fs.writeFileSync(CAPT + t + '.NUEVA.png', png); cambios.push(t + ' (' + (d * 100).toFixed(2) + '% distinto)'); }
+  }
+  // Administración › Contabilidad › Gastos (con la inflación)
+  await page.click('nav button[data-tab="admin"]'); await page.click('#admsec button[data-s="conta"]'); await page.click('#csub button[data-s="gas"]');
+  await page.locator('#c-gas .cmp').first().waitFor(); await page.locator('#avisoSub').waitFor({state: 'hidden', timeout: 6000});
+  {
+    const png = await page.screenshot({fullPage: true, mask: [page.locator('#verapp')], animations: 'disabled'}), ruta = CAPT + 'gastos.png';
+    if (ACTUALIZAR || !fs.existsSync(ruta)) fs.writeFileSync(ruta, png);
+    else { const d = await diferencia(page, fs.readFileSync(ruta), png); if (d > 0.002) { fs.writeFileSync(CAPT + 'gastos.NUEVA.png', png); cambios.push('gastos (' + (d * 100).toFixed(2) + '% distinto)'); } }
   }
   await ctx.close();
   assert.deepEqual(cambios, [], 'Cambió cómo se ve: ' + cambios.join(', ') + '. Mirá tests/capturas/*.NUEVA.png');

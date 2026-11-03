@@ -16,6 +16,19 @@ export const DATOS = {
   indice: {formato: 2, version: '02/11/2026 08:00', provs: ['DISTRIBUIDORA UNO', 'MAYORISTA DOS'], rubros: ['SHAMPOO', 'PERFUME'], cats: ['MARCA A'],
     p: [['1001', 'SHAMPOO PRUEBA X 400', 0, '7790000000011', 'A1', 0, 5000, 3, 0, 0, ''], ['1002', 'PERFUME PRUEBA EDT X 100', 1, '7790000000028', 'B2', 0, 25000, 1, 1, 0, '']]},
   sin_estadistica: [], propuestas: [], ordenes_anuladas: [],
+  gastos_datos: {mes: '2026-11', mesAnterior: '2026-10', proximo: '2026-12', total: 6480000, totalPct: 0.045,
+    filas: [{fila: 10, label: 'Sueldos', col: 0, valor: 3200000, total: true},
+      {fila: 11, label: 'Empleados', col: 3, valor: 2600000, grupo: 'Sueldos', auto: {valor: 2600000, fuente: 'Sueldos', detalle: 'Bruto de 2 liquidaciones de oct 2026'}, autoOn: true, antes: null},
+      {fila: 13, label: 'Alquiler', col: 2, valor: 1500000, grupo: '', antes: 1428571}, {fila: 14, label: 'Luz', col: 2, valor: 180000, grupo: '', antes: 180000},
+      {fila: 15, label: 'Internet y teléfono', col: 2, valor: 60000, grupo: '', antes: null}, {fila: 16, label: 'Ingresos brutos', col: 2, valor: 420000, grupo: '', antes: 400000}],
+    pct: [{fila: 30, label: 'Tarjetas y Mercado Pago (comisión)', pct: 0.035}],
+    resultado: {ventasMes: 25e6, fijosPct: 0.26, minimo: 0.30, deseado: 0.45, actual: 0.42, ventasMinimas: 21600000, porDia: 830000, proyectado: 1e6, estado: ''},
+    ultimo: {mes: '2026-10', fact: 25289737, ganancia: 1850000, margen: 0.418}, meses: [], dist: {fact: 24e6, repo: 14e6, porVenta: 1.08e6, ganancia: 1.8e6},
+    inflacion: [
+      {mes: '2026-11', inflacion: null, precios: 0.012, costos: 0.009, gastos: 0.021, ventasReales: null, enCurso: true, texto: 'Tus precios subieron más que tus costos: el margen mejoró.'},
+      {mes: '2026-10', inflacion: 0.027, precios: 0.031, costos: 0.04, gastos: 0.015, ventasReales: -0.02, enCurso: false, texto: 'Subiste los precios más que la inflación (0,4% más), pero tus costos subieron más que tus precios: el margen se achicó. Los gastos fijos subieron menos que la inflación. Descontando la inflación vendiste 2,0% menos que el mes anterior.'},
+      {mes: '2026-09', inflacion: 0.021, precios: 0.024, costos: 0.018, gastos: 0.03, ventasReales: 0.011, enCurso: false, texto: 'Subiste los precios más que la inflación (0,3% más), y más que tus costos: el margen mejoró.'},
+      {mes: '2026-08', inflacion: null, precios: 0.012, costos: 0.016, gastos: 0.02, ventasReales: null, enCurso: false, texto: 'Tus costos subieron más que tus precios: el margen se achicó. Cargá la inflación de ago 2026 para compararla.'}]},
   estado_echu: {enCurso: false, estado: 'OK', detalle: '', pct: null, ultima: '02/11/2026 08:00', datos: '02/11/2026 08:00'},
   actualizar_echu: {lanzada: true, tipo: 'actualizar', estado: {enCurso: false, estado: 'OK', ultima: '02/11/2026 08:00'}}
 };
