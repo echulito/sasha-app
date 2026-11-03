@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=98;
+var APP_V=99;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1034,9 +1034,11 @@ function verProducto(c){
       '<div class="row"><span>Proveedor</span><span>'+esc(p.proveedor||'-')+'</span></div>'+
       '<div class="row"><span>Código de proveedor</span><span>'+esc(p.codigoProveedorVer||p.codigoProveedor||'-')+'</span></div>'+
       // v49: unidades por bulto (de su proveedor primero; si su lista no lo dice, de las otras listas).
-      (function(){var bs=(p.bultos||[]).filter(function(x){return x.unidades>1}).slice(0,3);
-        if(!bs.length)return '<div class="row"><span>Unidades por bulto</span><span class="note" style="margin:0">la lista no lo informa</span></div>';
-        return bs.map(function(x){return '<div class="row"><span>Bulto'+(x.actual?'':' en')+' ('+esc(x.proveedor)+')</span><span><b>'+x.unidades+' u.</b> · '+pesos(x.costo*x.unidades)+' el bulto</span></div>'}).join('')})()+
+      // v99: precio POR UNIDAD en cada lista (uno por proveedor, sin repetir); el bulto queda como dato.
+      (function(){var vistos={},bs=(p.bultos||[]).filter(function(x){return x.costo>0&&x.proveedor}).slice().sort(function(a,b){return (b.actual?1:0)-(a.actual?1:0)||a.costo-b.costo})
+          .filter(function(x){var k=String(x.proveedor).toUpperCase();if(vistos[k])return false;vistos[k]=1;return true}).slice(0,5);
+        if(!bs.length)return '<div class="row"><span>En las listas</span><span class="note" style="margin:0">no figura en las listas cargadas</span></div>';
+        return bs.map(function(x){return '<div class="row"><span>'+esc(x.proveedor)+(x.actual?' <span class="rk">(el de hoy)</span>':'')+'</span><span><b>'+pesos2(x.costo)+'</b> c/u'+(x.unidades>1?' <span class="rk">· bulto '+x.unidades+' u.</span>':'')+'</span></div>'}).join('')})()+
       (p.mejorCosto?'<div class="eval bien">Más barato en '+esc(p.mejorDonde)+': '+pesos(p.mejorCosto)+' ('+pct(1-p.mejorCosto/p.costo,0)+' menos). Con ese costo el margen sería '+pct(p.precio?(p.precio-p.mejorCosto)/p.precio:null)+'.</div>':'<div class="note">No hay un costo más barato en otra lista vigente.</div>')+
       (f.recomendacion?'<div class="note"><b>'+esc(f.recomendacion)+'</b></div>':'')+
       '<div class="btns"><button class="btn" id="bsim">Simular una compra de este producto</button></div>'+
