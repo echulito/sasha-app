@@ -88,3 +88,6 @@ td:last-child,th:last-child{text-align:right}
 .pie{font-size:11px;text-align:center;margin-top:16px}
 [hidden]{display:none!important}
 @media(min-width:760px){.cards{grid-template-columns:repeat(4,1fr)}.split{grid-template-columns:1fr 1fr}.formgrid{grid-template-columns:repeat(3,1fr)}}
+
+/* v100: Importar PDF arriba de Día / Caja / Cajera (modelo A) */
+.imp-dia{display:block;width:100%;box-sizing:border-box;text-align:center;margin:0 0 8px}
