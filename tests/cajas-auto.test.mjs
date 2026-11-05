@@ -43,7 +43,7 @@ test('si en el horario del turno entró lo del informe PDF: se contesta solo y q
     assert.equal(loadErrors(normalizeState(ultimo), {}).length, 1, 'cuenta como error de carga en el resumen del mes');
     assert.match(nota, /^Error de carga de la cajera: Mercado Pago acreditó/);
     assert.match(nota, /2 cobros de 15:40 a 19:30, turno de 15:39 a 19:34/);
-    assert.match(nota, /La cajera declaró \$\s?234\.674,00/);
+    assert.match(nota, /La cajera declaró \$\s?234\.674,00 \(en el sistema estaba bien\)/);
     assert.deepEqual(errores, []);
   } finally { await cerrar(); }
 });
@@ -55,6 +55,19 @@ test('si lo que entró no coincide con nada, no contesta solo: muestra el botón
     assert.equal(guardados(echu).filter(s => (s.state.guidedAnswers || []).length).length, 0);
     assert.equal(await page.locator('[data-real]').count(), 1);
     assert.match(await page.locator('[data-real]').first().textContent(), /Entró de verdad: \$\s?100\.000,00 \(1 cobros\)/);
+    assert.deepEqual(errores, []);
+  } finally { await cerrar(); }
+});
+test('si entró lo que declaró la cajera (el sistema estaba mal): también es error de carga, y dice cuánto cargó en el sistema', async () => {
+  const cobros = [{hora: '16:00:00', importe: 234674, canal: 'QR', comision: 0}];
+  const {page, echu, errores, cerrar} = await abrirCajas({cantidad: 1, total: 234674, comisiones: 0, porCanal: {QR: {cantidad: 1, total: 234674}}, cobros});
+  try {
+    await page.waitForFunction(() => document.querySelector('#externos') && !document.querySelector('#externos').hidden, null, {timeout: 15000});
+    await page.waitForTimeout(800);
+    const g = guardados(echu), ultimo = g[g.length - 1].state, nota = (ultimo.guidedAnswers || []).map(a => a.note).join(' | ');
+    assert.match(nota, /^Error de carga de la cajera: Mercado Pago acreditó \$\s?234\.674,00 \(1 cobros de 16:00 a 16:00/);
+    assert.match(nota, /Coincide con lo que declaró la cajera; en el sistema cargó \$\s?239\.393,04\./);
+    assert.equal(loadErrors(normalizeState(ultimo), {}).length, 1);
     assert.deepEqual(errores, []);
   } finally { await cerrar(); }
 });

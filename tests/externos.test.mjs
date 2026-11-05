@@ -33,9 +33,9 @@ test('cobros del turno: solo los del horario (apertura a cierre, minuto incluido
   assert.equal(cobrosEnTurno(COBROS, '15:00', '14:00'), null);
   assert.deepEqual(cobrosEnTurno([], '09:00', '10:00'), {total: 0, cantidad: 0, desde: '', hasta: ''});
 });
-test('respuesta automática: si entró lo del PDF, la cajera cargó mal; si entró lo declarado, estaba bien; si no coincide nada, pregunta', () => {
+test('respuesta automática: coincida con el PDF o con lo declarado, es error de carga de la cajera (las dos las carga ella); si no coincide nada, pregunta', () => {
   assert.deepEqual(respuestaAutomatica(11652300, 13166301, 13166301), {monto: 13166301, errorCajera: true, coincide: 'pdf'});
-  assert.deepEqual(respuestaAutomatica(11652300, 13166301, 11652350), {monto: 11652300, errorCajera: false, coincide: 'cajera'});
+  assert.deepEqual(respuestaAutomatica(11652300, 13166301, 11652350), {monto: 11652300, errorCajera: true, coincide: 'cajera'});
   assert.equal(respuestaAutomatica(11652300, 13166301, 12000000), null);
   assert.equal(respuestaAutomatica(11652300, 13166301, NaN), null);
 });

@@ -38,11 +38,12 @@ export function cobrosEnTurno(cobros, apertura, cierre, canales) {
   const horas = dentro.map(x => String(x.hora).slice(0, 5)).sort();
   return {total, cantidad: dentro.length, desde: horas[0] || '', hasta: horas[horas.length - 1] || ''};
 }
-/** Todo en centavos. Si lo que entró coincide con el informe PDF o con la cajera (±$1), esa es la respuesta. Si no, null (la contesta el encargado). */
+/** Todo en centavos. Si lo que entró coincide con el informe PDF o con la cajera (±$1), esa es la respuesta. Si no, null (la contesta el encargado).
+ *  Las dos cosas las carga la cajera (la declaración y el sistema del que sale el PDF): si no coinciden, siempre es error de carga de ella. */
 export function respuestaAutomatica(declarado, pdf, real) {
   if (!Number.isFinite(real)) return null;
   const cerca = (a, b) => Math.abs(a - b) <= 100;
-  if (cerca(real, declarado)) return {monto: declarado, errorCajera: false, coincide: 'cajera'};
+  if (cerca(real, declarado)) return {monto: declarado, errorCajera: true, coincide: 'cajera'};
   if (cerca(real, pdf)) return {monto: pdf, errorCajera: true, coincide: 'pdf'};
   return null;
 }

@@ -145,7 +145,7 @@ function autoResponderPagos(d,x){if(AUTO_EN_CURSO)return false;const qs=guidedQu
   if(!src)continue;const r=cobrosEnTurno(src.cobros,t.openTime,t.closeTime,src.canales);if(!r)continue;REAL_TURNO[q.key]=r;
   const a=respuestaAutomatica(q.entered,q.pdf,r.total);if(!a)continue;
   const det=src.nombre+' acreditó '+money(r.total)+' ('+r.cantidad+' cobros'+(r.cantidad?' de '+r.desde+' a '+r.hasta:'')+', turno de '+t.openTime+' a '+t.closeTime+').';
-  const nota=a.errorCajera?LOAD_ERROR+': '+det+' La cajera declaró '+money(q.entered)+'.':'Verificado automáticamente: '+det+' Coincide con lo declarado por la cajera; el informe PDF decía '+money(q.pdf)+'.';
+  const nota=LOAD_ERROR+': '+det+(a.coincide==='pdf'?' La cajera declaró '+money(q.entered)+' (en el sistema estaba bien).':' Coincide con lo que declaró la cajera; en el sistema cargó '+money(q.pdf)+'.');
   try{s=answerGuidedQuestion(s,q.key,a.monto,nota);cambio=true;}catch(e){}
  }
  if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Respondido solo con lo que entró de verdad');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
