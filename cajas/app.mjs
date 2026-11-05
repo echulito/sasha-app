@@ -5,7 +5,7 @@ import {automaticTurnMatch,declaredPaymentMethods} from './payment-reconciliatio
 import {reconcileTeam,pendingTeamExpenses,teamDeclarationTotals,replaceTeamInbox,visibleTeamDeclarations} from './team-domain.mjs';
 import {declaredCashWithdrawals,dailyTicketAverage} from './summary-metrics.mjs';
 import {sheetProjection} from './sheet-projection.mjs';
-import {compararExternos} from './externos.mjs';
+import {compararExternos,cobrosEnTurno,respuestaAutomatica} from './externos.mjs';
 import {parseReport,cents,difference,summarize,ticketKey} from './parser.mjs';
 import {isClosedDay,LOAD_ERROR,normalizeState,reportKey,roster,assign,allTurns,dailyCloses,dayStatus,daySales,cashierMetrics,controlStatus,ticketTotalsConfirmed,ticketRows,paymentRows,transactionRows,productLines,rankProducts,receiptKey,couponSignature,couponStatus,closingBalance,closingAlerts,cashierBalances,turnKey,turnCollection,alertKey,operationalAlerts,openingChecks,cashCarryovers,withinTolerance,remainingCash,correctionKey,effectiveTurn,addClosingCorrection,productExcluded,storeExpenses} from './domain.mjs';
 // Sasha v94: transporte a ECHU (Apps Script) en lugar del servidor de Cloudflare. Las rutas ./api/... se atienden acá.
@@ -135,7 +135,23 @@ function externosHtml(d,x){const c=compararExternos(declaradoExterno(d),x);
  return `<h2>Lo que entró de verdad</h2>${filas.length?table(['','Declarado','Entró','Resultado'],filas):''}${c.comisiones.total?`<p><small>Comisiones del día: ${money(c.comisiones.total)} (Mercado Pago ${money(c.comisiones.mp)} · Cuenta DNI ${money(c.comisiones.cuentaDni)})</small></p>`:''}${c.notas.map(n=>`<p><small>${esc(n)}</small></p>`).join('')}`;}
 async function cargarExternos(d){const box=$('externos');if(!box||!d)return;let x=EXTERNOS[d];
  if(!x){try{x=await echu('pagos_externos',undefined,{fecha:d});EXTERNOS[d]=x;}catch(e){return;}}
- const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;}
+ const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoResponderPagos(d,x))pistasPagos();}
+// v111: "¿Cuánto recibió X por Mercado Pago / Cuenta DNI?" se contesta solo con lo que entró en el horario del turno.
+// Si coincide con el informe PDF, la cajera cargó mal (queda como error de carga, con lo que declaró); si coincide con lo declarado, estaba bien.
+const REAL_TURNO={};let AUTO_EN_CURSO=false;
+function autoResponderPagos(d,x){if(AUTO_EN_CURSO)return false;const qs=guidedQuestions(state,d).filter(q=>q.kind==='payment');if(!qs.length)return false;let s=state,cambio=false;
+ for(const q of qs){const t=allTurns(s,d).find(t=>turnKey(t)===turnKey(q));if(!t)continue;
+  const src=q.method==='mercadoPago'?(x.mp&&x.mp.cobros?{cobros:x.mp.cobros,canales:['QR','Point'],nombre:'Mercado Pago'}:null):(x.cuentaDni&&x.cuentaDni.cobros?{cobros:x.cuentaDni.cobros,canales:null,nombre:'Cuenta DNI (Redlink)'}:null);
+  if(!src)continue;const r=cobrosEnTurno(src.cobros,t.openTime,t.closeTime,src.canales);if(!r)continue;REAL_TURNO[q.key]=r;
+  const a=respuestaAutomatica(q.entered,q.pdf,r.total);if(!a)continue;
+  const det=src.nombre+' acreditó '+money(r.total)+' ('+r.cantidad+' cobros'+(r.cantidad?' de '+r.desde+' a '+r.hasta:'')+', turno de '+t.openTime+' a '+t.closeTime+').';
+  const nota=a.errorCajera?LOAD_ERROR+': '+det+' La cajera declaró '+money(q.entered)+'.':'Verificado automáticamente: '+det+' Coincide con lo declarado por la cajera; el informe PDF decía '+money(q.pdf)+'.';
+  try{s=answerGuidedQuestion(s,q.key,a.monto,nota);cambio=true;}catch(e){}
+ }
+ if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Respondido solo con lo que entró de verdad');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
+function pistasPagos(){document.querySelectorAll('[data-guided-key]').forEach(el=>{const r=REAL_TURNO[el.dataset.guidedKey],act=el.querySelector('.actions');if(!r||!act||el.querySelector('[data-real]'))return;
+ const b=document.createElement('button');b.type='button';b.className='button';b.dataset.real='1';b.textContent='Entró de verdad: '+money(r.total)+' ('+r.cantidad+' cobros)';
+ b.onclick=()=>{const inp=el.querySelector('[data-guided-amount]');if(inp){inp.value=(r.total/100).toFixed(2).replace('.',',');inp.focus();}const m=el.querySelector('[data-motivo]');if(m)m.value='error';};act.appendChild(b);});}
 function drawDay(){const day=$('date').value;const panel=$('daily');panel.innerHTML='';try{renderDayContent();panel.dataset.date=day;}catch(error){delete panel.dataset.date;panel.innerHTML='<p class="notice">No se pudo mostrar el día '+esc(fmt(day))+'. Volvé a seleccionar el día o recargá la app.</p>';msg('No se pudo actualizar el día: '+error.message);}}
 function renderDayContent(){const selected=$('date').value;if(isClosedDay(selected,state)&&!state.reports.some(r=>r.date===selected)&&!state.manual.some(r=>r.date===selected)){$('daily').innerHTML=statusPanel(selected);return;}const d=$('date').value,b=$('box').value,cajera=$('dayCashier').value,matches=r=>!cajera||(cajera==='unassigned'?!assign(state,r).id:assign(state,r).id===cajera),rs=sales().filter(r=>r.date===d&&(!b||r.box===b)&&matches(r)),cs=(cajera?allTurns(state,d).filter(matches):closes()).filter(r=>r.date===d&&(!b||r.box===b)),s=summarize(rs),fallback=cs.reduce((a,r)=>a+r.sales,0),has=rs.length>0,ticks=ticketRows(state,d).filter(r=>(!b||r.box===b)&&matches(r)),transactions=rs.length?rs:ticks,tkCount=transactions.length?(ticks.filter(t=>t.documentType!=='NC').length||summarize(transactions).tickets):0,dayTotal=rs.length?s.total:ticks.length&&ticketTotalsConfirmed(state,d)?ticks.reduce((a,r)=>a+r.amount,0):fallback,month=(d||new Date().toISOString()).slice(0,7),dates=[...new Set(state.reports.map(r=>r.date).filter(x=>x.startsWith(month)))],monthTotal=dates.reduce((a,date)=>a+daySales(state,date),0);
  $('monthHome').innerHTML=`<p class="mes-linea">${esc(mesTexto(month))}: <b>${money(monthTotal)}</b> facturado · ${dates.filter(x=>state.completedDays.includes(x)&&controlStatus(state,x).complete).length} de ${dates.length} días confirmados</p>`;

@@ -26,3 +26,23 @@ export function compararExternos(dec, x) {
   if (!dec) notas.push('Todavía no hay declaraciones de este día para comparar.');
   return {filas, notas, comisiones: {mp: comMp, cuentaDni: comDni, total: r2(comMp + comDni)}};
 }
+
+// v111: respuesta automática de "¿Cuánto recibió X por Mercado Pago / Cuenta DNI?" con lo que entró de verdad en el horario del turno.
+const minuto = h => { const m = /^(\d{1,2}):(\d{2})/.exec(String(h || '')); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+/** Cobros (hora 'HH:MM:SS', importe en pesos) entre la apertura y el cierre del turno ('HH:MM'). canales: solo esos (si vienen). */
+export function cobrosEnTurno(cobros, apertura, cierre, canales) {
+  const a = minuto(apertura), c = minuto(cierre);
+  if (a === null || c === null || c < a) return null;
+  const dentro = (cobros || []).filter(x => { const m = minuto(x.hora); return m !== null && m >= a && m <= c && (!canales || canales.includes(x.canal)); });
+  const total = Math.round(dentro.reduce((n, x) => n + Math.round((Number(x.importe) || 0) * 100), 0));
+  const horas = dentro.map(x => String(x.hora).slice(0, 5)).sort();
+  return {total, cantidad: dentro.length, desde: horas[0] || '', hasta: horas[horas.length - 1] || ''};
+}
+/** Todo en centavos. Si lo que entró coincide con el informe PDF o con la cajera (±$1), esa es la respuesta. Si no, null (la contesta el encargado). */
+export function respuestaAutomatica(declarado, pdf, real) {
+  if (!Number.isFinite(real)) return null;
+  const cerca = (a, b) => Math.abs(a - b) <= 100;
+  if (cerca(real, declarado)) return {monto: declarado, errorCajera: false, coincide: 'cajera'};
+  if (cerca(real, pdf)) return {monto: pdf, errorCajera: true, coincide: 'pdf'};
+  return null;
+}

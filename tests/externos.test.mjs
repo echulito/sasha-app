@@ -22,3 +22,20 @@ test('sin clave de Mercado Pago o sin declaraciones: avisa y no compara', () => 
   assert.equal(s.filas.length, 0); assert.match(s.notas[0], /no hay declaraciones/); assert.equal(s.comisiones.total, 4797.13);
   assert.match(compararExternos(null, {mp: {error: 'la clave de Mercado Pago no sirve'}, cuentaDni: {error: 'x'}}).notas.join(' '), /no sirve.*Cuenta DNI: x/);
 });
+
+import {cobrosEnTurno, respuestaAutomatica} from '../cajas/externos.mjs';
+const COBROS = [{hora: '08:59:59', importe: 1000, canal: 'QR'}, {hora: '09:00:10', importe: 15000.5, canal: 'QR'}, {hora: '12:30:00', importe: 20000, canal: 'Point'},
+  {hora: '13:00:00', importe: 5000, canal: 'Online / otros'}, {hora: '14:15:59', importe: 100, canal: 'QR'}, {hora: '14:16:00', importe: 7000, canal: 'QR'}];
+test('cobros del turno: solo los del horario (apertura a cierre, minuto incluido) y de los canales pedidos', () => {
+  assert.deepEqual(cobrosEnTurno(COBROS, '09:00', '14:15', ['QR', 'Point']), {total: 3510050, cantidad: 3, desde: '09:00', hasta: '14:15'});
+  assert.equal(cobrosEnTurno(COBROS, '09:00', '14:15').cantidad, 4, 'sin canales: todos');
+  assert.equal(cobrosEnTurno(COBROS, '', '14:15'), null);
+  assert.equal(cobrosEnTurno(COBROS, '15:00', '14:00'), null);
+  assert.deepEqual(cobrosEnTurno([], '09:00', '10:00'), {total: 0, cantidad: 0, desde: '', hasta: ''});
+});
+test('respuesta automática: si entró lo del PDF, la cajera cargó mal; si entró lo declarado, estaba bien; si no coincide nada, pregunta', () => {
+  assert.deepEqual(respuestaAutomatica(11652300, 13166301, 13166301), {monto: 13166301, errorCajera: true, coincide: 'pdf'});
+  assert.deepEqual(respuestaAutomatica(11652300, 13166301, 11652350), {monto: 11652300, errorCajera: false, coincide: 'cajera'});
+  assert.equal(respuestaAutomatica(11652300, 13166301, 12000000), null);
+  assert.equal(respuestaAutomatica(11652300, 13166301, NaN), null);
+});
