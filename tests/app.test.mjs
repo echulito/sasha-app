@@ -30,7 +30,7 @@ async function abrir({modo = 'normal', logueado = true, ruta = '', consulta = fa
 test('entra con el PIN por POST: ni el PIN ni la sesión viajan en la dirección', async () => {
   const {ctx, page, echu, errores} = await abrir({logueado: false});
   await page.fill('#lpin', PIN); await page.click('#lbtn');
-  await page.getByText('Este mes').first().waitFor();
+  await page.getByText('Este mes').first().waitFor({state: 'attached'});
   const login = echu.pedidos.find(p => p.metodo === 'POST' && /"accion":"login"/.test(p.cuerpo));
   assert.ok(login, 'el login tiene que ir por POST');
   for (const p of echu.pedidos) assert.doesNotMatch(p.url, /[?&](pin|token)=/, 'dato secreto en la dirección: ' + p.url);
@@ -47,7 +47,7 @@ test('PIN equivocado: avisa y no entra', async () => {
 
 test('lo que se manda lleva su huella y coincide con lo que llegó', async () => {
   const {ctx, page, echu} = await abrir();
-  await page.getByText('Este mes').first().waitFor();
+  await page.getByText('Este mes').first().waitFor({state: 'attached'});
   const posts = echu.pedidos.filter(p => p.metodo === 'POST');
   assert.ok(posts.length > 0);
   for (const p of posts) assert.equal(new URL(p.url).searchParams.get('h'), huella(p.cuerpo));
@@ -56,7 +56,7 @@ test('lo que se manda lleva su huella y coincide con lo que llegó', async () =>
 
 test('resumen: muestra los datos y avisa "Llegó completo" arriba (3 segundos)', async () => {
   const {ctx, page, errores} = await abrir();
-  await page.getByText('Este mes · noviembre').waitFor();
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
   await assert.doesNotReject(page.locator('#avisoSub', {hasText: 'Llegó completo'}).waitFor({state: 'visible', timeout: 3000}));
   await page.waitForTimeout(3300);
   assert.equal(await page.locator('#avisoSub').isVisible(), false);
@@ -67,14 +67,14 @@ test('resumen: muestra los datos y avisa "Llegó completo" arriba (3 segundos)',
 
 test('si la respuesta no coincide con su huella, la app NO usa esos datos', async () => {
   const {ctx, page} = await abrir({modo: 'corrupto'});
-  await page.locator('#resumen', {hasText: 'llegó incompleta'}).waitFor({timeout: 15000});
+  await page.locator('#resumen', {hasText: 'llegó incompleta'}).waitFor({state: 'attached', timeout: 15000});
   assert.equal(await page.getByText('Este mes · noviembre').count(), 0);
   await ctx.close();
 });
 
 test('con ECHU sin actualizar (versión anterior) la app sigue andando', async () => {
   const {ctx, page, errores} = await abrir({modo: 'viejo'});
-  await page.getByText('Este mes · noviembre').waitFor();
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
   assert.deepEqual(errores, []);
   await ctx.close();
 });
@@ -82,15 +82,15 @@ test('con ECHU sin actualizar (versión anterior) la app sigue andando', async (
 test('con ECHU sin actualizar también se puede entrar con el PIN', async () => {
   const {ctx, page, errores} = await abrir({modo: 'viejo', logueado: false});
   await page.fill('#lpin', PIN); await page.click('#lbtn');
-  await page.getByText('Este mes · noviembre').waitFor();
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
   assert.deepEqual(errores, []);
   await ctx.close();
 });
 
 test('guardar: el botón se pone verde "✓ … en ECHU · Llegó completo" y vuelve solo (modelo C)', async () => {
   const {ctx, page, errores} = await abrir();
-  await page.getByText('Este mes · noviembre').waitFor();
-  await page.click('nav button[data-tab="ajustes"]');
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="ajustes"]');
   const b = page.locator('#bact'); const antes = await b.innerText();
   await b.click();
   await page.locator('#bact.okEchu', {hasText: '✓ Pedido en ECHU'}).waitFor({timeout: 5000});
@@ -103,8 +103,8 @@ test('guardar: el botón se pone verde "✓ … en ECHU · Llegó completo" y vu
 });
 
 async function irAGastos(page) {
-  await page.getByText('Este mes · noviembre').waitFor();
-  await page.click('nav button[data-tab="admin"]'); await page.click('#admsec button[data-s="conta"]'); await page.click('#csub button[data-s="gas"]');
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="gas"]');
   await page.locator('#c-gas .cmp').first().waitFor();
 }
 test('gastos › inflación: muestra qué pasó en el mes, los meses anteriores y se guarda la inflación', async () => {
@@ -140,19 +140,25 @@ test('gastos › aumento de cada gasto: con el % se calcula el monto y con el mo
 
 test('recorre todas las pestañas sin errores ni bloqueos de seguridad', async () => {
   const {ctx, page, errores} = await abrir();
-  await page.getByText('Este mes · noviembre').waitFor();
-  for (const t of ['productos', 'simulador', 'admin', 'ajustes', 'resumen']) { await page.click('nav button[data-tab="' + t + '"]'); await page.waitForTimeout(400); }
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+  for (const b of ['resumen', 'caja', 'productos', 'mas', 'inicio']) { await page.click('#bnav button[data-b="' + b + '"]'); await page.waitForTimeout(400); }
+  await page.click('#bnav button[data-b="productos"]'); await page.click('#productos .bcomp button[data-t="simulador"]'); await page.waitForTimeout(400);
+  await page.click('#bnav button[data-b="caja"]'); await page.click('#cajsec button[data-s="plata"]'); await page.waitForTimeout(300);
+  for (const d of ['conta', 'limpieza', 'ajustes']) { await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="' + d + '"]'); await page.waitForTimeout(400); }
   assert.deepEqual(errores, []);
   await ctx.close();
 });
 
 test('versión de consulta: es la misma app (Resumen, Productos y Simular) sin Administración ni Ajustes', async () => {
   const {ctx, page, echu, errores} = await abrir({consulta: true, ruta: '?consulta'});
-  await page.getByText('Este mes · noviembre').waitFor();
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
   assert.equal(await page.evaluate(() => document.body.classList.contains('consulta')), true);
-  const visibles = await page.$$eval('nav button', bs => bs.filter(b => b.offsetParent).map(b => b.dataset.tab));
-  assert.deepEqual(visibles, ['resumen', 'productos', 'simulador']);
-  for (const t of visibles) { await page.click('nav button[data-tab="' + t + '"]'); await page.waitForTimeout(300); }
+  const visibles = await page.$$eval('#bnav button', bs => bs.filter(b => b.offsetParent).map(b => b.dataset.b));
+  assert.deepEqual(visibles, ['resumen', 'productos']);
+  for (const t of visibles) { await page.click('#bnav button[data-b="' + t + '"]'); await page.waitForTimeout(300); }
+  await page.click('#productos .bcomp button[data-t="simulador"]'); await page.waitForTimeout(300);
+  // Con el PIN de consulta no se pide el Inicio (muestra plata y cajas).
+  assert.ok(!echu.pedidos.some(p => /"accion":"inicio"|accion=inicio/.test((p.cuerpo || '') + p.url)));
   assert.ok(echu.pedidos.every(p => p.metodo !== 'POST' || /[?&]h=/.test(p.url)));
   assert.deepEqual(errores, []);
   await ctx.close();
@@ -162,6 +168,35 @@ test('link de cajeras: abre sin errores', async () => {
   const {ctx, page, errores} = await abrir({ruta: 'cajeras/?api=' + encodeURIComponent(URL_ECHU)});
   await page.locator('#username').waitFor();
   await page.waitForTimeout(500);
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('Inicio (modelo A): números, avisos y cada botón lleva al lugar para resolver', async () => {
+  const {ctx, page, errores} = await abrir();
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+  await page.locator('#inicio .iav').first().waitFor();
+  const t = await page.locator('#inicio').innerText();
+  assert.match(t, /Ventas del mes\s*\$ 1\.650\.000/);
+  assert.match(t, /Plata libre\s*\$ 412\.000\s*saldos del 01\/11\/2026/);
+  assert.match(t, /Pagos 7 días\s*\$ 238\.500\s*2 vencimientos/);
+  assert.match(t, /PARA RESOLVER · 4/i);
+  assert.deepEqual(await page.$$eval('#inicio .iav b', bs => bs.map(b => b.textContent)), ['Caja 0003 · Cajera Uno · 01/11', 'Vence Alquiler · 04/11', '6 productos se agotan', '12 cambios de costo']);
+  // Resolver -> Caja y plata › Cajas (con el módulo de cajeras)
+  await page.click('#inicio .iav button[data-ir="caja"]');
+  assert.equal(await page.locator('#caja').isVisible(), true);
+  assert.equal(await page.locator('#caja-cajas #a-cajeras').isVisible(), true);
+  assert.equal(await page.locator('#bnav button.on').getAttribute('data-b'), 'caja');
+  // Ver pagos -> Plata y pagos
+  await page.click('#bnav button[data-b="inicio"]'); await page.click('#inicio .iav button[data-ir="pagos"]');
+  assert.match(await page.locator('#caja-plata').innerText(), /Libre para mercadería\s*\$ 412\.000[\s\S]*Alquiler · 04\/11\s*\$ 180\.000/);
+  // Armar pedido -> Compras › Simular › Armar pedido
+  await page.click('#bnav button[data-b="inicio"]'); await page.click('#inicio .iav button[data-ir="pedido"]');
+  assert.equal(await page.locator('#simulador').isVisible(), true);
+  assert.equal(await page.locator('#simmodo button.on').getAttribute('data-m'), 'ped');
+  assert.equal(await page.locator('#bnav button.on').getAttribute('data-b'), 'productos');
+  // Ventas -> el Resumen de siempre
+  await page.click('#bnav button[data-b="resumen"]'); await page.getByText('Este mes · noviembre').waitFor();
   assert.deepEqual(errores, []);
   await ctx.close();
 });
@@ -182,11 +217,15 @@ async function diferencia(page, a, b) {
 test('pantallas iguales a las aprobadas (regresión visual)', {skip: !CON_CAPTURAS && 'en CI sin CAPTURAS=1'}, async () => {
   fs.mkdirSync(CAPT, {recursive: true});
   const {ctx, page} = await abrir();
-  await page.getByText('Este mes · noviembre').waitFor();
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
   await page.waitForTimeout(3300); // que se vaya el aviso
   const cambios = [];
-  for (const t of ['resumen', 'productos', 'simulador', 'admin', 'ajustes']) {
-    await page.click('nav button[data-tab="' + t + '"]'); await page.waitForTimeout(600);
+  const IR = {inicio: ['#bnav button[data-b="inicio"]'], resumen: ['#bnav button[data-b="resumen"]'], cajas: ['#bnav button[data-b="caja"]', '#cajsec button[data-s="cajas"]'], plata: ['#bnav button[data-b="caja"]', '#cajsec button[data-s="plata"]'],
+    productos: ['#bnav button[data-b="productos"]', '#productos .bcomp button[data-t="productos"]'], simulador: ['#bnav button[data-b="productos"]', '#productos .bcomp button[data-t="simulador"]'],
+    mas: ['#bnav button[data-b="mas"]'], admin: ['#bnav button[data-b="mas"]', '#mas [data-ir="limpieza"]'], ajustes: ['#bnav button[data-b="mas"]', '#mas [data-ir="ajustes"]']};
+  for (const t of Object.keys(IR)) {
+    for (const sel of IR[t]) { if (await page.locator(sel).isVisible()) await page.click(sel); }
+    await page.waitForTimeout(600);
     await page.locator('#avisoSub').waitFor({state: 'hidden', timeout: 6000}); // el aviso lleva la hora: se espera a que se vaya
     const png = await page.screenshot({fullPage: true, mask: [page.locator('#verapp')], animations: 'disabled'});
     const ruta = CAPT + t + '.png';
@@ -195,7 +234,7 @@ test('pantallas iguales a las aprobadas (regresión visual)', {skip: !CON_CAPTUR
     if (d > 0.002) { fs.writeFileSync(CAPT + t + '.NUEVA.png', png); cambios.push(t + ' (' + (d * 100).toFixed(2) + '% distinto)'); }
   }
   // Administración › Contabilidad › Gastos (con la inflación)
-  await page.click('nav button[data-tab="admin"]'); await page.click('#admsec button[data-s="conta"]'); await page.click('#csub button[data-s="gas"]');
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="gas"]');
   await page.locator('#c-gas .cmp').first().waitFor(); await page.locator('#avisoSub').waitFor({state: 'hidden', timeout: 6000});
   {
     const png = await page.screenshot({fullPage: true, mask: [page.locator('#verapp')], animations: 'disabled'}), ruta = CAPT + 'gastos.png';

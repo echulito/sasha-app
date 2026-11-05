@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=106;
+var APP_V=107;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -138,7 +138,23 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
 .cmp{background:#fff;border:1px solid var(--linea);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer}
 .cmp .t{display:flex;justify-content:space-between;gap:8px}.cmp .t b{font-size:14px}.cmp .s{font-size:12px;color:var(--gris);margin-top:2px}
 .rowb{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px dashed var(--linea);font-size:14px}.rowb span:first-child{color:var(--gris)}
-.fab{position:sticky;bottom:10px;margin-top:10px;z-index:3}
+.fab{position:sticky;bottom:calc(76px + env(safe-area-inset-bottom));margin-top:10px;z-index:3}
+/* v107: navegación de 5 botones abajo (modelo A) + Inicio */
+header nav{display:none}
+main{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+#bnav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#fff;border-top:1px solid var(--linea);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+#bnav button{flex:1;background:none;border:0;color:var(--gris);font-size:11px;padding:9px 2px 8px;cursor:pointer;font-family:inherit}
+#bnav button b{display:block;font-size:19px;font-weight:400;line-height:22px;margin-bottom:1px}
+#bnav button.on{color:var(--azul2);font-weight:700}
+body.consulta #bnav .solo-completo{display:none}
+.ikp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px}.ikp .card{padding:12px;cursor:pointer}.ikp .lbl{font-size:12px;color:var(--gris)}.ikp .big{font-size:22px;margin-top:2px}.ikp .chico{font-size:11px;color:var(--gris);margin-top:2px}
+.itit{font-size:13px;color:var(--gris);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px;font-weight:600}
+.iav{display:flex;gap:10px;margin-bottom:8px}.iav .ic{width:30px;height:30px;border-radius:50%;flex:0 0 30px;display:flex;align-items:center;justify-content:center;font-weight:700}
+.iav .ic.rojo{background:var(--rojoF);color:var(--rojo)}.iav .ic.amarillo{background:var(--amarF);color:var(--amar)}.iav .ic.azul{background:var(--celeste);color:var(--azul2)}
+.iav b{font-size:14px}.iav p{margin:2px 0 8px;font-size:13px;color:var(--gris)}
+.iav .btn{padding:7px 14px;font-size:13px}.iav .btn.sec{background:var(--celeste);color:var(--azul2);border:0}
+.idat{font-size:12px;color:var(--gris);margin:0 0 10px}.idat i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:0}
+.mas .card{display:flex;justify-content:space-between;align-items:center;cursor:pointer;margin-bottom:8px}.mas .card small{display:block;color:var(--gris);font-size:12px;margin-top:2px}
 .seg4c button{font-size:12px;padding:8px 2px}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 8px}
 /* v76: Administración › Limpieza (modelo C, con los colores de la app) */
@@ -176,7 +192,10 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
   <button class="recargar" onclick="actualizarApp()">↻ Actualizar</button><h1>Sasha · Mi negocio</h1>
   <div class="sub"><span id="avisoSub" class="okEchuSub" style="display:none"></span><span id="sub">Cargando…</span><button class="salir" onclick="salir()">salir</button><span style="opacity:.55;font-size:11px;margin-left:6px" id="verapp"></span></div>
   <nav>
-    <button class="on" data-tab="resumen">Resumen</button>
+    <button class="on solo-completo" data-tab="inicio">Inicio</button>
+    <button data-tab="resumen">Resumen</button>
+    <button data-tab="caja" class="solo-completo">Caja</button>
+    <button data-tab="mas" class="solo-completo">Más</button>
     <button data-tab="productos">Productos</button>
     <button data-tab="simulador">Simular</button>
     <button data-tab="admin" class="solo-completo">Administración</button>
@@ -186,9 +205,23 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
 <div id="estado" class="estado oculto"></div>
 <div id="fichaov" class="oculto"><div class="barra"><button onclick="cerrarFicha()">← Volver</button><b style="font-size:16px">Ficha del producto</b></div><div class="cuerpo"><div id="detalle"></div></div></div>
 <main>
-  <section id="resumen"><div class="cargando">Cargando el tablero…</div></section>
+  <!-- v107: Inicio (modelo A): lo importante y lo que hay que resolver, con botón al lugar. -->
+  <section id="inicio" class="solo-completo"><div id="inicio-c"><div class="cargando">Cargando el inicio…</div></div></section>
+  <section id="resumen" class="oculto"><div class="cargando">Cargando el tablero…</div></section>
+  <section id="caja" class="oculto">
+    <div class="seg" style="margin-top:0" id="cajsec"><button class="on" data-s="cajas">Cajas</button><button data-s="plata">Plata y pagos</button></div>
+    <div id="caja-cajas"></div>
+    <div id="caja-plata" class="oculto"><div class="cargando">Cargando…</div></div>
+  </section>
+  <section id="mas" class="oculto mas">
+    <div class="card" data-ir="conta"><div><b>Contabilidad</b><small>Facturas e IVA, sueldos y gastos</small></div><b style="color:var(--azul2)">›</b></div>
+    <div class="card" data-ir="limpieza"><div><b>Limpieza</b><small>Recibos de limpieza</small></div><b style="color:var(--azul2)">›</b></div>
+    <div class="card" data-ir="ajustes"><div><b>Ajustes</b><small>Actualizar ECHU, PIN y la app en el celular</small></div><b style="color:var(--azul2)">›</b></div>
+    <div class="note">Próximamente acá: Equipo (tareas delegadas), Contador (Excel del mes) e Informes del mes.</div>
+  </section>
 
   <section id="productos" class="oculto">
+    <div class="seg bcomp" style="margin-top:0"><button class="on" data-t="productos">Productos</button><button data-t="simulador">Simular y pedidos</button></div>
     <div class="card">
       <h2>Buscar producto</h2>
       <input id="q" placeholder="Nombre, código, código de barras o proveedor" autocomplete="off">
@@ -216,6 +249,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
   </section>
 
   <section id="simulador" class="oculto">
+    <div class="seg bcomp" style="margin-top:0"><button data-t="productos">Productos</button><button class="on" data-t="simulador">Simular y pedidos</button></div>
     <div class="seg" id="simmodo" style="margin-top:0"><button data-m="uno" class="on">Un producto</button><button data-m="ped">Armar pedido</button></div>
     <div id="armped">
       <div class="card">
@@ -357,7 +391,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
   </section>
   <!-- v76: Administración › Limpieza (la app Sasha Limpieza, ahora dentro de Sasha). Solo con tu PIN. -->
   <section id="admin" class="oculto">
-    <div class="seg" style="margin-top:0" id="admsec"><button class="on" data-s="limpieza">Limpieza</button><button data-s="conta">Contabilidad</button><button data-s="cajeras">Cajeras</button></div>
+    <div class="seg" style="margin-top:0" id="admsec"><button class="on" data-s="limpieza">Limpieza</button><button data-s="conta">Contabilidad</button><button data-s="cajeras" style="display:none">Cajeras</button></div>
     <div id="a-limpieza">
     <div class="seg" style="margin-top:0" id="lsub"><button class="on" data-s="nuevo">Nuevo recibo</button><button data-s="registro">Registro</button><button data-s="config">Configuración</button></div>
     <div id="l-nuevo">
@@ -422,6 +456,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
     </div>
   </section>
 </main>
+<div id="bnav"><button data-b="inicio" class="on solo-completo"><b>⌂</b>Inicio</button><button data-b="resumen"><b>↗</b>Ventas</button><button data-b="caja" class="solo-completo"><b>$</b>Caja y plata</button><button data-b="productos"><b>▦</b>Compras</button><button data-b="mas" class="solo-completo"><b>≡</b>Más</button></div>
 </div>
 
 <script>
@@ -435,7 +470,7 @@ function esConsulta(){return CFG.modo==='consulta'||/[?&]consulta\b/.test(locati
 // v61: ícono propio de la versión de consulta (flor naranja sobre blanco). Se elige al agregarla a la pantalla de inicio.
 function aplicarIconos(){var c=esConsulta()||/[?&]consulta\b/.test(location.search),p=c?'consulta-':'';var s=function(id,h){var e=$(id);if(e&&e.getAttribute('href')!==h)e.setAttribute('href',h)};s('ltouch',p+'apple-touch-icon.png');s('lfav',p+'icon-192.png');s('lmanif',c?'manifest-consulta.webmanifest':'manifest.webmanifest');var t=$('mtema');if(t)t.setAttribute('content',c?'#F49820':'#1f3a5f')}
 try{document.addEventListener('DOMContentLoaded',function(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta())})}catch(e){}
-function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&(!$('ajustes').classList.contains('oculto')||!$('admin').classList.contains('oculto')))irA('resumen')}
+function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&['ajustes','admin','inicio','caja','mas'].some(function(t){return !$(t).classList.contains('oculto')}))irA('resumen')}
 function jsonp(url){
   return new Promise(function(ok,mal){
     var nombre='echu_cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
@@ -565,9 +600,19 @@ function err(e){return '<div class="card"><b class="neg">Error:</b> '+esc(e&&e.m
 
 document.querySelectorAll('nav button').forEach(function(b){b.onclick=function(){
   document.querySelectorAll('nav button').forEach(function(x){x.classList.toggle('on',x===b)});
-  ['resumen','productos','simulador','admin','ajustes'].forEach(function(t){$(t).classList.toggle('oculto',t!==b.dataset.tab)});
+  ['inicio','resumen','caja','mas','productos','simulador','admin','ajustes'].forEach(function(t){$(t).classList.toggle('oculto',t!==b.dataset.tab)});
+  marcarBnav(b.dataset.tab);
   window.scrollTo(0,0);
 }});
+// v107: botones de abajo. Ventas = Resumen; Compras = Productos y Simular; Más = Contabilidad, Limpieza y Ajustes.
+var BNAV_DE={inicio:'inicio',resumen:'resumen',caja:'caja',productos:'productos',simulador:'productos',mas:'mas',admin:'mas',ajustes:'mas'};
+function marcarBnav(tab){var k=BNAV_DE[tab]||tab;document.querySelectorAll('#bnav button').forEach(function(x){x.classList.toggle('on',x.dataset.b===k)})}
+document.querySelectorAll('#bnav button').forEach(function(b){b.onclick=function(){
+  var t=b.dataset.b;
+  if(t==='productos'){var u='productos';try{u=localStorage.getItem('sasha_compras')||'productos'}catch(e){}t=u==='simulador'?'simulador':'productos'}
+  irA(t);
+}});
+document.querySelectorAll('.bcomp button').forEach(function(b){b.onclick=function(){try{localStorage.setItem('sasha_compras',b.dataset.t)}catch(e){}irA(b.dataset.t)}});
 function irA(tab){document.querySelector('nav button[data-tab="'+tab+'"]').click()}
 
 
@@ -599,10 +644,101 @@ function formatearMientrasEscribe(e){
   el.addEventListener('compositionend',function(e){formatearMientrasEscribe({target:el});el.dispatchEvent(new Event('input'))});
   el.addEventListener('blur',function(){formatearMientrasEscribe({target:el})});
 });
+/* ---------------- v107: INICIO (modelo A) ---------------- */
+// Lo importante de un vistazo y lo que hay que resolver. Cada aviso dice qué pasó, el importe o producto, y lleva al lugar.
+var INI=null, INI_ERR='';
+function cargarInicio(){
+  if(esConsulta())return Promise.resolve();
+  return api('inicio').then(function(d){INI=d||{};INI_ERR='';pintarInicio();pintarPlata()})
+    .catch(function(e){INI_ERR=/Acci/i.test(e.message)?'Actualizá ECHU a la versión 6.11 (Nueva versión) para ver la plata y los avisos.':e.message;pintarInicio();pintarPlata()});
+}
+function iniDatosAlDia(){
+  var dt=(D&&D.datos)||{},c=String(dt.completa||''),m=c.match(/(\d{2})\/(\d{2})\/(\d{4})/),col='var(--verde)',txt;
+  if(dt.estado==='ERROR'){col='var(--rojo)';txt='La última actualización de ECHU dio error'}
+  else if(dt.estado==='EN PROCESO'){col='var(--amar)';txt='ECHU se está actualizando'}
+  else if(m){var f=new Date(Number(m[3]),Number(m[2])-1,Number(m[1])),dias=Math.floor((new Date().setHours(0,0,0,0)-f)/86400000);
+    if(dias>1)col='var(--amar)';txt=(dias>1?'Datos atrasados: ':'Datos al día: ')+c}
+  else{col='var(--amar)';txt='Todavía no hay una actualización completa'}
+  return '<div class="idat"><i style="background:'+col+'"></i>'+esc(txt)+'</div>';
+}
+function iniBoton(a){
+  var t={caja:['Resolver',''],pagos:['Ver pagos','sec'],pedido:['Armar pedido','sec'],tareas:['Ver tareas','sec']}[a.ir]||['Ver','sec'];
+  return '<button class="btn '+t[1]+'" data-ir="'+esc(a.ir)+'">'+t[0]+'</button>';
+}
+function pintarInicio(){
+  var el=$('inicio-c');if(!el)return;
+  var h=iniDatosAlDia(),m=D&&D.mes,ult=D&&D.dias&&D.dias[D.dias.length-1],pl=INI&&INI.plata,pg=INI&&INI.pagos;
+  h+='<div class="ikp">'+
+    '<div class="card" data-ir="ventas"><div class="lbl">'+(ult?'Último día · '+esc(ult.etiqueta):'Último día')+'</div><div class="big">'+(ult?pesos(ult.ventas):'…')+'</div></div>'+
+    '<div class="card" data-ir="ventas"><div class="lbl">Ventas del mes</div><div class="big">'+(m?pesos(m.fact):'…')+'</div></div>'+
+    '<div class="card" data-ir="pagos"><div class="lbl">Plata libre</div>'+(pl&&!pl.sinDatos?'<div class="big '+(pl.libre>=0?'pos':'neg')+'">'+pesos(pl.libre)+'</div><div class="chico">saldos del '+esc(pl.fechaSaldo)+'</div>':'<div class="big" style="font-size:16px;color:var(--gris)">'+(INI?'Sin datos':'…')+'</div>')+'</div>'+
+    '<div class="card" data-ir="pagos"><div class="lbl">Pagos 7 días</div><div class="big">'+(pg?pesos(pg.total):'…')+'</div>'+(pg&&pg.items.length?'<div class="chico">'+pg.items.length+' '+(pg.items.length===1?'vencimiento':'vencimientos')+'</div>':'')+'</div>'+
+  '</div>';
+  if(INI_ERR)h+='<div class="card"><b class="neg">No se pudieron traer los avisos.</b> <span class="note">'+esc(INI_ERR)+'</span></div>';
+  else if(!INI)h+='<div class="cargando">Buscando lo que hay que resolver…</div>';
+  else{
+    var av=INI.avisos||[];
+    h+='<div class="itit">Para resolver · '+av.length+'</div>';
+    if(!av.length)h+='<div class="card"><b class="pos">✓ Todo al día.</b> <span class="note">No hay diferencias de caja, vencimientos ni tareas pendientes.</span></div>';
+    av.forEach(function(a){
+      var ic={rojo:'!',amarillo:a.ir==='pagos'?'◷':'▦',azul:'✓'}[a.nivel]||'·';
+      h+='<div class="card iav"><div class="ic '+esc(a.nivel)+'">'+ic+'</div><div><b>'+esc(a.titulo)+'</b><p>'+esc(a.detalle)+'</p>'+iniBoton(a)+'</div></div>';
+    });
+    if((INI.errores||[]).length)h+='<div class="note">No se pudo leer: '+esc(INI.errores.join(' · '))+'</div>';
+  }
+  el.innerHTML=h;
+  el.querySelectorAll('[data-ir]').forEach(function(x){x.onclick=function(ev){ev.stopPropagation();iniIr(x.dataset.ir)}});
+}
+function iniIr(ir){
+  if(ir==='ventas')return irA('resumen');
+  if(ir==='caja'){cajSec('cajas');return irA('caja')}
+  if(ir==='pagos'){cajSec('plata');return irA('caja')}
+  if(ir==='pedido'){try{localStorage.setItem('sasha_compras','simulador')}catch(e){}irA('simulador');var b=document.querySelector('#simmodo button[data-m="ped"]');if(b)b.click();return}
+  if(ir==='tareas'){if(INI&&INI.tareasUrl)window.open(INI.tareasUrl,'_blank','noopener');return}
+}
+/* ---------------- v107: CAJA Y PLATA ---------------- */
+var CAJSEC='cajas';
+function cajSec(s){
+  CAJSEC=s==='plata'?'plata':'cajas';
+  document.querySelectorAll('#cajsec button').forEach(function(b){b.classList.toggle('on',b.dataset.s===CAJSEC)});
+  $('caja-cajas').classList.toggle('oculto',CAJSEC!=='cajas');$('caja-plata').classList.toggle('oculto',CAJSEC!=='plata');
+  // Cajeras se mudó acá desde Administración (el mismo módulo, sin cambios).
+  var a=$('a-cajeras');if(a&&a.parentNode!==$('caja-cajas'))$('caja-cajas').appendChild(a);
+  if(CAJSEC==='cajas'&&a){a.classList.remove('oculto');cajAbrir()}
+  if(CAJSEC==='plata'){pintarPlata();if(!INI&&!INI_ERR)cargarInicio()}
+}
+function pintarPlata(){
+  var el=$('caja-plata');if(!el)return;
+  if(INI_ERR){el.innerHTML='<div class="card"><b class="neg">No se pudo traer la plata.</b> <span class="note">'+esc(INI_ERR)+'</span></div>';return}
+  if(!INI){el.innerHTML='<div class="cargando">Cargando…</div>';return}
+  var pl=INI.plata||{},pg=INI.pagos||{items:[],total:0},h='';
+  if(pl.sinDatos)h+='<div class="card"><h2>Plata</h2><div class="note" style="margin-top:0">'+esc(pl.motivo||'Sin datos.')+'</div></div>';
+  else h+='<div class="card"><h2>Plata · saldos del '+esc(pl.fechaSaldo)+(pl.cajasHasta?' + lo que entró hasta el '+esc(pl.cajasHasta):'')+'</h2>'+
+    '<div class="row"><span>Efectivo</span><span>'+pesos(pl.efectivo)+'</span></div>'+
+    '<div class="row"><span>Mercado Pago / banco</span><span>'+pesos(pl.mp)+'</span></div>'+
+    '<div class="row"><span>Total estimado</span><span>'+pesos(pl.total)+'</span></div>'+
+    '<div class="row"><span>Apartado para gastos fijos</span><span>'+pesos(pl.reservado)+'</span></div>'+
+    '<div class="row"><span><b>Libre para mercadería</b></span><span class="'+(pl.libre>=0?'pos':'neg')+'">'+pesos(pl.libre)+'</span></div>'+
+    '<div class="note">Es una estimación: los saldos que cargaste más lo que entró por las cajas, menos lo que ya tendría que estar apartado para cada vencimiento. No es la contabilidad oficial.</div></div>';
+  h+='<div class="card"><h2>Pagos de los próximos 7 días · '+pesos(pg.total)+'</h2>';
+  if(!pg.items.length)h+='<div class="note" style="margin-top:0">No vence nada en los próximos 7 días.</div>';
+  pg.items.forEach(function(x){h+='<div class="row"><span>'+(x.vencido?'<b class="neg">Venció</b> ':'')+esc(x.nombre)+' · '+esc(x.vence)+(x.dias===0&&!x.vencido?' (hoy)':'')+'</span><span>'+pesos(x.monto)+'</span></div>'});
+  h+='</div><div class="note">Los saldos, los vencimientos y los pagados se cargan en ECHU › ADMINISTRACION › Reparto de la plata. Próximo paso: cargarlos desde acá, con Cuenta DNI y los aportes y retiros de cada dueño.</div>';
+  el.innerHTML=h;
+}
+document.querySelectorAll('#cajsec button').forEach(function(b){b.onclick=function(){cajSec(b.dataset.s)}});
+document.querySelector('nav button[data-tab="caja"]').addEventListener('click',function(){if(esConsulta()){irA('resumen');return}setTimeout(function(){cajSec(CAJSEC)},0)});
+/* ---------------- v107: MÁS ---------------- */
+document.querySelectorAll('#mas [data-ir]').forEach(function(c){c.onclick=function(){
+  var d=c.dataset.ir;if(d==='ajustes')return irA('ajustes');
+  irA('admin');admSec(d);
+}});
+
 /* ---------------- RESUMEN ---------------- */
 function cargar(){
   $('sub').textContent='Cargando…';
-  api('resumen').then(function(d){D=d;ADMIN=d.admin;setTimeout(function(){cargarIndice((d.datos||{}).completa||'')},800);PROV.lista=d.proveedores||[];pintarProveedores();pintarResumen(d);recalcular()})
+  if(!esConsulta())cargarInicio();
+  api('resumen').then(function(d){D=d;ADMIN=d.admin;setTimeout(function(){cargarIndice((d.datos||{}).completa||'')},800);PROV.lista=d.proveedores||[];pintarProveedores();pintarResumen(d);pintarInicio();recalcular()})
     .catch(function(e){$('resumen').innerHTML=err(e);$('sub').textContent='No se pudo cargar'});
 }
 $('lbtn').onclick=entrar;
@@ -1432,7 +1568,7 @@ function htmlBulto(c,q,vm,minimo){
 var ESTADO_K='sasha_estado', NO_GUARDAR=false;
 function estadoActual(){
   var t=document.querySelector('nav button.on');
-  return {t:Date.now(),tab:t?t.dataset.tab:'resumen',q:$('q').value,det:DETCOD||'',sprod:SPROD,
+  return {t:Date.now(),tab:t?t.dataset.tab:'inicio',q:$('q').value,det:DETCOD||'',sprod:SPROD,
     scosto:$('scosto').value,scant:$('scant').value,sprecio:$('sprecio').value,prov:{modo:PROV.modo,sel:PROV.sel,fuera:$('sprovf').value,cod:$('sprovcod').value},
     e:{op:EST.op,editId:EST.editId||'',orden:EST.orden||'',lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,tObj:EST.tObj,vm:EST.vm,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,edias:$('edias').value,eobj:$('eobj').value},
     rtab:RTAB,y:window.scrollY};
@@ -1461,7 +1597,7 @@ function restaurarEstado(){
   elegirOpcion(e.op===2?2:1);
   if(s.rtab)RTAB=s.rtab;
   if(s.det)verProducto(s.det);
-  if(s.tab&&s.tab!=='resumen')irA(s.tab);
+  if(s.tab&&s.tab!=='inicio'&&!(esConsulta()&&s.tab==='resumen'))irA(s.tab);
   recalcular();
   setTimeout(function(){window.scrollTo(0,s.y||0)},s.tab==='productos'?1500:200);
 }
@@ -2727,7 +2863,7 @@ $('limpbtn').onclick=function(){
   lPost('limpieza_importar',{datos:t}).then(function(r){LMP.recs=null;$('limptxt').value='';$('limpmsg').innerHTML='<span class="pos">Listo: se trajeron '+r.importados+' recibos'+(r.total>r.importados?' (los otros '+(r.total-r.importados)+' ya estaban)':'')+'.</span>'})
     .catch(function(e){$('limpmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 };
-document.querySelector('nav button[data-tab="admin"]').addEventListener('click',function(){if(esConsulta()){irA('resumen');return}var s='limpieza';try{s=localStorage.getItem('sasha_admsec')||'limpieza'}catch(e){}admSec(s)});
+document.querySelector('nav button[data-tab="admin"]').addEventListener('click',function(){if(esConsulta()){irA('resumen');return}var s='conta';try{s=localStorage.getItem('sasha_admsec')||'conta'}catch(e){}if(s==='cajeras')s='conta';admSec(s)});
 /* ---------------- v77: ADMINISTRACIÓN › CONTABILIDAD (1ª parte: IVA, facturas, cierres Z y remitos) ---------------- */
 var CT={per:'',mes:null,seg:'compras',form:null,foto:'',mime:'',hash:'',cargando:false};
 var CTIPOS={factura:'Factura',nota_credito:'Nota de crédito',nota_debito:'Nota de débito',remito:'Remito',cierre_z:'Cierre Z',otro:'Otro'};
@@ -2746,8 +2882,8 @@ function admSec(s){
 }
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
-function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0);f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=106');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=107');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;

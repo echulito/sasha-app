@@ -29,6 +29,16 @@ export const DATOS = {
       {mes: '2026-10', inflacion: 0.027, precios: 0.031, costos: 0.04, gastos: 0.015, ventasReales: -0.02, enCurso: false, texto: 'Subiste los precios más que la inflación (0,4% más), pero tus costos subieron más que tus precios: el margen se achicó. Los gastos fijos subieron menos que la inflación. Descontando la inflación vendiste 2,0% menos que el mes anterior.'},
       {mes: '2026-09', inflacion: 0.021, precios: 0.024, costos: 0.018, gastos: 0.03, ventasReales: 0.011, enCurso: false, texto: 'Subiste los precios más que la inflación (0,3% más), y más que tus costos: el margen mejoró.'},
       {mes: '2026-08', inflacion: null, precios: 0.012, costos: 0.016, gastos: 0.02, ventasReales: null, enCurso: false, texto: 'Tus costos subieron más que tus precios: el margen se achicó. Cargá la inflación de ago 2026 para compararla.'}]},
+  // v107: Inicio (modelo A). Inventado.
+  inicio: {generado: '02/11/2026 09:00', errores: [], tareasUrl: 'https://docs.google.com/spreadsheets/d/PRUEBA/edit#gid=1',
+    plata: {efectivo: 250000, mp: 480000, total: 730000, reservado: 318000, libre: 412000, fechaSaldo: '01/11/2026', cajasHasta: '02/11'},
+    pagos: {total: 238500, items: [{nombre: 'Alquiler', monto: 180000, vence: '04/11', dias: 2, medio: 'MERCADO PAGO', vencido: false},
+      {nombre: 'Internet', monto: 58500, vence: '07/11', dias: 5, medio: 'CUALQUIERA', vencido: false}]},
+    tareas: {'CAMBIAR COSTO': 12, 'PEDIR ANTES (SE AGOTA)': 6},
+    avisos: [{nivel: 'rojo', titulo: 'Caja 0003 · Cajera Uno · 01/11', detalle: 'Faltan $ 160.114. Revisá la diferencia.', ir: 'caja'},
+      {nivel: 'amarillo', titulo: 'Vence Alquiler · 04/11', detalle: '$ 180.000 · Mercado Pago', ir: 'pagos'},
+      {nivel: 'amarillo', titulo: '6 productos se agotan', detalle: 'Pedilos antes de quedarte sin stock.', ir: 'pedido'},
+      {nivel: 'azul', titulo: '12 cambios de costo', detalle: 'Cargalos en el sistema de ventas.', ir: 'tareas'}]},
   estado_echu: {enCurso: false, estado: 'OK', detalle: '', pct: null, ultima: '02/11/2026 08:00', datos: '02/11/2026 08:00'},
   actualizar_echu: {lanzada: true, tipo: 'actualizar', estado: {enCurso: false, estado: 'OK', ultima: '02/11/2026 08:00'}}
 };
