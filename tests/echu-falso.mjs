@@ -47,6 +47,18 @@ export const DATOS = {
   actualizar_echu: {lanzada: true, tipo: 'actualizar', estado: {enCurso: false, estado: 'OK', ultima: '02/11/2026 08:00'}}
 };
 
+// v109: pagar sueldos (inventado). E1 cobra con recibo y mixto; E2 con monotributo (cuota del mes pasado) por Mercado Pago.
+DATOS.sue_datos.empleados[0].pago = {tipo: 'recibo', medio: 'mixto', neto: 900000};
+DATOS.sue_datos.empleados[1].pago = {tipo: 'monotributo', medio: 'mp', neto: 500000};
+DATOS.sue_datos.docs = {E1: {recibo: {id: 'D1', periodo: '2026-11', importe: 600000, bruto: 750000, costo: 950000, archivo: true}, monotributo: null, monotributoAnterior: null, cuota: null, cuotaAnterior: null},
+  E2: {recibo: null, monotributo: null, monotributoAnterior: null, cuota: null, cuotaAnterior: {id: 'D9', periodo: '2026-10', importe: 50000, archivo: false}}};
+DATOS.sue_datos.pagos = {E1: {tipo: 'recibo', medio: 'mixto', neto: 900000, cuota: 0, cuotaDelMes: false, total: 900000, mp: 600000, mpSueldo: 600000, ef: 300000, docImporte: 600000, falta: false, costo: 1250000},
+  E2: {tipo: 'monotributo', medio: 'mp', neto: 500000, cuota: 50000, cuotaDelMes: false, total: 550000, mp: 550000, mpSueldo: 500000, ef: 0, docImporte: 0, falta: true, costo: 550000}};
+DATOS.sue_datos.duenos = [{nombre: 'Dueño Uno', monto: 1000000}, {nombre: 'Dueño Dos', monto: 400000}];
+DATOS.sue_doc_pdf = {nombre: 'recibo_prueba.pdf', mime: 'application/pdf', b64: 'JVBERi0xLjcKJYGBgYEKCjYgMCBvYmoKPDwKL0ZpbHRlciAvRmxhdGVEZWNvZGUKL0xlbmd0aCAxMDgKPj4Kc3RyZWFtCnicHYqxCsJAEAX79xVbB8S99S25g5AioFjYCPsDIlEiWijB788lDEwxzBdDQGXl98T+PL7/4zzdb7tWS2bWNhdJlHjAqi9I25rEqlQlPujc6Dyw0HgyJemmrm7utRtTL/FCNDgGrlgAnJYYQAplbmRzdHJlYW0KZW5kb2JqCgo3IDAgb2JqCjw8Ci9GaWx0ZXIgL0ZsYXRlRGVjb2RlCi9UeXBlIC9PYmpTdG0KL04gNQovRmlyc3QgMjYKL0xlbmd0aCAzNjIKPj4Kc3RyZWFtCnic1VJNS8NAEL3vr5ijHmQ/svmolELbJApSlFZQFA9pspRI2ZVkI/XfO5Oklh7Es4TH7sy82X2beRIEKNAaAogT0BAGCkKIpYTplPHHrw8D/KHYmZbxu7pq4RU5AtbwxvjSddaDZLMZO3GXhS/2bseGJpBEPjIeGld1pWlgmmd5LkQshIg0IhJCpbguEROEwhhrKsE9ItYjMBcHQgRzrOUDonjooXrPDcf+DFfkRsRJB65OhvjnXrorG85Qf+mZzBhfuSotvIGL9FoJFUkpQiVDraOXS/wdjSm8+7+P6/XXzv76wrM503hpyI0hD/RT5mvTuq4pcezEyx1WaHNr9p/G12VxFYtJgjrjZIIeG43Bn++376bsqRRmB3+z8aRhSFBuZaq6WLgDuk/ghy8HVE0enFvrPLmy96P1qIaiaPTomWQSxPim2/o+pKRkfFG0ppd60okibOmq2u6AP9V2btv6mKATvwEYIsXYCmVuZHN0cmVhbQplbmRvYmoKCjggMCBvYmoKPDwKL1NpemUgOQovUm9vdCAyIDAgUgovSW5mbyAzIDAgUgovRmlsdGVyIC9GbGF0ZURlY29kZQovVHlwZSAvWFJlZgovTGVuZ3RoIDQwCi9XIFsgMSAyIDIgXQovSW5kZXggWyAwIDkgXQo+PgpzdHJlYW0KeJwVxLERACAMA7G3wx0tyzMScyVYhYBusyEpOVVa4oB4P18YYYkDpQplbmRzdHJlYW0KZW5kb2JqCgpzdGFydHhyZWYKNjYxCiUlRU9G'};
+DATOS.sue_monotributo = {id: 'D10', tipo: 'cuota', periodo: '2026-11', importe: 50000};
+DATOS.sue_doc_subir = [{id: 'D11', tipo: 'recibo', periodo: '2026-11', persona: 'EMPLEADA UNO', importe: 600000}];
+
 /** Responde como ECHU. modo: 'normal' | 'viejo' (ECHU sin actualizar) | 'corrupto' (respuesta que no coincide con su huella). */
 export function crearECHU(modo = 'normal') {
   const pedidos = [];

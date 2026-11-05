@@ -230,6 +230,52 @@ test('Sueldos: editar desde la lista y borrar un empleado (dos toques)', async (
   await ctx.close();
 });
 
+test('Pagar sueldos: estado del recibo, monotributo, dueños aparte; confirmar el reparto y bajar un PDF con el recibo y el de efectivo', async () => {
+  const {ctx, page, echu, errores} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="sue"]');
+  await page.locator('#spagar').waitFor();
+  const t = await page.locator('#slista').innerText();
+  assert.match(t, /Empleada\s+recibo ✓/); assert.match(t, /Empleado\s+falta factura/);
+  assert.match(t, /Mercado Pago \$ 600\.000 · Efectivo \$ 300\.000/);
+  assert.match(t, /incluye monotributo \$ 50\.000/);
+  assert.match(t, /Empleados\s*\$ 1\.450\.000/); assert.match(t, /Dueño Uno \(dueño\)\s*\$ 1\.000\.000/); assert.match(t, /Total sueldos\s*\$ 2\.850\.000/);
+  // monotributo: "sigue igual" guarda la cuota del mes
+  await page.getByText('Sí, igual').click(); await page.waitForTimeout(400);
+  assert.ok(echu.pedidos.some(p => /"accion":"sue_monotributo"/.test(p.cuerpo || '') && /\\"importe\\":50000/.test(p.cuerpo || '')));
+  // confirmar: E2 pide 100.000 en efectivo
+  await page.click('#spagar');
+  assert.equal(await page.inputValue('[data-i="0"][data-sp="mp"]'), '600.000');
+  await page.fill('[data-i="1"][data-sp="ef"]', '100000'); await page.dispatchEvent('[data-i="1"][data-sp="ef"]', 'change');
+  assert.equal(await page.inputValue('[data-i="1"][data-sp="mp"]'), '450.000');
+  await page.fill('[data-i="1"][data-sp="ef"]', '600000'); await page.dispatchEvent('[data-i="1"][data-sp="ef"]', 'change');
+  assert.equal(await page.inputValue('[data-i="1"][data-sp="mp"]'), '50.000', 'el monotributo queda por Mercado Pago');
+  await page.fill('[data-i="1"][data-sp="ef"]', '100000'); await page.dispatchEvent('[data-i="1"][data-sp="ef"]', 'change');
+  await page.click('#sp_ok');
+  await page.locator('#sp_msg .pos').waitFor();
+  assert.match(await page.locator('#sp_msg').innerText(), /1 recibo\/factura y 2 recibos de efectivo/);
+  const b64 = await page.evaluate(() => { let s = ''; ULT_PDF.bytes.forEach(b => { s += String.fromCharCode(b); }); return btoa(s); });
+  const L = createRequire(import.meta.url)('../pdf-lib.min.js');
+  const doc = await L.PDFDocument.load(Buffer.from(b64, 'base64'));
+  assert.equal(doc.getPageCount(), 3, 'recibo de la contadora + 2 recibos de efectivo');
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('Sueldos: el empleado guarda cómo cobra (recibo o monotributo), con qué se le paga y su neto', async () => {
+  const {ctx, page, echu, errores} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="sue"]');
+  await page.locator('#slista .cmp').nth(0).waitFor();
+  await page.locator('#slista .cmp').nth(0).getByText('editar').click();
+  assert.equal(await page.inputValue('#se_pmed'), 'mixto');
+  await page.selectOption('#se_ptipo', 'monotributo'); await page.selectOption('#se_pmed', 'efectivo'); await page.fill('#se_pneto', '1.200.000');
+  await page.click('#se_ok'); await page.waitForTimeout(400);
+  const p = echu.pedidos.find(x => /"accion":"sue_empleado"/.test(x.cuerpo || ''));
+  assert.ok(p); const datos = JSON.parse(JSON.parse(p.cuerpo).datos);
+  assert.deepEqual(datos.pago, {tipo: 'monotributo', medio: 'efectivo', neto: 1200000});
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
 // ---------- Regresión de pantallas: tienen que verse igual que las aprobadas ----------
 async function diferencia(page, a, b) {
   return page.evaluate(async ([a, b]) => {

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=108;
+var APP_V=109;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -45,6 +45,7 @@ button.okEchu{background:var(--verdeF)!important;color:var(--verde)!important;bo
 .chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700}
 .chip.v{background:var(--verdeF);color:var(--verde)}.chip.r{background:var(--rojoF);color:var(--rojo)}
 .chip.a{background:var(--amarF);color:var(--amar)}.chip.c{background:var(--celeste);color:var(--azul2)}
+.sp{padding:8px 0;border-bottom:1px solid var(--linea)}.sp .g3{margin-top:4px}
 .bar{height:10px;background:#e8eaed;border-radius:6px;overflow:hidden;margin:8px 0 4px;position:relative}
 .bar i{display:block;height:100%;border-radius:6px}
 .note{font-size:12px;color:var(--gris);margin-top:6px;line-height:1.4}
@@ -511,7 +512,7 @@ function postECHU(cuerpoObj,ms){
 var ESCRITURAS={guardar_propuesta:'Guardado',borrar_propuesta:'Borrado',marcar_pedido:'Guardado',marcar_cargado:'Guardado',marcar_pedido_grupo:'Guardado',
   guardar_pedido:'Guardado',borrar_pedido:'Borrado',limpieza_config_guardar:'Guardado',limpieza_sync:'Guardado',conta_config_guardar:'Guardado',
   conta_proveedor:'Guardado',conta_borrar:'Borrado',sue_empleado:'Guardado',sue_borrar_liq:'Borrado',actualizar_echu:'Pedido',
-  limpieza_importar:'Guardado',limpieza_emitir:'Guardado',gastos_guardar:'Guardado',sue_liquidar:'Guardado',sue_config:'Guardado',conta_guardar:'Guardado'};
+  limpieza_importar:'Guardado',limpieza_emitir:'Guardado',gastos_guardar:'Guardado',sue_liquidar:'Guardado',sue_config:'Guardado',conta_guardar:'Guardado',sue_doc_subir:'Guardado',sue_monotributo:'Guardado'};
 // Cargas que muestran "Llegó completo" arriba (no las que corren solas de fondo).
 var CARGAS_AVISO={resumen:1,producto:1,oportunidades:1,sugerencias:1,ranking:1,propuestas:1,conta_mes:1,sue_datos:1,gastos_datos:1,limpieza_recibos:1,candidatos_pedido:1,candidatos_gama:1};
 function api(accion,params,intento){
@@ -2883,7 +2884,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=108');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=109');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3184,10 +3185,12 @@ document.querySelectorAll('#csub button').forEach(function(b){if(!b.disabled)b.o
 function r2(n){return Math.round((Number(n)||0)*100)/100}
 function sPesos(n){n=r2(n);return (n<0?'-$ ':'$ ')+Math.abs(n).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function sCargar(per){
-  SU.per=per||SU.per||cPerHoy();
+  SU.per=per||SU.per||sPerDefecto();
   if(!SU.D||SU.D.periodo!==SU.per)$('slista').innerHTML='<div class="cargando">Cargando…</div>';
   return api('sue_datos',{periodo:SU.per}).then(function(d){SU.D=d;sPintar()}).catch(function(e){$('slista').innerHTML=err(e)});
 }
+// v109: hasta el 15, los sueldos que se pagan son los del mes pasado.
+function sPerDefecto(){var h=lHoy(),y=Number(h.slice(0,4)),m=Number(h.slice(5,7));if(Number(h.slice(8,10))>15)return h.slice(0,7);m--;if(!m){m=12;y--}return y+'-'+('0'+m).slice(-2)}
 function sEscala(per){
   var E=SU.D.config.escalas,ks=Object.keys(E).sort(),k=ks.filter(function(x){return x<=per}).pop()||ks[0];
   return {per:k,cats:E[k].cats,nr:E[k].nr||[]};
@@ -3251,7 +3254,7 @@ function sPintar(){
   var filas=act.map(function(e){var l=sLiq(e.id),c=l?{totales:l.totales}:sCalcular(e,per,{});if(!l)falta++;netos+=c.totales.neto;costo+=c.totales.costo;
     return '<div class="cmp" style="margin-top:8px" onclick="sAbrir(\''+e.id+'\')"><div class="t"><b>'+esc(e.nombre)+'</b><b>'+pesos(c.totales.neto)+'</b></div><div class="s"><button class="lnk" style="float:right" onclick="event.stopPropagation();sEmpForm(\''+e.id+'\')">editar</button>'+esc(e.categoria)+' · '+sAnios(e.ingreso,per)+(sAnios(e.ingreso,per)===1?' año':' años')+(e.jornada<100?' · '+(e.jornada===50?'media jornada':e.jornada+'% jornada'):'')+' · '+(l?'<span class="chip v">liquidado</span>':'<span class="chip a">sin liquidar</span>')+'</div></div>'}).join('');
   var es=sEscala(per);
-  $('slista').innerHTML='<div class="tiles"><div class="card"><span class="rk">Netos a pagar</span><b>'+pesos(netos)+'</b></div><div class="card"><span class="rk">Costo empresa</span><b class="neg">'+pesos(costo)+'</b></div><div class="card"><span class="rk">Empleados</span><b>'+act.length+'</b></div></div>'+
+  $('slista').innerHTML=sPagoHtml()+'<h2 style="margin:14px 2px 0">Liquidación de Comercio</h2><div class="tiles"><div class="card"><span class="rk">Netos a pagar</span><b>'+pesos(netos)+'</b></div><div class="card"><span class="rk">Costo empresa</span><b class="neg">'+pesos(costo)+'</b></div><div class="card"><span class="rk">Empleados</span><b>'+act.length+'</b></div></div>'+
     (act.length?filas:'<div class="card" style="margin-top:8px"><div class="note" style="margin-top:0">Todavía no cargaste empleados. Tocá <b>+ Empleado</b>.</div></div>')+
     '<div class="btns">'+(falta?'<button class="btn" id="sliqall">Liquidar los que faltan ('+falta+')</button>':'')+'<button class="btn sec" onclick="sEmpForm()">+ Empleado</button></div>'+
     // v108: todos los empleados (también los que no aparecen este mes) para editarlos o borrarlos.
@@ -3259,6 +3262,7 @@ function sPintar(){
     '<div class="note">Escala de Comercio de <b>'+cMesTxt(es.per)+'</b>'+(es.per!==per?' (todavía no hay una de '+cMesTxt(per)+')':'')+' · <button class="lnk" onclick="sEscalaForm()">ver / cambiar</button> · <button class="lnk" onclick="sCfgForm()">empresa y porcentajes</button></div>'+
     '<div class="note">El costo empresa es estimado (contribuciones '+(d.config.patronal.ss+d.config.patronal.os)+'% + ART + seguro + INACAP). Las cargas se presentan en ARCA (F.931).</div>';
   if($('sliqall'))$('sliqall').onclick=sLiquidarFaltan;
+  sBindPago();
 }
 function sAbrir(id){SU.emp=id;var l=sLiq(id);SU.nov=l?JSON.parse(JSON.stringify(l.novedades||{})):{};sPintar();window.scrollTo(0,0)}
 function sRecibo(){
@@ -3314,6 +3318,10 @@ function sEmpForm(id){
     '<label>Categoría</label><select id="se_cat">'+SU.D.cats.map(function(k){return '<option'+(k===e.categoria?' selected':'')+'>'+k+'</option>'}).join('')+'</select>'+
     '<div class="g2"><div><label>Jornada</label><select id="se_jor"><option value="100"'+(e.jornada==100?' selected':'')+'>Completa</option><option value="50"'+(e.jornada==50?' selected':'')+'>Media jornada</option><option value="otra"'+([100,50].indexOf(Number(e.jornada))<0?' selected':'')+'>Otra (%)</option></select></div><div><label>% de la jornada</label><input id="se_pct" inputmode="numeric" value="'+(e.jornada||100)+'"></div></div>'+
     '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="se_afi" style="width:auto"'+(e.afiliado?' checked':'')+'> Afiliado al sindicato</label>'+
+    (function(){var pg=e.pago||{};return '<div class="g2"><div><label>Cobra con</label><select id="se_ptipo"><option value="recibo">Recibo de sueldo</option><option value="monotributo"'+(pg.tipo==='monotributo'?' selected':'')+'>Factura de monotributo</option></select></div>'+
+      '<div><label>Se le paga con</label><select id="se_pmed"><option value="mp">Mercado Pago</option><option value="efectivo"'+(pg.medio==='efectivo'?' selected':'')+'>Efectivo</option><option value="mixto"'+(pg.medio==='mixto'?' selected':'')+'>Mixto</option></select></div></div>'+
+      '<label>Neto que cobra por mes</label><input id="se_pneto" inputmode="decimal" value="'+(pg.neto?cNum(pg.neto):'')+'" placeholder="Vacío = lo que diga el recibo">'+
+      '<div class="note">Mixto: lo del recibo o la factura por Mercado Pago y el resto del neto en efectivo.</div>'})()+
     (id?'<div class="g2"><div><label>Fecha de egreso (si dejó)</label><input id="se_egr" type="date" value="'+esc(e.egreso||'')+'"></div><div></div></div>':'')+
     '<div class="btns"><button class="btn" id="se_ok">Guardar</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button>'+(id?'<button class="btn sec" style="color:var(--rojo)" id="se_del">Borrar empleado</button>':'')+'</div><div class="note" id="se_msg"></div>';
   if($('se_del'))$('se_del').onclick=function(){var b=this;
@@ -3326,7 +3334,8 @@ function sEmpForm(id){
   $('se_jor').onchange=function(){if(this.value!=='otra')$('se_pct').value=this.value};
   box.scrollIntoView({behavior:'smooth',block:'start'});
   $('se_ok').onclick=function(){$('se_msg').textContent='Guardando…';
-    var emp={id:id||'',nombre:$('se_nom').value,cuil:$('se_cuil').value,ingreso:$('se_ing').value,categoria:$('se_cat').value,jornada:Number($('se_pct').value)||100,afiliado:$('se_afi').checked,egreso:$('se_egr')?$('se_egr').value:'',activo:!($('se_egr')&&$('se_egr').value)};
+    var emp={id:id||'',nombre:$('se_nom').value,cuil:$('se_cuil').value,ingreso:$('se_ing').value,categoria:$('se_cat').value,jornada:Number($('se_pct').value)||100,afiliado:$('se_afi').checked,egreso:$('se_egr')?$('se_egr').value:'',activo:!($('se_egr')&&$('se_egr').value),
+      pago:{tipo:$('se_ptipo').value,medio:$('se_pmed').value,neto:parsePesos($('se_pneto').value)}};
     api('sue_empleado',{datos:JSON.stringify(emp)}).then(function(r){var L=SU.D.empleados||[],i=L.findIndex(function(x){return x.id===r.id});if(i>=0)L[i]=r;else L.push(r);SU.D.empleados=L;box.classList.add('oculto');sPintar()})
       .catch(function(err2){$('se_msg').innerHTML='<span class="neg">'+esc(err2.message)+'</span>'})};
 }
@@ -3403,6 +3412,159 @@ function sPDF(o){
     });
     return pdf.save();
   })})}).then(function(bytes){ULT_PDF={bytes:bytes,nombre:'recibo_'+String(e.nombre).replace(/[^A-Za-z0-9]+/g,'-')+'_'+per+'.pdf'};compartirPDF()}).catch(function(err2){alert(err2.message)});
+}
+/* ---------------- v109: PAGAR SUELDOS (recibos de la contadora, monotributo, dueños y recibo de efectivo) ---------------- */
+var SP={conf:null};
+function sMedioTxt(m){return m==='efectivo'?'Efectivo':m==='mixto'?'Mixto':'Mercado Pago'}
+function sDocChip(e,p,dd){
+  var mono=p.tipo==='monotributo',doc=mono?dd.monotributo:dd.recibo;
+  return doc?'<span class="chip v">'+(mono?'factura':'recibo')+' ✓</span>':'<span class="chip a">falta '+(mono?'factura':'recibo')+'</span>';
+}
+function sPagoHtml(){
+  var d=SU.D;
+  if(!d.pagos)return '<div class="card"><div class="note" style="margin-top:0">Para pagar sueldos con los recibos de la contadora, actualizá ECHU a la versión 6.15 (Nueva versión).</div></div>';
+  var act=sActivos().filter(function(e){return d.pagos[e.id]}),du=d.duenos||[],tEmp=0,tDu=0,faltan=0;
+  var filas=act.map(function(e){var p=d.pagos[e.id],dd=(d.docs||{})[e.id]||{};tEmp+=p.total;if(p.falta)faltan++;
+    var cuota=p.tipo==='monotributo'&&p.cuota>0;
+    return '<div class="sp"><div class="rowb" style="border:0;padding:0"><span><b>'+esc(e.nombre.split(' ')[0])+'</b> '+sDocChip(e,p,dd)+'</span><b>'+(p.total?pesos(p.total):'—')+'</b></div>'+
+      '<div class="rk">'+(p.total?'Mercado Pago '+pesos(p.mp)+(cuota?' (incluye monotributo '+pesos(p.cuota)+')':'')+' · Efectivo '+pesos(p.ef):'Cargá el neto en los datos del empleado o esperá el recibo')+'</div>'+
+      (p.tipo==='monotributo'&&!p.cuotaDelMes?'<div class="rk" style="margin-top:3px">Monotributo de '+cMesTxt(d.periodo)+': '+(p.cuota?'¿sigue en '+pesos(p.cuota)+'? <button class="lnk" onclick="sCuota(\''+e.id+'\','+p.cuota+')">Sí, igual</button> · ':'')+'<button class="lnk" onclick="sCuotaForm(\''+e.id+'\')">'+(p.cuota?'Aumentó':'Cargar')+'</button></div>':'')+
+      '</div>'}).join('');
+  du.forEach(function(x){tDu+=Number(x.monto)||0});
+  return '<div class="card"><h2>Pagar sueldos de '+cMesTxt(d.periodo)+'</h2>'+
+    (act.length?filas:'<div class="note" style="margin-top:0">No hay empleados en este mes.</div>')+
+    '<div class="rowb" style="margin-top:6px"><span>Empleados</span><b>'+pesos(tEmp)+'</b></div>'+
+    du.map(function(x){return '<div class="rowb"><span>'+esc(x.nombre)+' (dueño)</span><b>'+pesos(x.monto)+'</b></div>'}).join('')+
+    '<div class="rowb"><span><b>Total sueldos</b></span><b>'+pesos(tEmp+tDu)+'</b></div>'+
+    '<div class="btns">'+(act.length?'<button class="btn" id="spagar">Pagar sueldos</button>':'')+'<label class="btn sec" style="margin:0;text-align:center">Subir recibo o factura<input id="sdocup" type="file" accept="application/pdf,image/jpeg,image/png" class="oculto"></label></div>'+
+    '<div class="note" id="sdocmsg">'+(faltan?(faltan===1?'Falta 1 documento':'Faltan '+faltan+' documentos')+'. Llegan solos cuando la contadora los manda a proveedores@ (o subilos acá). ':'')+'<button class="lnk" onclick="sDuenosForm()">sueldo de los dueños</button></div></div>';
+}
+function sBindPago(){
+  if($('spagar'))$('spagar').onclick=sPagarForm;
+  if($('sdocup'))$('sdocup').onchange=function(){sSubirDoc(this)};
+}
+function sCuota(eid,imp){
+  return api('sue_monotributo',{datos:JSON.stringify({periodo:SU.per,empleado:eid,importe:imp})}).then(function(){return sCargar(SU.per)}).catch(function(e){alert(e.message)});
+}
+function sCuotaForm(eid){
+  var e=(SU.D.empleados||[]).filter(function(x){return x.id===eid})[0],p=SU.D.pagos[eid],box=$('sform');box.classList.remove('oculto');
+  box.innerHTML='<h2>Monotributo de '+esc(e.nombre.split(' ')[0])+' · '+cMesTxt(SU.per)+'</h2><label>Importe</label><input id="sq_imp" inputmode="decimal" value="'+(p.cuota?cNum(p.cuota):'')+'" placeholder="$ 0">'+
+    '<div class="note">Se suma al neto y va siempre por Mercado Pago.</div><div class="btns"><button class="btn" id="sq_ok">Guardar</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button></div><div class="note" id="sq_msg"></div>';
+  box.scrollIntoView({behavior:'smooth',block:'start'});
+  $('sq_ok').onclick=function(){var v=parsePesos($('sq_imp').value);if(!(v>0)){$('sq_msg').innerHTML='<span class="neg">Poné el importe.</span>';return}
+    $('sq_msg').textContent='Guardando…';sCuota(eid,v).then(function(){box.classList.add('oculto')})};
+}
+function sSubirDoc(input){
+  var f=input.files&&input.files[0];input.value='';if(!f)return;
+  if(f.size>10*1024*1024){$('sdocmsg').innerHTML='<span class="neg">El archivo es muy grande (hasta 10 MB).</span>';return}
+  $('sdocmsg').textContent='Leyendo '+f.name+'…';
+  var rd=new FileReader();
+  rd.onload=function(){var b64=String(rd.result).replace(/^data:[^,]+,/,'');
+    lPost('sue_doc_subir',{archivo:b64,mime:f.type||'application/pdf',nombre:f.name,periodo:SU.per}).then(function(docs){
+      var tx=(docs||[]).map(function(x){return ({recibo:'Recibo',monotributo:'Factura',iibb:'VEP Ingresos Brutos'})[x.tipo]+' de '+x.persona+(x.periodo?' · '+cMesTxt(x.periodo):'')+' · '+pesos(x.importe)}).join(' / ');
+      return sCargar(SU.per).then(function(){if($('sdocmsg'))$('sdocmsg').innerHTML='<span class="pos">Leído: '+esc(tx)+'</span>'});
+    }).catch(function(e){$('sdocmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+  };
+  rd.onerror=function(){$('sdocmsg').innerHTML='<span class="neg">No se pudo abrir el archivo.</span>'};
+  rd.readAsDataURL(f);
+}
+function sDuenosForm(){
+  var du=(SU.D.duenos||[]).slice();if(!du.length)du=[{nombre:'',monto:0}];
+  var box=$('sform');box.classList.remove('oculto');
+  var pinta=function(){box.innerHTML='<h2>Sueldo de los dueños</h2><div class="note" style="margin-top:0">Monto fijo por mes. Va separado de los empleados y a ADMINISTRACION.</div>'+
+    du.map(function(x,i){return '<div class="g2"><div><label>Nombre</label><input data-dn="'+i+'" value="'+esc(x.nombre)+'"></div><div><label>Por mes</label><input data-dm="'+i+'" inputmode="decimal" value="'+(x.monto?cNum(x.monto):'')+'" placeholder="$ 0"></div></div>'}).join('')+
+    '<div class="btns"><button class="btn" id="sd_ok">Guardar</button><button class="btn sec" id="sd_mas">+ Otro</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button></div><div class="note" id="sd_msg"></div>';
+    var leer=function(){du=du.map(function(x,i){return {nombre:box.querySelector('[data-dn="'+i+'"]').value.trim(),monto:parsePesos(box.querySelector('[data-dm="'+i+'"]').value)}})};
+    $('sd_mas').onclick=function(){leer();du.push({nombre:'',monto:0});pinta()};
+    $('sd_ok').onclick=function(){leer();$('sd_msg').textContent='Guardando…';
+      lPost('sue_config',{datos:JSON.stringify({duenos:du.filter(function(x){return x.nombre})})}).then(function(c){SU.D.config=c;SU.D.duenos=c.duenos||[];box.classList.add('oculto');sPintar()})
+        .catch(function(e){$('sd_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'})};
+  };
+  pinta();box.scrollIntoView({behavior:'smooth',block:'start'});
+}
+// Confirmar cómo se pagó de verdad (por defecto: recibo o factura por Mercado Pago y el resto en efectivo) y bajar los PDFs.
+function sPagarForm(){
+  var d=SU.D,act=sActivos().filter(function(e){return d.pagos[e.id]}),box=$('sform');box.classList.remove('oculto');
+  SP.conf=act.map(function(e){var p=d.pagos[e.id];return {id:e.id,nombre:e.nombre,tipo:p.tipo,total:r2(p.total),mp:r2(p.mp),ef:r2(p.ef),cuota:p.tipo==='monotributo'?r2(p.cuota):0}});
+  box.innerHTML='<h2>Confirmá cómo se paga</h2><div class="note" style="margin-top:0">Así salen los PDFs. Cambiá lo que haya sido distinto.</div>'+
+    '<label>Fecha del pago</label><input id="sp_fecha" type="date" value="'+lHoy()+'">'+
+    SP.conf.map(function(x,i){return '<div class="sp"><b>'+esc(x.nombre)+'</b>'+
+      '<div class="g3"><div><label>Total</label><input data-sp="total" data-i="'+i+'" inputmode="decimal" value="'+cNum(x.total)+'"></div><div><label>Mercado Pago</label><input data-sp="mp" data-i="'+i+'" inputmode="decimal" value="'+cNum(x.mp)+'"></div><div><label>Efectivo</label><input data-sp="ef" data-i="'+i+'" inputmode="decimal" value="'+cNum(x.ef)+'"></div></div>'+
+      (x.cuota?'<div class="rk">El Mercado Pago incluye el monotributo ('+pesos(x.cuota)+').</div>':'')+'</div>'}).join('')+
+    '<div class="btns"><button class="btn" id="sp_ok">Confirmar y bajar PDFs</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button></div><div class="note" id="sp_msg"></div>';
+  box.querySelectorAll('[data-sp]').forEach(function(inp){inp.onchange=function(){
+    var x=SP.conf[Number(inp.dataset.i)],v=Math.max(0,parsePesos(inp.value)),k=inp.dataset.sp;
+    // el monotributo va siempre por Mercado Pago: el efectivo nunca se lo come
+    if(k==='total'){x.total=Math.max(v,x.cuota);x.mp=Math.max(x.cuota,Math.min(x.mp,x.total));x.ef=r2(x.total-x.mp)}
+    else if(k==='mp'){x.mp=Math.max(x.cuota,Math.min(v,x.total));x.ef=r2(x.total-x.mp)}
+    else{x.ef=Math.min(v,r2(x.total-x.cuota));x.mp=r2(x.total-x.ef)}
+    var q=function(n){return box.querySelector('[data-i="'+inp.dataset.i+'"][data-sp="'+n+'"]')};
+    q('total').value=cNum(x.total);q('mp').value=cNum(x.mp);q('ef').value=cNum(x.ef);
+  }});
+  box.scrollIntoView({behavior:'smooth',block:'start'});
+  $('sp_ok').onclick=function(){var b=this;b.disabled=true;$('sp_msg').textContent='Armando los PDFs…';
+    sPagoPDF(SP.conf,$('sp_fecha').value||lHoy()).then(function(n){b.disabled=false;$('sp_msg').innerHTML='<span class="pos">Listo: '+n+'</span>'})
+      .catch(function(e){b.disabled=false;$('sp_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'})};
+}
+// Un PDF con todo: el recibo o la factura de cada uno y, si cobra algo en efectivo, el recibo de efectivo (copia tuya y copia del empleado).
+function sPagoPDF(conf,fecha){
+  var d=SU.D,vistos={},faltan=[],nEf=0,nDoc=0;
+  return cargarLibPDF().then(function(L){return L.PDFDocument.create().then(function(pdf){
+    return Promise.all([pdf.embedFont(L.StandardFonts.Helvetica),pdf.embedFont(L.StandardFonts.HelveticaBold)]).then(function(F){
+      var i=0;
+      var sig=function(){
+        if(i>=conf.length)return pdf.save();
+        var x=conf[i++],dd=(d.docs||{})[x.id]||{},doc=x.tipo==='monotributo'?dd.monotributo:dd.recibo;
+        var traer=doc&&doc.archivo?api('sue_doc_pdf',{id:doc.id}).catch(function(){return null}):Promise.resolve(null);
+        return traer.then(function(f){
+          if(!f){faltan.push(x.nombre.split(' ')[0]);return}
+          var clave=f.nombre+'|'+f.b64.length;if(vistos[clave])return;vistos[clave]=1;nDoc++;
+          var bytes=Uint8Array.from(atob(f.b64),function(c){return c.charCodeAt(0)});
+          if(/pdf/i.test(f.mime))return L.PDFDocument.load(bytes,{ignoreEncryption:true}).then(function(src){return pdf.copyPages(src,src.getPageIndices())}).then(function(ps){ps.forEach(function(p){pdf.addPage(p)})});
+          return (/png/i.test(f.mime)?pdf.embedPng(bytes):pdf.embedJpg(bytes)).then(function(img){var p=pdf.addPage([595,842]),k=Math.min(555/img.width,802/img.height);p.drawImage(img,{x:(595-img.width*k)/2,y:(842-img.height*k)/2,width:img.width*k,height:img.height*k})});
+        }).then(function(){if(x.ef>0){nEf++;sReciboEfectivo(pdf,F,L.rgb,x,fecha,d.periodo)}}).then(sig);
+      };
+      return sig();
+    })})}).then(function(bytes){
+      if(!nEf&&!nDoc)throw new Error('No hay nada para imprimir todavía (faltan los recibos y nadie cobra en efectivo).');
+      ULT_PDF={bytes:bytes,nombre:'sueldos_'+d.periodo+'.pdf'};compartirPDF();
+      return (nDoc?nDoc+(nDoc===1?' recibo/factura':' recibos/facturas'):'')+(nDoc&&nEf?' y ':'')+(nEf?nEf+(nEf===1?' recibo de efectivo':' recibos de efectivo'):'')+'.'+(faltan.length?' Sin documento: '+faltan.join(', ')+'.':'');
+    });
+}
+// Recibo de pago en efectivo: arriba la copia tuya (con cómo se repartió todo, la firma el empleado); abajo la del empleado (solo el efectivo, sin firma).
+function sReciboEfectivo(pdf,F,rgb,x,fecha,per){
+  var R=F[0],B=F[1],p=pdf.addPage([595,842]),AZ=rgb(0.137,0.294,0.4),INK=rgb(0.11,0.17,0.23),GR=rgb(0.36,0.42,0.48),LIN=rgb(0.89,0.91,0.93),FON=rgb(0.953,0.965,0.976);
+  var safe=function(t){return String(t==null?'':t).replace(/[−–]/g,'-').replace(/[^\x20-\x7e\xa0-\xff]/g,'')};
+  var tx=function(t,X,Y,s,f,c){p.drawText(safe(t),{x:X,y:Y,size:s,font:f||R,color:c||INK})};
+  var monto=function(n){return Math.round(n*100)%100?sPesos(n):pesos(n)};
+  var fe=String(fecha).split('-').reverse().join('/'),letras='('+sLetras(x.ef).toUpperCase()+')',nom=x.nombre;
+  var copia=function(top,yo){
+    var h=yo?330:300,bx=45,bw=505;
+    p.drawRectangle({x:bx,y:top-h,width:bw,height:h,borderColor:LIN,borderWidth:1,color:rgb(1,1,1)});
+    p.drawRectangle({x:bx,y:top-42,width:bw,height:42,color:AZ});
+    tx('RECIBO DE PAGO EN EFECTIVO',bx+20,top-27,15,B,rgb(1,1,1));
+    var c=yo?'COPIA PARA EMPLEADOR':'COPIA PARA EMPLEADO';p.drawText(c,{x:bx+bw-20-B.widthOfTextAtSize(c,8),y:top-25,size:8,font:B,color:rgb(1,1,1)});
+    var y=top-66,X2=bx+250;
+    tx('FECHA DEL PAGO',bx+20,y,7.5,B,GR);tx(yo?'CONCEPTO':'MEDIO DE PAGO',X2,y,7.5,B,GR);
+    y-=15;tx(fe,bx+20,y,11);tx(yo?'Sueldo de '+cMesTxt(per).toLowerCase():'Efectivo',X2,y,11);
+    y-=12;p.drawLine({start:{x:bx+20,y:y},end:{x:bx+bw-20,y:y},thickness:.8,color:LIN});
+    y-=20;tx('PERSONA QUE RECIBE',bx+20,y,7.5,B,GR);y-=17;tx(nom,bx+20,y,13,B);
+    y-=24;tx(yo?'IMPORTE RECIBIDO EN EFECTIVO':'IMPORTE RECIBIDO',bx+20,y,7.5,B,GR);y-=26;tx(monto(x.ef),bx+20,y,22,B,AZ);
+    y-=14;var part='';safe(letras).split(' ').forEach(function(w){var nx=part?part+' '+w:w;if(R.widthOfTextAtSize(nx,7.5)>bw-40){tx(part,bx+20,y,7.5,R,GR);y-=10;part=w}else part=nx});if(part)tx(part,bx+20,y,7.5,R,GR);
+    if(yo){
+      y-=36;var cw=(bw-40-16)/3,cajas=[['Mercado Pago',monto(x.mp),x.cuota?'Incluye monotributo '+monto(x.cuota):''],['Efectivo',monto(x.ef),''],['Total pagado',monto(x.total),'']];
+      cajas.forEach(function(k,j){var cx=bx+20+j*(cw+8);p.drawRectangle({x:cx,y:y-(k[2]?8:0),width:cw,height:(k[2]?40:32),color:FON});tx(k[0],cx+8,y+19,8.5,R,INK);tx(k[1],cx+8,y+6,10.5,B,INK);if(k[2])tx(k[2],cx+8,y-4,6.8,R,GR)});
+      y-=30;tx('Declaro haber recibido el importe indicado en efectivo.',bx+20,y,9);
+      var yf=top-h+28;p.drawLine({start:{x:bx+20,y:yf+10},end:{x:bx+235,y:yf+10},thickness:.7,color:GR});p.drawLine({start:{x:bx+270,y:yf+10},end:{x:bx+bw-20,y:yf+10},thickness:.7,color:GR});
+      tx('Firma de quien recibe',bx+20,yf,7.5,R,GR);tx('Aclaración',bx+270,yf,7.5,R,GR);
+    }else{
+      y-=26;tx('Se deja constancia del importe recibido en efectivo,',bx+20,y,9);y-=13;tx('en la fecha indicada.',bx+20,y,9);
+    }
+  };
+  copia(800,true);
+  var yc=448;for(var xx=45;xx<550;xx+=7)p.drawLine({start:{x:xx,y:yc},end:{x:Math.min(xx+3.5,550),y:yc},thickness:.8,color:rgb(0.72,0.75,0.79)});
+  var lc='LÍNEA DE CORTE';p.drawText(lc,{x:297.5-R.widthOfTextAtSize(lc,6.5)/2,y:yc+7,size:6.5,font:R,color:GR});
+  copia(420,false);
 }
 /* ---------------- v79: CONTABILIDAD › GASTOS (la solapa ADMINISTRACION de ECHU) ---------------- */
 var GA={D:null,abierto:''};
