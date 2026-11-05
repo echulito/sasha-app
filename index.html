@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=113;
+var APP_V=114;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -2884,7 +2884,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=113');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=114');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3273,7 +3273,18 @@ function sRecibo(){
   var chips='<div class="mes">'+act.map(function(x){return '<button class="'+(x.id===e.id?'on':'')+'" onclick="sAbrir(\''+x.id+'\')">'+esc(x.nombre.split(' ')[0])+'</button>'}).join('')+'<button onclick="SU.emp=\'\';sPintar()">← Todos</button></div>';
   var fila=function(x){var v=x.rem||x.nr||-x.desc;return '<tr><td>'+esc(x.c)+(x.u?' <span class="rk">'+esc(x.u)+'</span>':'')+'</td><td style="text-align:right'+(v<0?';color:var(--rojo)':'')+'">'+cNum2(v)+'</td></tr>'};
   var cambio=l&&Math.abs(l.totales.neto-T.neto)>0.01;
-  $('slista').innerHTML=chips+'<div class="rec card" style="padding:12px"><div style="display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--linea);padding-bottom:6px;margin-bottom:4px"><div><b>'+esc(e.nombre)+'</b><div class="rk">'+esc(e.categoria)+' · ingreso '+e.ingreso.split('-').reverse().join('/')+(e.cuil?' · CUIL '+cuitTextoJS(e.cuil):'')+'</div></div><div style="text-align:right"><b>'+cMesTxt(per)+'</b><div class="rk">'+(e.jornada<100?e.jornada+'% jornada':'jornada completa')+'</div></div></div>'+
+  // v114: si llegó el recibo (o la factura) de la contadora, ese es el que vale: va arriba; el cálculo de la app queda plegado.
+  var rp=d.pagos&&d.pagos[e.id],rdd=(d.docs||{})[e.id]||{},rdoc=rp&&(rp.tipo==='monotributo'?rdd.monotributo:rdd.recibo);
+  var real=rdoc?'<div class="card" style="margin-top:8px"><h2>'+(rp.tipo==='monotributo'?'Factura':'Recibo')+' de la contadora · '+cMesTxt(per)+'</h2>'+
+    (rdoc.bruto&&rp.tipo!=='monotributo'?'<div class="rowb"><span>Sueldo bruto</span><b>'+sPesos(rdoc.bruto)+'</b></div>':'')+
+    '<div class="rowb"><span>Neto del '+(rp.tipo==='monotributo'?'la factura':'recibo')+' · Mercado Pago</span><b>'+sPesos(rp.mpSueldo!=null?rp.mpSueldo:rp.mp)+'</b></div>'+
+    (rp.cuota?'<div class="rowb"><span>Monotributo · Mercado Pago</span><b>'+sPesos(rp.cuota)+'</b></div>':'')+
+    (rp.ef>0?'<div class="rowb"><span>Efectivo</span><b>'+sPesos(rp.ef)+'</b></div>':'')+
+    '<div class="rowb"><span><b>Total que cobra</b></span><b>'+sPesos(rp.total)+'</b></div>'+
+    (rdoc.costo?'<div class="rowb"><span>Costo empresa</span><b class="neg">'+sPesos(rp.costo)+'</b></div>':'')+
+    '<div class="btns">'+(rdoc.archivo?'<button class="btn sec" id="sverdoc">Ver el PDF</button>':'')+'<button class="btn sec" onclick="sEmpForm(\''+e.id+'\')">Cambiar neto o reparto</button></div>'+
+    '<div class="note">Es el que manda la contadora: este es el que vale.</div></div>':'';
+  $('slista').innerHTML=chips+real+(rdoc?'<details class="card" style="margin-top:8px;padding:10px"><summary class="rk">Cálculo estimado de la app (no se usa: llegó el recibo)</summary>':'')+'<div class="rec card" style="padding:12px"><div style="display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--linea);padding-bottom:6px;margin-bottom:4px"><div><b>'+esc(e.nombre)+'</b><div class="rk">'+esc(e.categoria)+' · ingreso '+e.ingreso.split('-').reverse().join('/')+(e.cuil?' · CUIL '+cuitTextoJS(e.cuil):'')+'</div></div><div style="text-align:right"><b>'+cMesTxt(per)+'</b><div class="rk">'+(e.jornada<100?e.jornada+'% jornada':'jornada completa')+'</div></div></div>'+
     '<table style="font-size:13px">'+c.lineas.map(fila).join('')+'</table>'+
     '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--linea);margin-top:6px;padding-top:6px"><b>NETO A COBRAR</b><b>'+sPesos(T.neto)+'</b></div>'+
     '<div class="rk" style="margin-top:4px">Remunerativo '+pesos(T.rem)+' · No rem. '+pesos(T.nr)+' · Descuentos '+pesos(T.desc)+' · Costo empresa ≈ '+pesos(T.costo)+'</div></div>'+
@@ -3284,7 +3295,10 @@ function sRecibo(){
     '<div class="g3"><input id="sn_oc" placeholder="Concepto"><input id="sn_om" inputmode="decimal" placeholder="$ 0"><select id="sn_ot"><option value="rem">Remunerativo</option><option value="nr">No remunerativo</option><option value="desc">Descuento / adelanto</option></select></div><div class="btns" style="margin-top:4px"><button class="btn sec" id="sn_oadd">Agregar concepto</button></div>'+
     '<div class="btns"><button class="btn" id="sguardar">'+(l?(cambio?'Guardar cambios y PDF':'Bajar el PDF para firmar'):'Guardar y PDF para firmar')+'</button></div>'+
     '<div class="btns">'+(l?'<button class="btn sec" style="color:var(--rojo)" onclick="sBorrarLiq(\''+l.id+'\')">Borrar liquidación</button>':'')+'<button class="btn sec" onclick="sEmpForm(\''+e.id+'\')">Datos del empleado</button></div>'+
-    (l?'<div class="note">Liquidado el '+esc(l.guardado)+(cambio?' · <b class="warn">cambió algo: guardá de nuevo</b>':'')+'</div>':'')+'<div class="note" id="smsg"></div></div>';
+    (l?'<div class="note">Liquidado el '+esc(l.guardado)+(cambio?' · <b class="warn">cambió algo: guardá de nuevo</b>':'')+'</div>':'')+'<div class="note" id="smsg"></div></div>'+(rdoc?'</details>':'');
+  if($('sverdoc'))$('sverdoc').onclick=function(){var b=this;b.disabled=true;b.textContent='Bajando…';
+    api('sue_doc_pdf',{id:rdoc.id}).then(function(f){var by=Uint8Array.from(atob(f.b64),function(c){return c.charCodeAt(0)});ULT_PDF={bytes:by,nombre:f.nombre||'recibo.pdf'};compartirPDF();b.disabled=false;b.textContent='Ver el PDF'})
+      .catch(function(err2){b.disabled=false;b.textContent='Ver el PDF';alert(err2.message)})};
   var leer=function(){SU.nov.he50=Number(String($('sn_he50').value).replace(',','.'))||0;SU.nov.he100=Number(String($('sn_he100').value).replace(',','.'))||0;SU.nov.faltas=Number($('sn_faltas').value)||0;
     var p=$('sn_pres').value;SU.nov.presentismo=p==='si'?true:p==='no'?false:undefined;if($('sn_sac'))SU.nov.sac=$('sn_sac').checked;};
   ['sn_he50','sn_he100','sn_faltas','sn_pres','sn_sac'].forEach(function(id){var x=$(id);if(x)x.onchange=function(){leer();var y=window.scrollY;sRecibo();window.scrollTo(0,y)}});
@@ -3312,6 +3326,37 @@ function sLiquidarFaltan(){
 }
 function sBorrarLiq(id){if(!confirm('¿Borrar esta liquidación?'))return;api('sue_borrar_liq',{id:id}).then(function(){SU.D.liquidaciones=SU.D.liquidaciones.filter(function(x){return x.id!==id});sRecibo()}).catch(function(e){alert(e.message)})}
 /* ---- empleado / escala / empresa ---- */
+// v114: campos de plata: se van escribiendo como "$ 1.100.000" (con coma para centavos).
+function pesosEnVivo(el){if(!el||el.dataset.pv)return;el.dataset.pv='1';el.addEventListener('input',function(){
+  var v=String(el.value||''),i=v.indexOf(','),ent=(i>=0?v.slice(0,i):v).replace(/\D/g,'').replace(/^0+(?=\d)/,''),dec=i>=0?v.slice(i+1).replace(/\D/g,'').slice(0,2):null;
+  if(!ent&&dec===null){el.value='';return}
+  el.value='$ '+(ent?Number(ent).toLocaleString('es-AR'):'0')+(dec!==null?','+dec:'');
+  try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}
+})}
+function pesosTxt(n){return n?'$ '+cNum(n):''}
+var SMIX={doc:0};
+// Mixto: por defecto, por Mercado Pago lo del recibo (o la factura) y en efectivo el resto. Cambiando uno se acomoda el otro.
+function sMixForm(e){
+  var pg=e.pago||{},dd=(SU.D.docs||{})[e.id]||{},doc=(pg.tipo==='monotributo'?dd.monotributo:dd.recibo),p=(SU.D.pagos||{})[e.id];
+  SMIX.doc=doc?Number(doc.importe)||0:0;
+  ['se_pneto','se_pmp','se_pef'].forEach(function(id){pesosEnVivo($(id))});
+  var neto=function(){return parsePesos($('se_pneto').value)||(p?p.neto:0)||0};
+  var pinta=function(desde){
+    var mix=$('se_pmed').value==='mixto';$('se_mix').style.display=mix?'':'none';$('se_mixnota').style.display=mix?'':'none';if(!mix)return;
+    var n=neto(),mp;
+    if(desde==='mp')mp=Math.min(parsePesos($('se_pmp').value),n);
+    else if(desde==='ef')mp=Math.max(0,n-parsePesos($('se_pef').value));
+    else mp=pg.mp>0?Math.min(pg.mp,n||pg.mp):Math.min(SMIX.doc,n||SMIX.doc);
+    if(desde!=='mp')$('se_pmp').value=pesosTxt(mp);
+    if(desde!=='ef')$('se_pef').value=n?pesosTxt(Math.max(0,n-mp)):'';
+    $('se_mixnota').textContent=SMIX.doc?('Lo del '+(pg.tipo==='monotributo'||$('se_ptipo').value==='monotributo'?'la factura':'recibo')+' de '+cMesTxt(SU.D.periodo).toLowerCase()+' es '+pesosTxt(SMIX.doc)+(Math.abs(mp-SMIX.doc)>0.5?'. Lo cambiaste: se va a pagar así todos los meses hasta que lo vuelvas a cambiar.':': va por Mercado Pago (por defecto).')):'Cuando llegue el recibo, por Mercado Pago va lo del recibo (podés cambiarlo).';
+  };
+  $('se_pmed').onchange=function(){pinta()};$('se_pneto').addEventListener('input',function(){pinta('neto')});
+  $('se_pmp').addEventListener('input',function(){pinta('mp')});$('se_pef').addEventListener('input',function(){pinta('ef')});
+  pinta();
+}
+// Si por Mercado Pago queda lo del recibo, no se guarda fijo (así cada mes toma el recibo nuevo).
+function sMixMpGuardar(){if(!$('se_pmed')||$('se_pmed').value!=='mixto')return 0;var mp=parsePesos($('se_pmp').value);return Math.abs(mp-SMIX.doc)<=0.5?0:mp}
 function sEmpForm(id){
   var e=(SU.D.empleados||[]).filter(function(x){return x.id===id})[0]||{jornada:100,categoria:'Vendedores A',activo:true};
   var box=$('sform');box.classList.remove('oculto');
@@ -3322,8 +3367,10 @@ function sEmpForm(id){
     '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="se_afi" style="width:auto"'+(e.afiliado?' checked':'')+'> Afiliado al sindicato</label>'+
     (function(){var pg=e.pago||{};return '<div class="g2"><div><label>Cobra con</label><select id="se_ptipo"><option value="recibo">Recibo de sueldo</option><option value="monotributo"'+(pg.tipo==='monotributo'?' selected':'')+'>Factura de monotributo</option></select></div>'+
       '<div><label>Se le paga con</label><select id="se_pmed"><option value="mp">Mercado Pago</option><option value="efectivo"'+(pg.medio==='efectivo'?' selected':'')+'>Efectivo</option><option value="mixto"'+(pg.medio==='mixto'?' selected':'')+'>Mixto</option></select></div></div>'+
-      '<label>Neto que cobra por mes (recibo + efectivo)</label><input id="se_pneto" inputmode="decimal" value="'+(pg.neto?cNum(pg.neto):'')+'" placeholder="Vacío = el Sueldo de ADMINISTRACION">'+
-      '<div class="note">Mixto: lo del recibo o la factura por Mercado Pago y el resto del neto en efectivo. Si el neto es más que el recibo, la diferencia va siempre en efectivo.</div>'})()+
+      '<label>Neto que cobra por mes (recibo + efectivo)</label><input id="se_pneto" data-pesos inputmode="decimal" value="'+(pg.neto?'$ '+cNum(pg.neto):'')+'" placeholder="Vacío = el Sueldo de ADMINISTRACION">'+
+      // v114: mixto: cuánto por Mercado Pago y cuánto en efectivo (por defecto, lo del recibo por MP; se puede cambiar)
+      '<div id="se_mix" class="g2"><div><label>Por Mercado Pago</label><input id="se_pmp" data-pesos inputmode="decimal"></div><div><label>En efectivo</label><input id="se_pef" data-pesos inputmode="decimal"></div></div>'+
+      '<div class="note" id="se_mixnota"></div>'})()+
     (id?'<div class="g2"><div><label>Fecha de egreso (si dejó)</label><input id="se_egr" type="date" value="'+esc(e.egreso||'')+'"></div><div></div></div>':'')+
     '<div class="btns"><button class="btn" id="se_ok">Guardar</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button>'+(id?'<button class="btn sec" style="color:var(--rojo)" id="se_del">Borrar empleado</button>':'')+'</div><div class="note" id="se_msg"></div>';
   if($('se_del'))$('se_del').onclick=function(){var b=this;
@@ -3334,10 +3381,11 @@ function sEmpForm(id){
       .catch(function(e2){b.disabled=false;$('se_msg').innerHTML='<span class="neg">'+esc(/Acci/i.test(e2.message)?'Actualizá ECHU a la versión 6.12 (Nueva versión).':e2.message)+'</span>'});
   };
   $('se_jor').onchange=function(){if(this.value!=='otra')$('se_pct').value=this.value};
+  sMixForm(e);
   box.scrollIntoView({behavior:'smooth',block:'start'});
   $('se_ok').onclick=function(){$('se_msg').textContent='Guardando…';
     var emp={id:id||'',nombre:$('se_nom').value,cuil:$('se_cuil').value,ingreso:$('se_ing').value,categoria:$('se_cat').value,jornada:Number($('se_pct').value)||100,afiliado:$('se_afi').checked,egreso:$('se_egr')?$('se_egr').value:'',activo:!($('se_egr')&&$('se_egr').value),
-      pago:{tipo:$('se_ptipo').value,medio:$('se_pmed').value,neto:parsePesos($('se_pneto').value)}};
+      pago:{tipo:$('se_ptipo').value,medio:$('se_pmed').value,neto:parsePesos($('se_pneto').value),mp:sMixMpGuardar()}};
     api('sue_empleado',{datos:JSON.stringify(emp)}).then(function(r){var L=SU.D.empleados||[],i=L.findIndex(function(x){return x.id===r.id});if(i>=0)L[i]=r;else L.push(r);SU.D.empleados=L;box.classList.add('oculto');sPintar()})
       .catch(function(err2){$('se_msg').innerHTML='<span class="neg">'+esc(err2.message)+'</span>'})};
 }
@@ -3452,6 +3500,7 @@ function sCuotaForm(eid){
   var e=(SU.D.empleados||[]).filter(function(x){return x.id===eid})[0],p=SU.D.pagos[eid],box=$('sform');box.classList.remove('oculto');
   box.innerHTML='<h2>Monotributo de '+esc(e.nombre.split(' ')[0])+' · '+cMesTxt(SU.per)+'</h2><label>Importe</label><input id="sq_imp" inputmode="decimal" value="'+(p.cuota?cNum(p.cuota):'')+'" placeholder="$ 0">'+
     '<div class="note">Se suma al neto y va siempre por Mercado Pago.</div><div class="btns"><button class="btn" id="sq_ok">Guardar</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button></div><div class="note" id="sq_msg"></div>';
+  pesosEnVivo($('sq_imp'));if($('sq_imp').value)$('sq_imp').value=pesosTxt(parsePesos($('sq_imp').value));
   box.scrollIntoView({behavior:'smooth',block:'start'});
   $('sq_ok').onclick=function(){var v=parsePesos($('sq_imp').value);if(!(v>0)){$('sq_msg').innerHTML='<span class="neg">Poné el importe.</span>';return}
     $('sq_msg').textContent='Guardando…';sCuota(eid,v).then(function(){box.classList.add('oculto')})};
@@ -3476,6 +3525,7 @@ function sDuenosForm(){
   var pinta=function(){box.innerHTML='<h2>Sueldo de los dueños</h2><div class="note" style="margin-top:0">Monto fijo por mes. Va separado de los empleados y a ADMINISTRACION.</div>'+
     du.map(function(x,i){return '<div class="g2"><div><label>Nombre</label><input data-dn="'+i+'" value="'+esc(x.nombre)+'"></div><div><label>Por mes</label><input data-dm="'+i+'" inputmode="decimal" value="'+(x.monto?cNum(x.monto):'')+'" placeholder="$ 0"></div></div>'}).join('')+
     '<div class="btns"><button class="btn" id="sd_ok">Guardar</button><button class="btn sec" id="sd_mas">+ Otro</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button></div><div class="note" id="sd_msg"></div>';
+    box.querySelectorAll('[data-dm]').forEach(function(i){pesosEnVivo(i);if(i.value)i.value=pesosTxt(parsePesos(i.value))});
     var leer=function(){du=du.map(function(x,i){return {nombre:box.querySelector('[data-dn="'+i+'"]').value.trim(),monto:parsePesos(box.querySelector('[data-dm="'+i+'"]').value)}})};
     $('sd_mas').onclick=function(){leer();du.push({nombre:'',monto:0});pinta()};
     $('sd_ok').onclick=function(){leer();$('sd_msg').textContent='Guardando…';
@@ -3494,14 +3544,14 @@ function sPagarForm(){
       '<div class="g3"><div><label>Total</label><input data-sp="total" data-i="'+i+'" inputmode="decimal" value="'+cNum(x.total)+'"></div><div><label>Mercado Pago</label><input data-sp="mp" data-i="'+i+'" inputmode="decimal" value="'+cNum(x.mp)+'"></div><div><label>Efectivo</label><input data-sp="ef" data-i="'+i+'" inputmode="decimal" value="'+cNum(x.ef)+'"></div></div>'+
       (x.cuota?'<div class="rk">El Mercado Pago incluye el monotributo ('+pesos(x.cuota)+').</div>':'')+'</div>'}).join('')+
     '<div class="btns"><button class="btn" id="sp_ok">Confirmar y bajar PDFs</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button></div><div class="note" id="sp_msg"></div>';
-  box.querySelectorAll('[data-sp]').forEach(function(inp){inp.onchange=function(){
+  box.querySelectorAll('[data-sp]').forEach(function(inp){pesosEnVivo(inp);inp.value=pesosTxt(parsePesos(inp.value));inp.onchange=function(){
     var x=SP.conf[Number(inp.dataset.i)],v=Math.max(0,parsePesos(inp.value)),k=inp.dataset.sp;
     // el monotributo va siempre por Mercado Pago: el efectivo nunca se lo come
     if(k==='total'){x.total=Math.max(v,x.cuota);x.mp=Math.max(x.cuota,Math.min(x.mp,x.total));x.ef=r2(x.total-x.mp)}
     else if(k==='mp'){x.mp=Math.max(x.cuota,Math.min(v,x.total));x.ef=r2(x.total-x.mp)}
     else{x.ef=Math.min(v,r2(x.total-x.cuota));x.mp=r2(x.total-x.ef)}
     var q=function(n){return box.querySelector('[data-i="'+inp.dataset.i+'"][data-sp="'+n+'"]')};
-    q('total').value=cNum(x.total);q('mp').value=cNum(x.mp);q('ef').value=cNum(x.ef);
+    q('total').value=pesosTxt(x.total);q('mp').value=pesosTxt(x.mp);q('ef').value=pesosTxt(x.ef);
   }});
   box.scrollIntoView({behavior:'smooth',block:'start'});
   $('sp_ok').onclick=function(){var b=this;b.disabled=true;$('sp_msg').textContent='Armando los PDFs…';

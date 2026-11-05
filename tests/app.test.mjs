@@ -247,11 +247,11 @@ test('Pagar sueldos: estado del recibo, monotributo, dueños aparte; confirmar e
   assert.ok(echu.pedidos.some(p => /"accion":"sue_monotributo"/.test(p.cuerpo || '') && /\\"importe\\":50000/.test(p.cuerpo || '')));
   // confirmar: E2 pide 100.000 en efectivo
   await page.click('#spagar');
-  assert.equal(await page.inputValue('[data-i="0"][data-sp="mp"]'), '600.000');
+  assert.equal(await page.inputValue('[data-i="0"][data-sp="mp"]'), '$ 600.000');
   await page.fill('[data-i="1"][data-sp="ef"]', '100000'); await page.dispatchEvent('[data-i="1"][data-sp="ef"]', 'change');
-  assert.equal(await page.inputValue('[data-i="1"][data-sp="mp"]'), '450.000');
+  assert.equal(await page.inputValue('[data-i="1"][data-sp="mp"]'), '$ 450.000');
   await page.fill('[data-i="1"][data-sp="ef"]', '600000'); await page.dispatchEvent('[data-i="1"][data-sp="ef"]', 'change');
-  assert.equal(await page.inputValue('[data-i="1"][data-sp="mp"]'), '50.000', 'el monotributo queda por Mercado Pago');
+  assert.equal(await page.inputValue('[data-i="1"][data-sp="mp"]'), '$ 50.000', 'el monotributo queda por Mercado Pago');
   await page.fill('[data-i="1"][data-sp="ef"]', '100000'); await page.dispatchEvent('[data-i="1"][data-sp="ef"]', 'change');
   await page.click('#sp_ok');
   await page.locator('#sp_msg .pos').waitFor();
@@ -274,7 +274,48 @@ test('Sueldos: el empleado guarda cómo cobra (recibo o monotributo), con qué s
   await page.click('#se_ok'); await page.waitForTimeout(400);
   const p = echu.pedidos.find(x => /"accion":"sue_empleado"/.test(x.cuerpo || ''));
   assert.ok(p); const datos = JSON.parse(JSON.parse(p.cuerpo).datos);
-  assert.deepEqual(datos.pago, {tipo: 'monotributo', medio: 'efectivo', neto: 1200000});
+  assert.deepEqual(datos.pago, {tipo: 'monotributo', medio: 'efectivo', neto: 1200000, mp: 0});
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('Sueldos: el neto se escribe con $ y puntos; en mixto trae por MP lo del recibo y se puede cambiar (el efectivo se acomoda)', async () => {
+  const {ctx, page, echu, errores} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="sue"]');
+  await page.locator('#slista .cmp').nth(0).waitFor();
+  await page.locator('#slista .cmp').nth(0).getByText('editar').click();
+  assert.equal(await page.inputValue('#se_pneto'), '$ 900.000');
+  assert.equal(await page.inputValue('#se_pmp'), '$ 600.000', 'por defecto, lo del recibo');
+  assert.equal(await page.inputValue('#se_pef'), '$ 300.000');
+  await page.fill('#se_pneto', ''); await page.type('#se_pneto', '1100000');
+  assert.equal(await page.inputValue('#se_pneto'), '$ 1.100.000');
+  assert.equal(await page.inputValue('#se_pef'), '$ 500.000');
+  await page.fill('#se_pef', ''); await page.type('#se_pef', '400000');
+  assert.equal(await page.inputValue('#se_pmp'), '$ 700.000');
+  assert.match(await page.locator('#se_mixnota').innerText(), /Lo cambiaste/);
+  await page.click('#se_ok'); await page.waitForTimeout(400);
+  const p = echu.pedidos.filter(x => /"accion":"sue_empleado"/.test(x.cuerpo || '')).pop();
+  assert.deepEqual(JSON.parse(JSON.parse(p.cuerpo).datos).pago, {tipo: 'recibo', medio: 'mixto', neto: 1100000, mp: 700000});
+  // si se deja lo del recibo, no queda fijo (cada mes toma el recibo nuevo)
+  await page.locator('#slista .cmp').nth(0).getByText('editar').click();
+  await page.click('#se_ok'); await page.waitForTimeout(400);
+  const p2 = echu.pedidos.filter(x => /"accion":"sue_empleado"/.test(x.cuerpo || '')).pop();
+  assert.equal(JSON.parse(JSON.parse(p2.cuerpo).datos).pago.mp, 0);
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('Sueldos: al abrir un empleado con recibo de la contadora, arriba va el recibo (neto, efectivo y total) y el cálculo de la app queda plegado', async () => {
+  const {ctx, page, errores} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="sue"]');
+  await page.locator('#slista .cmp').nth(0).waitFor();
+  await page.locator('#slista .cmp').nth(0).click();
+  const t = await page.locator('#slista').innerText();
+  assert.match(t, /recibo de la contadora/i);
+  assert.match(t, /Neto del recibo · Mercado Pago\s*\$ 600\.000,00/); assert.match(t, /Efectivo\s*\$ 300\.000,00/); assert.match(t, /Total que cobra\s*\$ 900\.000,00/);
+  assert.equal(await page.locator('#slista details').evaluate(d => d.open), false);
+  await page.click('#sverdoc'); await page.waitForTimeout(500);
+  assert.ok(await page.evaluate(() => ULT_PDF && ULT_PDF.bytes.length > 100));
   assert.deepEqual(errores, []);
   await ctx.close();
 });
