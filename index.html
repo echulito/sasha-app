@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=107;
+var APP_V=108;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -133,7 +133,7 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
 .gr2{display:grid;grid-template-columns:1fr 108px 62px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px dashed var(--linea);font-size:14px}.gr2 input{padding:7px 8px;text-align:right;width:100%;box-sizing:border-box}.gr2 input[readonly]{background:#f1f3f6}
 .mini{font-size:11px;color:var(--gris)}.gr input{width:130px;padding:7px 9px;text-align:right;flex:none}.gr input[readonly]{background:#f1f3f6}
 /* v77: Contabilidad (modelo C) */
-.tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.tiles .card{margin:0;padding:10px 6px;text-align:center;cursor:pointer}.tiles b{display:block;font-size:15px}
+.tiles{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}#ctiles{grid-template-columns:1fr 1fr}.tiles .card{margin:0;padding:10px 6px;text-align:center;cursor:pointer}.tiles b{display:block;font-size:15px}
 .mes{display:flex;gap:6px;overflow-x:auto;margin:4px 0 10px;padding-bottom:2px}.mes button{flex:0 0 auto;border:1.5px solid var(--linea);background:#fff;border-radius:999px;padding:6px 12px;font-weight:600;color:var(--gris);font-size:13px;cursor:pointer}.mes button.on{background:var(--azul2);border-color:var(--azul2);color:#fff}
 .cmp{background:#fff;border:1px solid var(--linea);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer}
 .cmp .t{display:flex;justify-content:space-between;gap:8px}.cmp .t b{font-size:14px}.cmp .s{font-size:12px;color:var(--gris);margin-top:2px}
@@ -2883,7 +2883,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=107');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=108');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -2900,20 +2900,28 @@ function cPintar(){
   $('cmes').innerHTML=Object.keys(ps).sort().map(function(k){return '<button class="'+(k===m.periodo?'on':'')+'" onclick="cCargar(\''+k+'\')">'+(k===m.periodo?cMesTxt(k):LMESES[Number(k.slice(5,7))-1]+(k.slice(0,4)!==h.slice(0,4)?' '+k.slice(2,4):''))+'</button>'}).join('');
   setTimeout(function(){var b=$('cmes').querySelector('.on');if(b)b.scrollIntoView({inline:'center',block:'nearest'})},0);
   var aFavor=m.saldoSiguiente>0;
+  // v108: Compras = facturas (las notas de crédito restan) + remitos que todavía no tienen factura (para no contarlos dos veces).
+  var cs=m.comps||[],sg=function(o){return (o.tipo==='nota_credito'?-1:1)*(Number(o.total)||0)};
+  var cFac=cs.filter(function(x){return x.lado==='compra'&&x.tipo!=='remito'}),cRem=cs.filter(function(x){return x.tipo==='remito'});
+  var totFac=cFac.reduce(function(a,o){return a+sg(o)},0),totRem=cRem.reduce(function(a,o){return a+(Number(o.total)||0)},0),totRemSin=cRem.filter(function(o){return !o.vinculo}).reduce(function(a,o){return a+(Number(o.total)||0)},0);
+  CT.tot={fac:totFac,nFac:cFac.length,rem:totRem,remSin:totRemSin,nRem:cRem.length};
   $('ctiles').innerHTML='<div class="card" onclick="cDetalle()"><span class="rk">IVA ventas</span><b>'+pesos(m.debito)+'</b></div><div class="card" onclick="cDetalle()"><span class="rk">IVA compras</span><b class="pos">'+pesos(m.credito)+'</b></div>'+
-    '<div class="card" onclick="cDetalle()"><span class="rk">'+(aFavor?'Saldo a favor':'A pagar')+'</span><b class="'+(aFavor?'pos':'neg')+'">'+pesos(aFavor?m.saldoSiguiente:m.aPagar)+'</b></div>';
+    '<div class="card" onclick="cDetalle()"><span class="rk">'+(aFavor?'Saldo a favor':'A pagar')+'</span><b class="'+(aFavor?'pos':'neg')+'">'+pesos(aFavor?m.saldoSiguiente:m.aPagar)+'</b></div>'+
+    '<div class="card" onclick="CT.seg=\'compras\';cPintar()"><span class="rk">Compras</span><b>'+pesos(totFac+totRemSin)+'</b><span class="rk">facturas + remitos</span></div>';
   if(!$('cdet').classList.contains('oculto'))cDetalle(true);
   var c=m.comps||[],grupos={compras:c.filter(function(x){return x.lado==='compra'&&x.tipo!=='remito'}),ventas:c.filter(function(x){return x.lado==='venta'}),remitos:c.filter(function(x){return x.tipo==='remito'}),revisar:c.filter(function(x){return x.estado==='revisar'})};
   var nom={compras:'Facturas',ventas:'Ventas Z',remitos:'Remitos',revisar:'Revisar'};
   document.querySelectorAll('#cseg button').forEach(function(b){b.classList.toggle('on',b.dataset.s===CT.seg);b.textContent=nom[b.dataset.s]+' · '+grupos[b.dataset.s].length;b.onclick=function(){CT.seg=b.dataset.s;cPintar()}});
   var lista=grupos[CT.seg];
+  var totTxt=CT.seg==='compras'&&lista.length?'<div class="note" style="margin:0 0 6px">Total de facturas a la fecha: <b>'+pesos(CT.tot.fac)+'</b> ('+CT.tot.nFac+')'+(cFac.some(function(o){return o.tipo==='nota_credito'})?' · las notas de crédito restan':'')+'</div>':
+    CT.seg==='remitos'&&lista.length?'<div class="note" style="margin:0 0 6px">Total de remitos a la fecha: <b>'+pesos(CT.tot.rem)+'</b> ('+CT.tot.nRem+')'+(CT.tot.remSin!==CT.tot.rem?' · sin factura: '+pesos(CT.tot.remSin):'')+'</div>':'';
   var vacio={compras:'Todavía no cargaste facturas de compra de '+cMesTxt(m.periodo)+'. Sacales foto con el botón de abajo.',ventas:'Sacale foto a cada cierre Z del controlador fiscal. Los días sin Z se calculan con las ventas de control de cajas.',remitos:'No hay remitos en este mes.',revisar:'No hay nada para revisar.'};
-  $('clista').innerHTML=lista.length?lista.map(function(o){
+  $('clista').innerHTML=totTxt+(lista.length?lista.map(function(o){
     var chip=(o.tipo!=='cierre_z'&&!o.numero)?'<span class="chip r">sin número: tocalo y cargalo</span>':o.estado==='revisar'?'<span class="chip r">revisar</span>':o.tipo==='remito'?(o.vinculo?'<span class="chip v">con factura</span>':''):o.tipo==='nota_credito'?'<span class="chip c">descuenta</span>':
       (o.lado==='compra'&&['A','M'].indexOf(o.letra)<0?'<span class="chip a">no da crédito</span>':(o.conRemito?'<span class="chip v">con remito</span>':''));
     var der=o.tipo==='remito'?(o.total>0?pesos(o.total):'sin importe'):'IVA '+(o.ivaMes<0?'-':'')+pesos(Math.abs(o.ivaMes));
     return '<div class="cmp" onclick="cAbrir(\''+o.id+'\')"><div class="t"><b>'+esc(cTitulo(o))+'</b><b>'+der+'</b></div><div class="s">'+esc(o.nombre||'')+' · '+cFecha(o.fecha)+(chip?' · '+chip:'')+'</div></div>'}).join(''):
-    '<div class="card"><div class="note" style="margin-top:0">'+vacio[CT.seg]+'</div></div>';
+    '<div class="card"><div class="note" style="margin-top:0">'+vacio[CT.seg]+'</div></div>');
   if(!m.config.cuit&&$('ccfg').classList.contains('oculto'))$('clista').insertAdjacentHTML('afterbegin','<div class="card" style="margin-bottom:8px"><div class="note warn" style="margin-top:0;font-weight:600">Cargá tu CUIT en <button class="lnk" onclick="cVerConfig()">Datos de contabilidad</button> para que la app sepa qué facturas son tuyas (ventas) y cuáles de proveedores (compras).</div></div>');
 }
 function cDetalle(refrescar){
@@ -3241,11 +3249,13 @@ function sPintar(){
   $('sdet').classList.add('oculto');
   var act=sActivos(),netos=0,costo=0,falta=0;
   var filas=act.map(function(e){var l=sLiq(e.id),c=l?{totales:l.totales}:sCalcular(e,per,{});if(!l)falta++;netos+=c.totales.neto;costo+=c.totales.costo;
-    return '<div class="cmp" style="margin-top:8px" onclick="sAbrir(\''+e.id+'\')"><div class="t"><b>'+esc(e.nombre)+'</b><b>'+pesos(c.totales.neto)+'</b></div><div class="s">'+esc(e.categoria)+' · '+sAnios(e.ingreso,per)+(sAnios(e.ingreso,per)===1?' año':' años')+(e.jornada<100?' · '+(e.jornada===50?'media jornada':e.jornada+'% jornada'):'')+' · '+(l?'<span class="chip v">liquidado</span>':'<span class="chip a">sin liquidar</span>')+'</div></div>'}).join('');
+    return '<div class="cmp" style="margin-top:8px" onclick="sAbrir(\''+e.id+'\')"><div class="t"><b>'+esc(e.nombre)+'</b><b>'+pesos(c.totales.neto)+'</b></div><div class="s"><button class="lnk" style="float:right" onclick="event.stopPropagation();sEmpForm(\''+e.id+'\')">editar</button>'+esc(e.categoria)+' · '+sAnios(e.ingreso,per)+(sAnios(e.ingreso,per)===1?' año':' años')+(e.jornada<100?' · '+(e.jornada===50?'media jornada':e.jornada+'% jornada'):'')+' · '+(l?'<span class="chip v">liquidado</span>':'<span class="chip a">sin liquidar</span>')+'</div></div>'}).join('');
   var es=sEscala(per);
   $('slista').innerHTML='<div class="tiles"><div class="card"><span class="rk">Netos a pagar</span><b>'+pesos(netos)+'</b></div><div class="card"><span class="rk">Costo empresa</span><b class="neg">'+pesos(costo)+'</b></div><div class="card"><span class="rk">Empleados</span><b>'+act.length+'</b></div></div>'+
     (act.length?filas:'<div class="card" style="margin-top:8px"><div class="note" style="margin-top:0">Todavía no cargaste empleados. Tocá <b>+ Empleado</b>.</div></div>')+
     '<div class="btns">'+(falta?'<button class="btn" id="sliqall">Liquidar los que faltan ('+falta+')</button>':'')+'<button class="btn sec" onclick="sEmpForm()">+ Empleado</button></div>'+
+    // v108: todos los empleados (también los que no aparecen este mes) para editarlos o borrarlos.
+    (function(){var otros=(d.empleados||[]).filter(function(e){return act.indexOf(e)<0});return otros.length?'<div class="note">Otros empleados (no figuran en '+cMesTxt(per)+'): '+otros.map(function(e){return '<button class="lnk" onclick="sEmpForm(\''+e.id+'\')">'+esc(e.nombre)+'</button>'}).join(' · ')+'</div>':''})()+
     '<div class="note">Escala de Comercio de <b>'+cMesTxt(es.per)+'</b>'+(es.per!==per?' (todavía no hay una de '+cMesTxt(per)+')':'')+' · <button class="lnk" onclick="sEscalaForm()">ver / cambiar</button> · <button class="lnk" onclick="sCfgForm()">empresa y porcentajes</button></div>'+
     '<div class="note">El costo empresa es estimado (contribuciones '+(d.config.patronal.ss+d.config.patronal.os)+'% + ART + seguro + INACAP). Las cargas se presentan en ARCA (F.931).</div>';
   if($('sliqall'))$('sliqall').onclick=sLiquidarFaltan;
@@ -3305,7 +3315,14 @@ function sEmpForm(id){
     '<div class="g2"><div><label>Jornada</label><select id="se_jor"><option value="100"'+(e.jornada==100?' selected':'')+'>Completa</option><option value="50"'+(e.jornada==50?' selected':'')+'>Media jornada</option><option value="otra"'+([100,50].indexOf(Number(e.jornada))<0?' selected':'')+'>Otra (%)</option></select></div><div><label>% de la jornada</label><input id="se_pct" inputmode="numeric" value="'+(e.jornada||100)+'"></div></div>'+
     '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="se_afi" style="width:auto"'+(e.afiliado?' checked':'')+'> Afiliado al sindicato</label>'+
     (id?'<div class="g2"><div><label>Fecha de egreso (si dejó)</label><input id="se_egr" type="date" value="'+esc(e.egreso||'')+'"></div><div></div></div>':'')+
-    '<div class="btns"><button class="btn" id="se_ok">Guardar</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button></div><div class="note" id="se_msg"></div>';
+    '<div class="btns"><button class="btn" id="se_ok">Guardar</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button>'+(id?'<button class="btn sec" style="color:var(--rojo)" id="se_del">Borrar empleado</button>':'')+'</div><div class="note" id="se_msg"></div>';
+  if($('se_del'))$('se_del').onclick=function(){var b=this;
+    // v108: dos toques para borrar (sin ventanas que traben la app). Sus liquidaciones viejas quedan guardadas.
+    if(!b.dataset.ok){b.dataset.ok='1';b.textContent='¿Seguro? Tocá de nuevo para borrar';$('se_msg').textContent='Se borra de la lista. Sus recibos ya liquidados quedan guardados en ECHU.';return}
+    b.disabled=true;$('se_msg').textContent='Borrando…';
+    api('sue_borrar_emp',{id:id}).then(function(){SU.D.empleados=(SU.D.empleados||[]).filter(function(x){return x.id!==id});if(SU.emp===id)SU.emp='';box.classList.add('oculto');sPintar()})
+      .catch(function(e2){b.disabled=false;$('se_msg').innerHTML='<span class="neg">'+esc(/Acci/i.test(e2.message)?'Actualizá ECHU a la versión 6.12 (Nueva versión).':e2.message)+'</span>'});
+  };
   $('se_jor').onchange=function(){if(this.value!=='otra')$('se_pct').value=this.value};
   box.scrollIntoView({behavior:'smooth',block:'start'});
   $('se_ok').onclick=function(){$('se_msg').textContent='Guardando…';

@@ -201,6 +201,35 @@ test('Inicio (modelo A): números, avisos y cada botón lleva al lugar para reso
   await ctx.close();
 });
 
+test('IVA: tarjeta Compras (facturas − notas de crédito + remitos sin factura) y total en Facturas y Remitos', async () => {
+  const {ctx, page, errores} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="iva"]');
+  await page.locator('#ctiles .card').nth(3).waitFor();
+  // 121.000 − 12.100 + 50.000 (el remito con factura no se suma dos veces)
+  assert.match(await page.locator('#ctiles').innerText(), /Compras\s*\$ 158\.900\s*facturas \+ remitos/);
+  await page.click('#cseg button[data-s="compras"]');
+  assert.match(await page.locator('#clista').innerText(), /Total de facturas a la fecha: \$ 108\.900 \(2\)/);
+  await page.click('#cseg button[data-s="remitos"]');
+  assert.match(await page.locator('#clista').innerText(), /Total de remitos a la fecha: \$ 80\.000 \(2\) · sin factura: \$ 50\.000/);
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('Sueldos: editar desde la lista y borrar un empleado (dos toques)', async () => {
+  const {ctx, page, echu, errores} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="sue"]');
+  await page.locator('#slista .cmp').nth(1).waitFor();
+  await page.locator('#slista .cmp').nth(1).getByText('editar').click();
+  assert.equal(await page.inputValue('#se_nom'), 'Empleado Dos');
+  await page.click('#se_del');
+  assert.match(await page.locator('#se_del').innerText(), /Tocá de nuevo/);
+  await page.click('#se_del'); await page.waitForTimeout(500);
+  assert.ok(echu.pedidos.some(p => /"accion":"sue_borrar_emp"/.test(p.cuerpo || '') && /"id":"E2"/.test(p.cuerpo || '')));
+  assert.equal(await page.locator('#slista .cmp').count(), 1);
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
 // ---------- Regresión de pantallas: tienen que verse igual que las aprobadas ----------
 async function diferencia(page, a, b) {
   return page.evaluate(async ([a, b]) => {
