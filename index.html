@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=112;
+var APP_V=113;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -2884,7 +2884,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=112');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=113');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3251,8 +3251,10 @@ function sPintar(){
   if(SU.emp){sRecibo();return}
   $('sdet').classList.add('oculto');
   var act=sActivos(),netos=0,costo=0,falta=0;
-  var filas=act.map(function(e){var l=sLiq(e.id),c=l?{totales:l.totales}:sCalcular(e,per,{});if(!l)falta++;netos+=c.totales.neto;costo+=c.totales.costo;
-    return '<div class="cmp" style="margin-top:8px" onclick="sAbrir(\''+e.id+'\')"><div class="t"><b>'+esc(e.nombre)+'</b><b>'+pesos(c.totales.neto)+'</b></div><div class="s"><button class="lnk" style="float:right" onclick="event.stopPropagation();sEmpForm(\''+e.id+'\')">editar</button>'+esc(e.categoria)+' · '+sAnios(e.ingreso,per)+(sAnios(e.ingreso,per)===1?' año':' años')+(e.jornada<100?' · '+(e.jornada===50?'media jornada':e.jornada+'% jornada'):'')+' · '+(l?'<span class="chip v">liquidado</span>':'<span class="chip a">sin liquidar</span>')+'</div></div>'}).join('');
+  var filas=act.map(function(e){var l=sLiq(e.id),p=d.pagos&&d.pagos[e.id],real=p&&!p.falta;
+    // v113: con el recibo (o la factura) de la contadora, abajo van los importes reales: el neto total (recibo + efectivo) y su costo.
+    var c=real?{totales:{neto:p.total,costo:p.costo||p.total}}:l?{totales:l.totales}:sCalcular(e,per,{});if(!l&&!real)falta++;netos+=c.totales.neto;costo+=c.totales.costo;
+    return '<div class="cmp" style="margin-top:8px" onclick="sAbrir(\''+e.id+'\')"><div class="t"><b>'+esc(e.nombre)+'</b><b>'+pesos(c.totales.neto)+'</b></div><div class="s"><button class="lnk" style="float:right" onclick="event.stopPropagation();sEmpForm(\''+e.id+'\')">editar</button>'+esc(e.categoria)+' · '+sAnios(e.ingreso,per)+(sAnios(e.ingreso,per)===1?' año':' años')+(e.jornada<100?' · '+(e.jornada===50?'media jornada':e.jornada+'% jornada'):'')+' · '+(real?'<span class="chip v">'+(p.tipo==='monotributo'?'factura':'recibo')+' de la contadora</span>'+(p.ef>0?' <span class="rk">MP '+pesos(p.mp)+' + efectivo '+pesos(p.ef)+'</span>':''):l?'<span class="chip v">liquidado</span>':'<span class="chip a">sin liquidar</span>')+'</div></div>'}).join('');
   var es=sEscala(per);
   $('slista').innerHTML=sPagoHtml()+'<h2 style="margin:14px 2px 0">Liquidación de Comercio</h2><div class="tiles"><div class="card"><span class="rk">Netos a pagar</span><b>'+pesos(netos)+'</b></div><div class="card"><span class="rk">Costo empresa</span><b class="neg">'+pesos(costo)+'</b></div><div class="card"><span class="rk">Empleados</span><b>'+act.length+'</b></div></div>'+
     (act.length?filas:'<div class="card" style="margin-top:8px"><div class="note" style="margin-top:0">Todavía no cargaste empleados. Tocá <b>+ Empleado</b>.</div></div>')+
@@ -3320,8 +3322,8 @@ function sEmpForm(id){
     '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="se_afi" style="width:auto"'+(e.afiliado?' checked':'')+'> Afiliado al sindicato</label>'+
     (function(){var pg=e.pago||{};return '<div class="g2"><div><label>Cobra con</label><select id="se_ptipo"><option value="recibo">Recibo de sueldo</option><option value="monotributo"'+(pg.tipo==='monotributo'?' selected':'')+'>Factura de monotributo</option></select></div>'+
       '<div><label>Se le paga con</label><select id="se_pmed"><option value="mp">Mercado Pago</option><option value="efectivo"'+(pg.medio==='efectivo'?' selected':'')+'>Efectivo</option><option value="mixto"'+(pg.medio==='mixto'?' selected':'')+'>Mixto</option></select></div></div>'+
-      '<label>Neto que cobra por mes</label><input id="se_pneto" inputmode="decimal" value="'+(pg.neto?cNum(pg.neto):'')+'" placeholder="Vacío = lo que diga el recibo">'+
-      '<div class="note">Mixto: lo del recibo o la factura por Mercado Pago y el resto del neto en efectivo.</div>'})()+
+      '<label>Neto que cobra por mes (recibo + efectivo)</label><input id="se_pneto" inputmode="decimal" value="'+(pg.neto?cNum(pg.neto):'')+'" placeholder="Vacío = el Sueldo de ADMINISTRACION">'+
+      '<div class="note">Mixto: lo del recibo o la factura por Mercado Pago y el resto del neto en efectivo. Si el neto es más que el recibo, la diferencia va siempre en efectivo.</div>'})()+
     (id?'<div class="g2"><div><label>Fecha de egreso (si dejó)</label><input id="se_egr" type="date" value="'+esc(e.egreso||'')+'"></div><div></div></div>':'')+
     '<div class="btns"><button class="btn" id="se_ok">Guardar</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button>'+(id?'<button class="btn sec" style="color:var(--rojo)" id="se_del">Borrar empleado</button>':'')+'</div><div class="note" id="se_msg"></div>';
   if($('se_del'))$('se_del').onclick=function(){var b=this;

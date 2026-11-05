@@ -238,7 +238,10 @@ test('Pagar sueldos: estado del recibo, monotributo, dueños aparte; confirmar e
   assert.match(t, /Empleada\s+recibo ✓/); assert.match(t, /Empleado\s+falta factura/);
   assert.match(t, /Mercado Pago \$ 600\.000 · Efectivo \$ 300\.000/);
   assert.match(t, /incluye monotributo \$ 50\.000/);
-  assert.match(t, /Empleados\s*\$ 1\.450\.000/); assert.match(t, /Dueño Uno \(dueño\)\s*\$ 1\.000\.000/); assert.match(t, /Total sueldos\s*\$ 2\.850\.000/);
+  assert.match(t, /Empleados\s*\$ 1\.450\.000/);
+  // abajo, en la liquidación, también van los importes reales del recibo (neto total con el efectivo)
+  assert.match(await page.locator('#slista .cmp').nth(0).innerText(), /\$ 900\.000[\s\S]*recibo de la contadora\s*MP \$ 600\.000 \+ efectivo \$ 300\.000/);
+  assert.match(await page.locator('#slista .cmp').nth(1).innerText(), /sin liquidar/); assert.match(t, /Dueño Uno \(dueño\)\s*\$ 1\.000\.000/); assert.match(t, /Total sueldos\s*\$ 2\.850\.000/);
   // monotributo: "sigue igual" guarda la cuota del mes
   await page.getByText('Sí, igual').click(); await page.waitForTimeout(400);
   assert.ok(echu.pedidos.some(p => /"accion":"sue_monotributo"/.test(p.cuerpo || '') && /\\"importe\\":50000/.test(p.cuerpo || '')));
