@@ -361,6 +361,39 @@ test('Contadora: lista por de dónde sale, con lo que falta; subir, sacar, no va
   await ctx.close();
 });
 
+test('Contadora: "Subir archivos del mes" manda todos juntos; dice dónde fue cada uno, lo repetido no se duplica y lo que no reconoce se avisa', async () => {
+  const antes = DATOS.contador_subir;
+  const vistos = new Set();
+  DATOS.contador_subir = p => {
+    if (p.doc !== 'auto') return antes;
+    if (/foto/.test(p.nombre)) throw new Error('No supe dónde va "' + p.nombre + '": subilo desde su renglón.');
+    const doc = /CBTE/.test(p.nombre) ? 'libro_cbte' : /ALICUOTAS/.test(p.nombre) ? 'libro_alic' : 'ret_cert';
+    if (vistos.has(p.archivo)) return {id: 'R', doc, nombre: p.nombre, repetido: true};
+    vistos.add(p.archivo); return {id: 'N' + vistos.size, doc, nombre: p.nombre};
+  };
+  try {
+    const {ctx, page, echu, errores} = await abrir();
+    await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="cdor"]');
+    await page.locator('#c-cdor .kgr').first().waitFor();
+    assert.equal(await page.locator('#ktodo').innerText(), '+ Subir archivos del mes');
+    await page.setInputFiles('#kfiletodo', [
+      {name: 'LIBRO_IVA_DIGITAL_VENTAS_CBTE_SASHA 2026-10.TXT', mimeType: 'text/plain', buffer: Buffer.from('comprobantes octubre')},
+      {name: 'LIBRO_IVA_DIGITAL_VENTAS_ALICUOTAS_SASHA 2026-10.TXT', mimeType: 'text/plain', buffer: Buffer.from('alicuotas octubre')},
+      {name: 'LIBRO_IVA_DIGITAL_VENTAS_CBTE_SASHA 2026-10 (1).TXT', mimeType: 'text/plain', buffer: Buffer.from('comprobantes octubre')},
+      {name: 'foto.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('jpg')}]);
+    await page.waitForFunction(() => /ya estaba/.test((document.getElementById('kres') || {}).innerText || ''), null, {timeout: 8000});
+    const subidos = echu.pedidos.filter(p => /"accion":"contador_subir"/.test(p.cuerpo || '')).map(p => JSON.parse(p.cuerpo));
+    assert.equal(subidos.length, 4); assert.ok(subidos.every(x => x.doc === 'auto'));
+    const r = await page.locator('#kres').innerText();
+    assert.match(r, /✓ 2 subidos: Libro IVA Digital · comprobantes, Libro IVA Digital · alícuotas/);
+    assert.match(r, /1 ya estaba \(no se duplicó\): LIBRO_IVA_DIGITAL_VENTAS_CBTE_SASHA 2026-10 \(1\)\.TXT/);
+    assert.match(r, /No supe dónde va "foto\.jpg": subilo desde su renglón\./);
+    if (process.env.CAPTURA) await page.screenshot({path: process.env.CAPTURA});
+    assert.deepEqual(errores, []);
+    await ctx.close();
+  } finally { DATOS.contador_subir = antes; }
+});
+
 test('Inicio: el aviso de la contadora lleva a la pantalla Contadora', async () => {
   const antes = DATOS.inicio.avisos;
   DATOS.inicio.avisos = [{nivel: 'amarillo', titulo: 'Contadora · faltan 3 de octubre', detalle: 'Vence el 05/11.', ir: 'contadora'}].concat(antes);

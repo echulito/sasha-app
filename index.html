@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=116;
+var APP_V=117;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -2892,7 +2892,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=116');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=117');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3627,7 +3627,7 @@ function sReciboEfectivo(pdf,F,rgb,x,fecha,per){
   copia(420,false);
 }
 /* ---------------- v115: CONTABILIDAD › CONTADORA (lo que se le manda cada mes, hasta el 5) ---------------- */
-var KD={per:'',D:null,zip:null,mandar:0};
+var KD={per:'',D:null,zip:null,mandar:0,res:''};
 var K_DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 function kFecha(k){var p=String(k||'').split('-');if(p.length<3)return k||'';var d=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));return K_DIAS[d.getDay()]+' '+p[2]+'/'+p[1]}
 function kFechaHora(t){var m=/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/.exec(String(t||''));return m?m[3]+'/'+m[2]+(m[4]?' '+m[4]:''):String(t||'')}
@@ -3635,7 +3635,7 @@ function kMes(per,n){var y=Number(per.slice(0,4)),m=Number(per.slice(5,7))-1+n;y
 function kTam(b){return b>=1048576?(b/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(b/1024))+' KB'}
 function kCargar(per){
   var box=$('c-cdor');if(!KD.D)box.innerHTML='<div class="cargando">Cargando…</div>';
-  return api('contador_datos',{periodo:per||KD.per||''}).then(function(d){if(KD.per!==d.periodo)KD.zip=null;KD.D=d;KD.per=d.periodo;KD.mandar=0;kPintar()})
+  return api('contador_datos',{periodo:per||KD.per||''}).then(function(d){if(KD.per!==d.periodo){KD.zip=null;KD.res=''}KD.D=d;KD.per=d.periodo;KD.mandar=0;kPintar()})
     .catch(function(e){box.innerHTML='<div class="card"><div class="note" style="margin-top:0"><span class="neg">'+esc(e.message)+'</span>'+(/Acción desconocida|desconocida/i.test(e.message)?' · Actualizá ECHU a la versión 6.19 (Nueva versión).':'')+'</div></div>'});
 }
 function kChip(e){return e==='ok'?'<span class="chip v">✓ listo</span>':e==='auto'?'<span class="chip v">✓ automático</span>':e==='nova'?'<span class="chip" style="background:#f1f3f4;color:var(--gris)">no va este mes</span>':'<span class="chip a">falta</span>'}
@@ -3644,7 +3644,10 @@ function kPintar(){
   var cab='<div class="card"><div class="mes" style="margin:0 0 6px;display:flex;align-items:center;justify-content:space-between"><button class="lnk" id="kant">‹</button><b style="font-size:16px">Para la contadora · '+esc(d.mes)+'</b><button class="lnk" id="ksig">›</button></div>'+
     (d.enviado?'<div class="rk"><b class="pos">✓ Mandado el '+esc(kFechaHora(d.enviado.fecha))+'</b> a '+esc(d.enviado.a)+'</div>':
       '<div class="rk">Vence el <b>'+esc(kFecha(d.vence))+'</b> · '+(d.faltan?'faltan <b style="color:var(--amar)">'+d.faltan+' de '+d.total+'</b>':'<b class="pos">está todo</b>')+'</div>')+
-    '<div style="height:8px;background:#eef1f4;border-radius:6px;margin-top:8px"><div style="height:8px;width:'+pct+'%;background:var(--verde);border-radius:6px"></div></div></div>';
+    '<div style="height:8px;background:#eef1f4;border-radius:6px;margin-top:8px"><div style="height:8px;width:'+pct+'%;background:var(--verde);border-radius:6px"></div></div>'+
+    '<button class="btn" id="ktodo" style="width:100%;margin-top:12px">+ Subir archivos del mes</button>'+
+    '<div class="note" id="kres" style="'+(KD.res?'':'display:none')+'">'+(KD.res||'')+'</div>'+
+    '<input type="file" id="kfiletodo" class="oculto" multiple></div>';
   var grupos=[];d.docs.forEach(function(x){if(grupos.indexOf(x.grupo)<0)grupos.push(x.grupo)});
   var lista=grupos.map(function(g){
     return '<div class="card kgr" style="padding:8px 14px 2px"><div class="kgt">'+esc(g)+'</div>'+d.docs.filter(function(x){return x.grupo===g}).map(function(x){
@@ -3663,6 +3666,8 @@ function kPintar(){
   $('kant').onclick=function(){kCargar(kMes(KD.per,-1))};$('ksig').onclick=function(){kCargar(kMes(KD.per,1))};
   box.querySelectorAll('[data-ksubir]').forEach(function(b){b.onclick=function(){var f=$('kfile');f.dataset.doc=b.dataset.ksubir;f.value='';f.click()}});
   $('kfile').onchange=function(){kSubir(this.dataset.doc,Array.prototype.slice.call(this.files||[]))};
+  $('ktodo').onclick=function(){var f=$('kfiletodo');f.value='';f.click()};
+  $('kfiletodo').onchange=function(){kSubir('auto',Array.prototype.slice.call(this.files||[]))};
   box.querySelectorAll('[data-kborrar]').forEach(function(b){b.onclick=function(){
     if(b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='¿sacar?';setTimeout(function(){if(b.isConnected){b.dataset.ok='';b.textContent='×'}},3000);return}
     b.disabled=true;api('contador_borrar',{periodo:KD.per,archivo:b.dataset.kborrar}).then(function(){KD.zip=null;return kCargar()}).catch(function(e){kMsg(e.message,true)})}});
@@ -3671,19 +3676,33 @@ function kPintar(){
   $('kmail').onclick=kMandar;$('kwsp').onclick=kCompartir;
 }
 function kMsg(t,mal){if($('kmsg'))$('kmsg').innerHTML='<span class="'+(mal?'neg':'pos')+'">'+esc(t)+'</span>'}
+// v117: doc 'auto' = todos juntos (ECHU pone cada uno en su lugar por el nombre). Lo repetido no se duplica.
 function kSubir(doc,files){
   if(!files.length)return;
-  var i=0,ok=0;
-  var sig=function(){
-    if(i>=files.length){KD.zip=null;return kCargar().then(function(){kMsg(ok===1?'Subido.':ok+' archivos subidos.')})}
-    var f=files[i++];
-    if(f.size>20*1024*1024){kMsg(f.name+': es muy grande (hasta 20 MB).',true);return sig()}
-    kMsg('Subiendo '+f.name+'…');
-    return new Promise(function(res,rej){var rd=new FileReader();rd.onload=function(){res(String(rd.result).replace(/^data:[^,]*,/,''))};rd.onerror=function(){rej(new Error('No se pudo abrir '+f.name))};rd.readAsDataURL(f)})
-      .then(function(b64){return lPost('contador_subir',{periodo:KD.per,doc:doc,archivo:b64,mime:f.type||'application/octet-stream',nombre:f.name})})
-      .then(function(){ok++;return sig()});
+  var todo=doc==='auto',i=0,res={ok:[],rep:[],nue:[],mal:[]};
+  var nomDoc=function(id){var x=(KD.D.docs||[]).filter(function(d){return d.id===id})[0];return x?x.nombre:id};
+  var msg=function(t,mal){if(todo){var r=$('kres');r.style.display='';r.innerHTML='<span class="'+(mal?'neg':'')+'">'+esc(t)+'</span>'}else kMsg(t,mal)};
+  var resumen=function(){
+    var l=[];
+    if(res.ok.length)l.push('<b class="pos">✓ '+(res.ok.length===1?'1 subido':res.ok.length+' subidos')+'</b>'+(todo?': '+res.ok.map(function(a){return esc(nomDoc(a.doc))}).join(', '):''));
+    if(res.nue.length)l.push('<b class="pos">↻ '+res.nue.length+' reemplazado'+(res.nue.length>1?'s':'')+' por la versión nueva</b>: '+res.nue.map(function(a){return esc(nomDoc(a.doc))}).join(', '));
+    if(res.rep.length)l.push('<b>'+res.rep.length+' ya estaba'+(res.rep.length>1?'n':'')+'</b> (no se duplicó): '+res.rep.map(function(n){return esc(n)}).join(', '));
+    if(res.mal.length)l.push('<span class="neg">'+res.mal.map(function(m){return esc(m)}).join('<br>')+'</span>');
+    return l.join('<br>');
   };
-  return sig().catch(function(e){kMsg(e.message,true)});
+  var sig=function(){
+    if(i>=files.length){KD.zip=null;var r=resumen();if(todo)KD.res=r;return kCargar().then(function(){if(!todo){if($('kmsg'))$('kmsg').innerHTML=r}})}
+    var f=files[i++];
+    if(f.size>20*1024*1024){res.mal.push(f.name+': es muy grande (hasta 20 MB).');return sig()}
+    msg('Subiendo '+(files.length>1?i+' de '+files.length+': ':'')+f.name+'…');
+    return new Promise(function(ok,rej){var rd=new FileReader();rd.onload=function(){ok(String(rd.result).replace(/^data:[^,]*,/,''))};rd.onerror=function(){rej(new Error('No se pudo abrir '+f.name))};rd.readAsDataURL(f)})
+      .then(function(b64){return lPost('contador_subir',{periodo:KD.per,doc:doc,archivo:b64,mime:f.type||'application/octet-stream',nombre:f.name})})
+      .then(function(a){if(a&&a.repetido)res.rep.push(f.name);else if(a&&a.reemplazado)res.nue.push(a);else res.ok.push(a||{doc:doc})},
+        function(e){res.mal.push(todo?e.message:f.name+': '+e.message)})
+      .then(sig);
+  };
+  KD.res='';
+  return sig().catch(function(e){msg(e.message,true)});
 }
 function kMandar(){
   var d=KD.D;
