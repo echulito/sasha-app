@@ -330,6 +330,8 @@ test('Contadora: lista por de dónde sale, con lo que falta; subir, sacar, no va
   assert.match(t, /IVA Compras ✓ automático\s*23 facturas · \$ 8\.412\.330/);
   assert.match(t, /Extracto del banco no va este mes\s*Banco Provincia \(PDF\) · cada 3 meses/);
   assert.equal(await page.locator('#c-cdor [data-ksubir="libro_cbte"].btn').count(), 1);
+  // percepciones que arma ECHU: automático, con la opción de subir el archivo igual
+  assert.match(t, /Percepciones · Mercado Libre ✓ automático\s*Lo trae ECHU de Mercado Libre y lo arma en Excel al mandar\.\s*subir el archivo igual/);
   // subir
   await page.evaluate(() => { document.getElementById('kfile').dataset.doc = 'libro_cbte'; });
   await page.setInputFiles('#kfile', {name: 'LIBRO_CBTE.TXT', mimeType: 'text/plain', buffer: Buffer.from('202610010830000100000')});

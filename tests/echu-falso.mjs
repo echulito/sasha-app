@@ -65,11 +65,11 @@ const K_DOCS = [
   ['libro_alic', 'Libro IVA Digital · alícuotas', 'TXT del sistema de ventas', 'Ventas (sistema)', 'falta'], ['libro_err', 'Libro IVA Digital · control de errores', 'PDF del sistema de ventas', 'Ventas (sistema)', 'ok'],
   ['iva_compras', 'IVA Compras', 'Lo arma la app con las facturas cargadas', 'Lo arma la app', 'auto'], ['ret_cert', 'Retenciones · certificados', 'Mercado Pago (ZIP)', 'Mercado Pago y Mercado Libre', 'ok'],
   ['ret_rep', 'Retenciones · reportes', 'Mercado Pago (ZIP)', 'Mercado Pago y Mercado Libre', 'ok'], ['perc_mp', 'Percepciones · Mercado Pago', 'Mercado Pago (ZIP)', 'Mercado Pago y Mercado Libre', 'falta'],
-  ['perc_ml', 'Percepciones · Mercado Libre', 'Mercado Libre (ZIP)', 'Mercado Pago y Mercado Libre', 'ok'], ['extracto', 'Extracto del banco', 'Banco Provincia (PDF) · cada 3 meses', 'Banco', 'nova']];
+  ['perc_ml', 'Percepciones · Mercado Libre', 'Lo arma ECHU (o subí el archivo de Mercado Pago)', 'Mercado Pago y Mercado Libre', 'auto'], ['extracto', 'Extracto del banco', 'Banco Provincia (PDF) · cada 3 meses', 'Banco', 'nova']];
 DATOS.contador_datos = {periodo: '2026-10', mes: 'octubre 2026', vence: '2026-11-05', faltan: 3, total: 9, enviado: null, compartido: null, hoy: '2026-11-03',
   mail: {a: 'contadora@ejemplo.com', asunto: 'Contadora - Octubre 2026', texto: 'Hola'},
-  docs: K_DOCS.map(([id, nombre, desc, grupo, estado]) => ({id, nombre, desc, grupo, auto: id === 'iva_compras', cadaMeses: id === 'extracto' ? 3 : 0, estado,
-    nota: id === 'iva_compras' ? '23 facturas · $ 8.412.330' : id === 'extracto' ? 'El último fue el de septiembre 2026: toca en diciembre 2026.' : '',
+  docs: K_DOCS.map(([id, nombre, desc, grupo, estado]) => ({id, nombre, desc, grupo, auto: id === 'iva_compras' || estado === 'auto', manual: id !== 'iva_compras', cadaMeses: id === 'extracto' ? 3 : 0, estado,
+    nota: id === 'iva_compras' ? '23 facturas · $ 8.412.330' : id === 'perc_ml' ? 'Lo trae ECHU de Mercado Libre y lo arma en Excel al mandar.' : id === 'extracto' ? 'El último fue el de septiembre 2026: toca en diciembre 2026.' : '',
     archivos: estado === 'ok' ? [{id: 'A-' + id, nombre: 'archivo-' + id + '.zip', bytes: 92185}] : []}))};
 DATOS.contador_subir = {id: 'A-nuevo', doc: 'libro_cbte', nombre: 'x.txt', bytes: 10};
 DATOS.contador_borrar = {borrado: true};
