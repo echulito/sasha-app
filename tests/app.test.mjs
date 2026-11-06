@@ -4,7 +4,7 @@ import test from 'node:test'; import assert from 'node:assert/strict'; import fs
 import {createRequire} from 'node:module';
 const {chromium} = createRequire(import.meta.url)('playwright');
 import {servir} from './servidor-estatico.mjs';
-import {crearECHU, URL_ECHU, TOKEN, PIN, huella} from './echu-falso.mjs';
+import {crearECHU, URL_ECHU, TOKEN, PIN, huella, DATOS} from './echu-falso.mjs';
 
 const DIR = new URL('.', import.meta.url).pathname, CAPT = DIR + 'capturas/';
 const ACTUALIZAR = process.env.ACTUALIZAR === '1';
@@ -318,6 +318,59 @@ test('Sueldos: al abrir un empleado con recibo de la contadora, arriba va el rec
   assert.ok(await page.evaluate(() => ULT_PDF && ULT_PDF.bytes.length > 100));
   assert.deepEqual(errores, []);
   await ctx.close();
+});
+
+test('Contadora: lista por de dónde sale, con lo que falta; subir, sacar, no va este mes, mandar (con confirmación si falta algo) y ZIP para WhatsApp', async () => {
+  const {ctx, page, echu, errores} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="cdor"]');
+  await page.locator('#c-cdor .kgr').first().waitFor();
+  const t = await page.locator('#c-cdor').innerText();
+  assert.match(t, /Para la contadora · octubre 2026/); assert.match(t, /Vence el jueves 05\/11 · faltan 3 de 9/);
+  assert.deepEqual(await page.locator('#c-cdor .kgt').allInnerTexts(), ['VENTAS (SISTEMA)', 'LO ARMA LA APP', 'MERCADO PAGO Y MERCADO LIBRE', 'BANCO']);
+  assert.match(t, /IVA Compras ✓ automático\s*23 facturas · \$ 8\.412\.330/);
+  assert.match(t, /Extracto del banco no va este mes\s*Banco Provincia \(PDF\) · cada 3 meses/);
+  assert.equal(await page.locator('#c-cdor [data-ksubir="libro_cbte"].btn').count(), 1);
+  // subir
+  await page.evaluate(() => { document.getElementById('kfile').dataset.doc = 'libro_cbte'; });
+  await page.setInputFiles('#kfile', {name: 'LIBRO_CBTE.TXT', mimeType: 'text/plain', buffer: Buffer.from('202610010830000100000')});
+  await page.waitForTimeout(500);
+  const sub = echu.pedidos.filter(p => /"accion":"contador_subir"/.test(p.cuerpo || '')).pop();
+  assert.ok(sub); const cu = JSON.parse(sub.cuerpo);
+  assert.equal(cu.doc, 'libro_cbte'); assert.equal(cu.nombre, 'LIBRO_CBTE.TXT'); assert.equal(Buffer.from(cu.archivo, 'base64').toString(), '202610010830000100000');
+  // sacar: dos toques
+  const x = page.locator('[data-kborrar="A-iva_ventas"]'); await x.click(); assert.equal(await x.innerText(), '¿sacar?'); await x.click(); await page.waitForTimeout(300);
+  assert.ok(echu.pedidos.some(p => /"accion":"contador_borrar"/.test(p.cuerpo || '') && /A-iva_ventas/.test(p.cuerpo)));
+  // no va este mes
+  await page.click('[data-knova="perc_mp"]'); await page.waitForTimeout(300);
+  assert.ok(echu.pedidos.some(p => /"accion":"contador_nova"/.test(p.cuerpo || '') && /perc_mp/.test(p.cuerpo) && /valor\\?":\\?"true/.test(p.cuerpo)));
+  // mandar: si falta algo, pide un segundo toque
+  await page.click('#kmail');
+  assert.match(await page.locator('#kmail').innerText(), /Faltan 3: tocá de nuevo/);
+  assert.ok(!echu.pedidos.some(p => /"accion":"contador_enviar"/.test(p.cuerpo || '')));
+  await page.click('#kmail'); await page.waitForFunction(() => /se mandó/.test(document.getElementById('kmsg').innerText));
+  assert.match(await page.locator('#kmsg').innerText(), /se mandó a contadora@ejemplo\.com \(1,2 MB\)/);
+  // ZIP para WhatsApp (sin "Compartir" en el navegador de prueba: se baja)
+  const [desc] = await Promise.all([page.waitForEvent('download', {timeout: 5000}).catch(() => null), page.click('#kwsp')]);
+  await page.waitForTimeout(300);
+  assert.ok(echu.pedidos.some(p => /"accion":"contador_zip"/.test(p.cuerpo || '')));
+  assert.match(await page.locator('#kwsp').innerText(), /listo/);
+  if (desc) assert.equal(desc.suggestedFilename(), 'Contadora - Octubre 2026.zip');
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('Inicio: el aviso de la contadora lleva a la pantalla Contadora', async () => {
+  const antes = DATOS.inicio.avisos;
+  DATOS.inicio.avisos = [{nivel: 'amarillo', titulo: 'Contadora · faltan 3 de octubre', detalle: 'Vence el 05/11.', ir: 'contadora'}].concat(antes);
+  try {
+    const {ctx, page, errores} = await abrir();
+    await page.locator('#inicio .iav').first().waitFor();
+    await page.locator('#inicio [data-ir="contadora"]').first().click();
+    await page.locator('#c-cdor .kgr').first().waitFor();
+    assert.equal(await page.locator('#csub button.on').innerText(), 'Contadora');
+    assert.deepEqual(errores, []);
+    await ctx.close();
+  } finally { DATOS.inicio.avisos = antes; }
 });
 
 // ---------- Regresión de pantallas: tienen que verse igual que las aprobadas ----------

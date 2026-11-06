@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=114;
+var APP_V=115;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -45,7 +45,13 @@ button.okEchu{background:var(--verdeF)!important;color:var(--verde)!important;bo
 .chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:700}
 .chip.v{background:var(--verdeF);color:var(--verde)}.chip.r{background:var(--rojoF);color:var(--rojo)}
 .chip.a{background:var(--amarF);color:var(--amar)}.chip.c{background:var(--celeste);color:var(--azul2)}
-.sp{padding:8px 0;border-bottom:1px solid var(--linea)}.sp .g3{margin-top:4px}
+.sp{padding:8px 0;border-bottom:1px solid var(--linea)}
+#c-cdor .card{margin-top:10px}.kgt{font-size:11px;font-weight:700;color:var(--gris);letter-spacing:.4px;text-transform:uppercase;margin:2px 0}
+.kfila{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid #eef0f2}.knom{font-size:14px;font-weight:600}
+.ksub,.karch{font-size:12px;color:var(--gris);overflow:hidden;text-overflow:ellipsis}.karch{display:flex;justify-content:space-between;gap:6px;align-items:center}
+.karch span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kbtn{flex:none!important;min-width:0!important;padding:7px 14px!important;font-size:12px!important}
+#csub{overflow-x:auto}
+#c-cdor .kfila .lnk{font-size:12px;padding:2px 0;text-decoration:none}#c-cdor .karch .lnk{font-size:16px;padding:0 4px}.sp .g3{margin-top:4px}
 .bar{height:10px;background:#e8eaed;border-radius:6px;overflow:hidden;margin:8px 0 4px;position:relative}
 .bar i{display:block;height:100%;border-radius:6px}
 .note{font-size:12px;color:var(--gris);margin-top:6px;line-height:1.4}
@@ -429,7 +435,8 @@ body.consulta #bnav .solo-completo{display:none}
     <div id="a-cajeras" class="oculto"><iframe id="cajframe" title="Cajeras" style="width:100%;border:0;display:block;background:transparent"></iframe></div>
     <!-- v77: Administración › Contabilidad (modelo C): IVA del mes, facturas, cierres Z y remitos por foto. -->
     <div id="a-conta" class="oculto">
-      <div class="seg" style="margin-top:0" id="csub"><button class="on" data-s="iva">IVA</button><button data-s="sue">Sueldos</button><button data-s="gas">Gastos</button></div>
+      <div class="seg" style="margin-top:0" id="csub"><button class="on" data-s="iva">IVA</button><button data-s="sue">Sueldos</button><button data-s="gas">Gastos</button><button data-s="cdor">Contadora</button></div>
+      <div id="c-cdor" class="oculto"></div>
       <div id="c-iva">
       <div class="mes" id="cmes"></div>
       <div class="tiles" id="ctiles"><div class="card"><span class="rk">IVA ventas</span><b>…</b></div><div class="card"><span class="rk">IVA compras</span><b>…</b></div><div class="card"><span class="rk">A pagar</span><b>…</b></div></div>
@@ -512,7 +519,7 @@ function postECHU(cuerpoObj,ms){
 var ESCRITURAS={guardar_propuesta:'Guardado',borrar_propuesta:'Borrado',marcar_pedido:'Guardado',marcar_cargado:'Guardado',marcar_pedido_grupo:'Guardado',
   guardar_pedido:'Guardado',borrar_pedido:'Borrado',limpieza_config_guardar:'Guardado',limpieza_sync:'Guardado',conta_config_guardar:'Guardado',
   conta_proveedor:'Guardado',conta_borrar:'Borrado',sue_empleado:'Guardado',sue_borrar_liq:'Borrado',actualizar_echu:'Pedido',
-  limpieza_importar:'Guardado',limpieza_emitir:'Guardado',gastos_guardar:'Guardado',sue_liquidar:'Guardado',sue_config:'Guardado',conta_guardar:'Guardado',sue_doc_subir:'Guardado',sue_monotributo:'Guardado'};
+  limpieza_importar:'Guardado',limpieza_emitir:'Guardado',gastos_guardar:'Guardado',sue_liquidar:'Guardado',sue_config:'Guardado',conta_guardar:'Guardado',sue_doc_subir:'Guardado',sue_monotributo:'Guardado',contador_subir:'Guardado',contador_enviar:'Mandado'};
 // Cargas que muestran "Llegó completo" arriba (no las que corren solas de fondo).
 var CARGAS_AVISO={resumen:1,producto:1,oportunidades:1,sugerencias:1,ranking:1,propuestas:1,conta_mes:1,sue_datos:1,gastos_datos:1,limpieza_recibos:1,candidatos_pedido:1,candidatos_gama:1};
 function api(accion,params,intento){
@@ -695,6 +702,7 @@ function iniIr(ir){
   if(ir==='caja'){cajSec('cajas');return irA('caja')}
   if(ir==='pagos'){cajSec('plata');return irA('caja')}
   if(ir==='pedido'){try{localStorage.setItem('sasha_compras','simulador')}catch(e){}irA('simulador');var b=document.querySelector('#simmodo button[data-m="ped"]');if(b)b.click();return}
+  if(ir==='contadora'){irA('admin');admSec('conta');contaSub('cdor');return}
   if(ir==='tareas'){if(INI&&INI.tareasUrl)window.open(INI.tareasUrl,'_blank','noopener');return}
 }
 /* ---------------- v107: CAJA Y PLATA ---------------- */
@@ -2884,7 +2892,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=114');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=115');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3177,9 +3185,9 @@ function cVerConfig(){
 var SU={per:'',D:null,emp:'',nov:{},vista:'lista'};
 function contaSub(s){
   document.querySelectorAll('#csub button').forEach(function(b){b.classList.toggle('on',b.dataset.s===s)});
-  $('c-iva').classList.toggle('oculto',s!=='iva');$('c-sue').classList.toggle('oculto',s!=='sue');$('c-gas').classList.toggle('oculto',s!=='gas');
+  $('c-iva').classList.toggle('oculto',s!=='iva');$('c-sue').classList.toggle('oculto',s!=='sue');$('c-gas').classList.toggle('oculto',s!=='gas');$('c-cdor').classList.toggle('oculto',s!=='cdor');
   try{localStorage.setItem('sasha_csub',s)}catch(e){}
-  if(s==='sue')sCargar();else if(s==='gas')gCargar();else cCargar();
+  if(s==='sue')sCargar();else if(s==='gas')gCargar();else if(s==='cdor')kCargar();else cCargar();
 }
 document.querySelectorAll('#csub button').forEach(function(b){if(!b.disabled)b.onclick=function(){contaSub(b.dataset.s)}});
 function r2(n){return Math.round((Number(n)||0)*100)/100}
@@ -3617,6 +3625,85 @@ function sReciboEfectivo(pdf,F,rgb,x,fecha,per){
   var yc=448;for(var xx=45;xx<550;xx+=7)p.drawLine({start:{x:xx,y:yc},end:{x:Math.min(xx+3.5,550),y:yc},thickness:.8,color:rgb(0.72,0.75,0.79)});
   var lc='LÍNEA DE CORTE';p.drawText(lc,{x:297.5-R.widthOfTextAtSize(lc,6.5)/2,y:yc+7,size:6.5,font:R,color:GR});
   copia(420,false);
+}
+/* ---------------- v115: CONTABILIDAD › CONTADORA (lo que se le manda cada mes, hasta el 5) ---------------- */
+var KD={per:'',D:null,zip:null,mandar:0};
+var K_DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+function kFecha(k){var p=String(k||'').split('-');if(p.length<3)return k||'';var d=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));return K_DIAS[d.getDay()]+' '+p[2]+'/'+p[1]}
+function kFechaHora(t){var m=/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}:\d{2}))?/.exec(String(t||''));return m?m[3]+'/'+m[2]+(m[4]?' '+m[4]:''):String(t||'')}
+function kMes(per,n){var y=Number(per.slice(0,4)),m=Number(per.slice(5,7))-1+n;y+=Math.floor(m/12);m=((m%12)+12)%12;return y+'-'+('0'+(m+1)).slice(-2)}
+function kTam(b){return b>=1048576?(b/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(b/1024))+' KB'}
+function kCargar(per){
+  var box=$('c-cdor');if(!KD.D)box.innerHTML='<div class="cargando">Cargando…</div>';
+  return api('contador_datos',{periodo:per||KD.per||''}).then(function(d){if(KD.per!==d.periodo)KD.zip=null;KD.D=d;KD.per=d.periodo;KD.mandar=0;kPintar()})
+    .catch(function(e){box.innerHTML='<div class="card"><div class="note" style="margin-top:0"><span class="neg">'+esc(e.message)+'</span>'+(/Acción desconocida|desconocida/i.test(e.message)?' · Actualizá ECHU a la versión 6.19 (Nueva versión).':'')+'</div></div>'});
+}
+function kChip(e){return e==='ok'?'<span class="chip v">✓ listo</span>':e==='auto'?'<span class="chip v">✓ automático</span>':e==='nova'?'<span class="chip" style="background:#f1f3f4;color:var(--gris)">no va este mes</span>':'<span class="chip a">falta</span>'}
+function kPintar(){
+  var d=KD.D,box=$('c-cdor'),hechos=d.total-d.faltan,pct=d.total?Math.round(hechos*100/d.total):0;
+  var cab='<div class="card"><div class="mes" style="margin:0 0 6px;display:flex;align-items:center;justify-content:space-between"><button class="lnk" id="kant">‹</button><b style="font-size:16px">Para la contadora · '+esc(d.mes)+'</b><button class="lnk" id="ksig">›</button></div>'+
+    (d.enviado?'<div class="rk"><b class="pos">✓ Mandado el '+esc(kFechaHora(d.enviado.fecha))+'</b> a '+esc(d.enviado.a)+'</div>':
+      '<div class="rk">Vence el <b>'+esc(kFecha(d.vence))+'</b> · '+(d.faltan?'faltan <b style="color:var(--amar)">'+d.faltan+' de '+d.total+'</b>':'<b class="pos">está todo</b>')+'</div>')+
+    '<div style="height:8px;background:#eef1f4;border-radius:6px;margin-top:8px"><div style="height:8px;width:'+pct+'%;background:var(--verde);border-radius:6px"></div></div></div>';
+  var grupos=[];d.docs.forEach(function(x){if(grupos.indexOf(x.grupo)<0)grupos.push(x.grupo)});
+  var lista=grupos.map(function(g){
+    return '<div class="card kgr" style="padding:8px 14px 2px"><div class="kgt">'+esc(g)+'</div>'+d.docs.filter(function(x){return x.grupo===g}).map(function(x){
+      var sub='';
+      if(x.estado==='ok')sub=x.archivos.map(function(a){return '<div class="karch"><span>'+esc(a.nombre)+(a.bytes?' · '+kTam(a.bytes):'')+'</span><button class="lnk neg" data-kborrar="'+esc(a.id)+'" title="Sacar">×</button></div>'}).join('')+'<button class="lnk" data-ksubir="'+x.id+'">+ otro archivo</button>';
+      else if(x.estado==='auto')sub='<div class="ksub">'+esc(x.nota)+'</div>';
+      else if(x.estado==='nova')sub='<div class="ksub">'+esc(x.desc)+(x.nota?' · '+esc(x.nota):'')+' · <button class="lnk" data-kva="'+x.id+'">este mes va</button></div>';
+      else sub='<div class="ksub">'+esc(x.auto?x.nota:x.desc)+'</div>'+(x.auto?'':'<button class="lnk" style="color:var(--gris)" data-knova="'+x.id+'">no va este mes</button>');
+      return '<div class="kfila"><div style="flex:1;min-width:0"><div class="knom">'+esc(x.nombre)+' '+kChip(x.estado)+'</div>'+sub+'</div>'+
+        (x.estado==='falta'&&!x.auto?'<button class="btn sec kbtn" data-ksubir="'+x.id+'">Subir</button>':'')+'</div>';
+    }).join('')+'</div>';
+  }).join('');
+  var pie='<div class="card"><div class="btns"><button class="btn" id="kmail">'+(d.enviado?'Mandar de nuevo por mail':KD.mandar?'Faltan '+d.faltan+': tocá de nuevo para mandar igual':'Mandar por mail')+'</button><button class="btn sec" id="kwsp">'+(KD.zip?'Compartir por WhatsApp (listo)':'Compartir por WhatsApp')+'</button></div>'+
+    '<div class="note" id="kmsg">El mail sale de tu Gmail a '+esc(d.mail.a)+' con el asunto <b>'+esc(d.mail.asunto)+'</b> y un ZIP con todo.</div></div>';
+  box.innerHTML=cab+lista+pie+'<input type="file" id="kfile" class="oculto" multiple>';
+  $('kant').onclick=function(){kCargar(kMes(KD.per,-1))};$('ksig').onclick=function(){kCargar(kMes(KD.per,1))};
+  box.querySelectorAll('[data-ksubir]').forEach(function(b){b.onclick=function(){var f=$('kfile');f.dataset.doc=b.dataset.ksubir;f.value='';f.click()}});
+  $('kfile').onchange=function(){kSubir(this.dataset.doc,Array.prototype.slice.call(this.files||[]))};
+  box.querySelectorAll('[data-kborrar]').forEach(function(b){b.onclick=function(){
+    if(b.dataset.ok!=='1'){b.dataset.ok='1';b.textContent='¿sacar?';setTimeout(function(){if(b.isConnected){b.dataset.ok='';b.textContent='×'}},3000);return}
+    b.disabled=true;api('contador_borrar',{periodo:KD.per,archivo:b.dataset.kborrar}).then(function(){KD.zip=null;return kCargar()}).catch(function(e){kMsg(e.message,true)})}});
+  box.querySelectorAll('[data-knova]').forEach(function(b){b.onclick=function(){api('contador_nova',{periodo:KD.per,doc:b.dataset.knova,valor:true}).then(function(){KD.zip=null;return kCargar()}).catch(function(e){kMsg(e.message,true)})}});
+  box.querySelectorAll('[data-kva]').forEach(function(b){b.onclick=function(){api('contador_nova',{periodo:KD.per,doc:b.dataset.kva,valor:false}).then(function(){return kCargar()}).catch(function(e){kMsg(e.message,true)})}});
+  $('kmail').onclick=kMandar;$('kwsp').onclick=kCompartir;
+}
+function kMsg(t,mal){if($('kmsg'))$('kmsg').innerHTML='<span class="'+(mal?'neg':'pos')+'">'+esc(t)+'</span>'}
+function kSubir(doc,files){
+  if(!files.length)return;
+  var i=0,ok=0;
+  var sig=function(){
+    if(i>=files.length){KD.zip=null;return kCargar().then(function(){kMsg(ok===1?'Subido.':ok+' archivos subidos.')})}
+    var f=files[i++];
+    if(f.size>20*1024*1024){kMsg(f.name+': es muy grande (hasta 20 MB).',true);return sig()}
+    kMsg('Subiendo '+f.name+'…');
+    return new Promise(function(res,rej){var rd=new FileReader();rd.onload=function(){res(String(rd.result).replace(/^data:[^,]*,/,''))};rd.onerror=function(){rej(new Error('No se pudo abrir '+f.name))};rd.readAsDataURL(f)})
+      .then(function(b64){return lPost('contador_subir',{periodo:KD.per,doc:doc,archivo:b64,mime:f.type||'application/octet-stream',nombre:f.name})})
+      .then(function(){ok++;return sig()});
+  };
+  return sig().catch(function(e){kMsg(e.message,true)});
+}
+function kMandar(){
+  var d=KD.D;
+  if(d.faltan&&!d.enviado&&!KD.mandar){KD.mandar=1;$('kmail').textContent='Faltan '+d.faltan+': tocá de nuevo para mandar igual';return}
+  var b=$('kmail');b.disabled=true;kMsg('Armando el ZIP y mandando el mail…');
+  lPost('contador_enviar',{periodo:KD.per}).then(function(env){return kCargar().then(function(){kMsg('Listo: se mandó a '+env.a+' ('+String(env.mb).replace('.',',')+' MB).')})})
+    .catch(function(e){b.disabled=false;kMsg(e.message,true)});
+}
+// WhatsApp: el celular necesita el ZIP ya bajado para abrir "Compartir"; la primera vez se baja y se comparte.
+function kCompartir(){
+  var b=$('kwsp');
+  var comp=function(){var z=KD.zip,f=null;try{f=new File([z.bytes],z.nombre,{type:'application/zip'})}catch(e){f=null}
+    if(f&&navigator.canShare&&navigator.canShare({files:[f]}))return navigator.share({files:[f],title:z.nombre,text:KD.D.mail.asunto}).then(function(){kMsg('Compartido.')}).catch(function(e){if(e&&e.name!=='AbortError')kMsg('Tocá "Compartir por WhatsApp (listo)" de nuevo.',true)});
+    bajarArchivo(z.bytes,z.nombre);kMsg('Se bajó el ZIP: mandalo por WhatsApp desde Descargas.');};
+  if(KD.zip&&KD.zip.per===KD.per)return comp();
+  b.disabled=true;kMsg('Armando el ZIP…');
+  api('contador_zip',{periodo:KD.per}).then(function(z){
+    var by=Uint8Array.from(atob(z.b64),function(c){return c.charCodeAt(0)});KD.zip={per:KD.per,nombre:z.nombre,bytes:by};
+    b.disabled=false;b.textContent='Compartir por WhatsApp (listo)';kMsg('ZIP listo ('+kTam(by.length)+').');comp();
+  }).catch(function(e){b.disabled=false;kMsg(e.message,true)});
 }
 /* ---------------- v79: CONTABILIDAD › GASTOS (la solapa ADMINISTRACION de ECHU) ---------------- */
 var GA={D:null,abierto:''};
