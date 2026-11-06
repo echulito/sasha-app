@@ -1,8 +1,8 @@
 // Sasha · Mi negocio - guarda solo la "cáscara" de la app (los datos siempre se piden en vivo a ECHU).
-const CACHE = 'sasha-v120';
+const CACHE = 'sasha-v121';
 // v118: archivos que llegan con "Compartir › Sasha" (WhatsApp, Gmail, Archivos). Quedan acá hasta que la app los sube.
 const COMPARTIDOS = 'sasha-compartidos';
-const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './pdf-lib.min.js'];
+const ARCHIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './pdf-lib.min.js', './camara.js'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS)).then(() => self.skipWaiting()));
 });
