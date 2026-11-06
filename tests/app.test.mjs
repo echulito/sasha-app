@@ -23,6 +23,7 @@ async function abrir({modo = 'normal', logueado = true, ruta = '', consulta = fa
   const errores = [];
   page.on('pageerror', e => errores.push('JS: ' + e.message));
   page.on('console', m => { if (m.type() === 'error' || /Content Security Policy|Refused to/.test(m.text())) errores.push('consola: ' + m.text()); });
+  page.on('response', r => { if (r.status() === 404) errores.push('404: ' + r.url()); });
   await page.goto(web.url + ruta);
   return {ctx, page, echu, errores};
 }
