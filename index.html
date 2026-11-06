@@ -3881,6 +3881,6 @@ function gNuevo(){
     this.disabled=true;lPost('gastos_guardar',{datos:JSON.stringify({nuevos:[{label:l,valor:v}]})}).then(function(r){GA.D=r;gPintar()}).catch(function(e){$('gn_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>';$('gn_ok').disabled=false})};
 }
 </script>
-<script src="camara.js?v=121"></script>
+<script src="camara.js?v=121" defer></script>
 </body>
 </html>
