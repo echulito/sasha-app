@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=118;
+var APP_V=119;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -2892,7 +2892,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=118');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=119');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3704,7 +3704,12 @@ function kSubir(doc,files){
   KD.res='';
   return sig().catch(function(e){msg(e.message,true)});
 }
-// v118: archivos que llegaron con "Compartir › Sasha" (por ejemplo desde WhatsApp): van a la contadora, cada uno a su lugar.
+// v118/v119: archivos que llegaron con "Compartir › Sasha" (por ejemplo desde WhatsApp).
+// Los de la contadora van a Contadora (cada uno a su lugar); los PDF de las cajas (cierres, cobros, tickets) van a Cajas.
+function kEsContadora(nombre){
+  var n=String(nombre||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/[_\-.]+/g,' ');
+  return /libro iva|\biva ventas\b|retencion|percepcion|extracto/.test(n);
+}
 function kCompartidos(){
   if(!window.caches)return;
   var limpiarUrl=function(){try{if(/compartid/.test(location.search))history.replaceState(null,'',location.pathname)}catch(e){}};
@@ -3714,13 +3719,29 @@ function kCompartidos(){
       return new File([b],decodeURIComponent(r.headers.get('X-Nombre')||'archivo'),{type:r.headers.get('Content-Type')||b.type||''})})})})).then(function(files){
       limpiarUrl();
       if(CFG.modo==='consulta'){avisoArriba('Con el PIN de consulta no se pueden subir archivos.');return}
+      var esPdf=function(f){return /\.pdf$/i.test(f.name)||/pdf/i.test(f.type)};
+      var cajas=files.filter(function(f){return esPdf(f)&&!kEsContadora(f.name)}),cdor=files.filter(function(f){return cajas.indexOf(f)<0});
+      var borrar=function(){return Promise.all(ks.map(function(k){return c.delete(k)}))};
+      var aCajas=function(){if(!cajas.length)return borrar();return cajImportar(cajas).then(borrar)};
+      if(!cdor.length)return aCajas();
       iniIr('contadora');
       var n=0,esperar=function(){
-        if(KD.D&&$('ktodo'))return kSubir('auto',files).then(function(){return Promise.all(ks.map(function(k){return c.delete(k)}))});
-        if(++n>80)return;setTimeout(esperar,400)};
-      esperar();
+        if(KD.D&&$('ktodo'))return kSubir('auto',cdor).then(function(){if(cajas.length)avisoArriba('Contadora: '+cdor.length+' archivo'+(cdor.length>1?'s':'')+' · ahora los de cajas');return aCajas()});
+        if(++n>80)return;return new Promise(function(r){setTimeout(r,400)}).then(esperar)};
+      return esperar();
     });
   })}).catch(function(){});
+}
+// Pone los PDF en "Importar PDF" del módulo de cajas (el mismo camino que elegirlos a mano).
+function cajImportar(files){
+  iniIr('caja');
+  var n=0,ir=function(){
+    var f=$('cajframe'),w=null,up=null;try{w=f.contentWindow;up=w.document.getElementById('upload')}catch(e){}
+    if(up&&up.onchange){var dt=new w.DataTransfer();files.forEach(function(x){dt.items.add(x)});up.files=dt.files;up.dispatchEvent(new w.Event('change'));return Promise.resolve()}
+    if(++n>100)return Promise.resolve();
+    return new Promise(function(r){setTimeout(r,400)}).then(ir);
+  };
+  return ir();
 }
 function kMandar(){
   var d=KD.D;

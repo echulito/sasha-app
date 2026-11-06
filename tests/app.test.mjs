@@ -415,6 +415,26 @@ test('Compartir › Sasha: los archivos que llegan (por ejemplo de WhatsApp) se 
   await ctx.close();
 });
 
+test('Compartir › Sasha: los PDF de las cajas van a "Importar PDF" de Cajas; los de la contadora, a Contadora', async () => {
+  const {ctx, page, echu, errores} = await abrir();
+  await page.waitForFunction(() => !!window.caches);
+  await page.evaluate(async () => {
+    const c = await caches.open('sasha-compartidos');
+    const poner = (k, nombre, tipo, txt) => c.put(new Request('./compartido/' + k), new Response(new Blob([txt], {type: tipo}), {headers: {'Content-Type': tipo, 'X-Nombre': encodeURIComponent(nombre)}}));
+    await poner('2-0', 'Cierre de caja 0001 vuelco 2.pdf', 'application/pdf', '%PDF-1.4 no es un pdf de verdad');
+    await poner('2-1', 'LIBRO_IVA_DIGITAL_VENTAS_ERR_SASHA 2026-10.PDF', 'application/pdf', '%PDF errores');
+  });
+  await page.goto(page.url().split('?')[0] + '?compartido=1');
+  await page.waitForFunction(() => { try { return /Cierre de caja 0001 vuelco 2\.pdf/.test(document.getElementById('cajframe').contentDocument.getElementById('message').textContent); } catch (e) { return false; } }, null, {timeout: 15000});
+  const sub = echu.pedidos.filter(p => /"accion":"contador_subir"/.test(p.cuerpo || '')).map(p => JSON.parse(p.cuerpo).nombre);
+  assert.deepEqual(sub, ['LIBRO_IVA_DIGITAL_VENTAS_ERR_SASHA 2026-10.PDF'], 'a la contadora va solo el de la contadora');
+  assert.equal(await page.locator('#cajsec button.on').innerText(), 'Cajas');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(async () => (await (await caches.open('sasha-compartidos')).keys()).length), 0);
+  assert.deepEqual(errores.filter(e => !/cajas|Google Sheets/i.test(e)), []);
+  await ctx.close();
+});
+
 test('Compartir › Sasha: el manifiesto acepta archivos y el service worker los guarda y abre la app', async () => {
   const m = JSON.parse(fs.readFileSync(new URL('../manifest.webmanifest', import.meta.url), 'utf8'));
   assert.equal(m.share_target.method, 'POST'); assert.equal(m.share_target.enctype, 'multipart/form-data');
