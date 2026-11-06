@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=117;
+var APP_V=118;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -591,7 +591,7 @@ function entrar(){
   api('login',{pin:$('lpin').value.trim()}).then(function(j){CFG.token=j.token;CFG.modo=j.modo==='consulta'?'consulta':'';guardarCfg();$('lpin').value='';arrancar()})
    .catch(function(e){$('lerr').textContent=/Failed to fetch|RED|no respondió/.test(e.message)?'No se pudo conectar con ECHU. Revisá la dirección y que esté publicada para "Cualquier persona".':e.message;$('campoUrl').style.display=''});
 }
-function arrancar(){aplicarModo();$('login').classList.add('oculto');$('app').classList.remove('oculto');try{restaurarEstado()}catch(e){}cargar();setTimeout(function(){cargarSinEst()},1500)}
+function arrancar(){aplicarModo();$('login').classList.add('oculto');$('app').classList.remove('oculto');try{restaurarEstado()}catch(e){}cargar();setTimeout(function(){cargarSinEst()},1500);setTimeout(kCompartidos,300)}
 
 var DETCOD='', D=null, ADMIN={porVenta:0.03,minimo:0.5,deseado:0.6,fijos:0}, SPROD=null;
 function $(id){return document.getElementById(id)}
@@ -2892,7 +2892,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=117');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=118');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3703,6 +3703,24 @@ function kSubir(doc,files){
   };
   KD.res='';
   return sig().catch(function(e){msg(e.message,true)});
+}
+// v118: archivos que llegaron con "Compartir › Sasha" (por ejemplo desde WhatsApp): van a la contadora, cada uno a su lugar.
+function kCompartidos(){
+  if(!window.caches)return;
+  var limpiarUrl=function(){try{if(/compartid/.test(location.search))history.replaceState(null,'',location.pathname)}catch(e){}};
+  caches.open('sasha-compartidos').then(function(c){return c.keys().then(function(ks){
+    if(!ks.length){limpiarUrl();return}
+    return Promise.all(ks.map(function(k){return c.match(k).then(function(r){return r.blob().then(function(b){
+      return new File([b],decodeURIComponent(r.headers.get('X-Nombre')||'archivo'),{type:r.headers.get('Content-Type')||b.type||''})})})})).then(function(files){
+      limpiarUrl();
+      if(CFG.modo==='consulta'){avisoArriba('Con el PIN de consulta no se pueden subir archivos.');return}
+      iniIr('contadora');
+      var n=0,esperar=function(){
+        if(KD.D&&$('ktodo'))return kSubir('auto',files).then(function(){return Promise.all(ks.map(function(k){return c.delete(k)}))});
+        if(++n>80)return;setTimeout(esperar,400)};
+      esperar();
+    });
+  })}).catch(function(){});
 }
 function kMandar(){
   var d=KD.D;

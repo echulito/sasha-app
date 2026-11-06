@@ -394,6 +394,49 @@ test('Contadora: "Subir archivos del mes" manda todos juntos; dice dónde fue ca
   } finally { DATOS.contador_subir = antes; }
 });
 
+test('Compartir › Sasha: los archivos que llegan (por ejemplo de WhatsApp) se suben solos a la contadora, cada uno a su lugar', async () => {
+  const {ctx, page, echu, errores} = await abrir();
+  await page.waitForFunction(() => !!window.caches);
+  await page.evaluate(async () => {
+    const c = await caches.open('sasha-compartidos');
+    await c.put(new Request('./compartido/1-0'), new Response(new Blob(['comprobantes octubre'], {type: 'text/plain'}), {headers: {'Content-Type': 'text/plain', 'X-Nombre': encodeURIComponent('LIBRO_IVA_DIGITAL_VENTAS_CBTE_SASHA PERFUMERÍAS 2026-10.TXT')}}));
+    await c.put(new Request('./compartido/1-1'), new Response(new Blob(['PK zip'], {type: 'application/zip'}), {headers: {'Content-Type': 'application/zip', 'X-Nombre': encodeURIComponent('Certificados-de-retenciones-octubre2026.zip')}}));
+  });
+  await page.goto(page.url().split('?')[0] + '?compartido=1');
+  await page.waitForFunction(() => /subido/.test((document.getElementById('kres') || {}).innerText || ''), null, {timeout: 10000});
+  assert.equal(await page.locator('#csub button.on').innerText(), 'Contadora');
+  const sub = echu.pedidos.filter(p => /"accion":"contador_subir"/.test(p.cuerpo || '')).map(p => JSON.parse(p.cuerpo));
+  assert.deepEqual(sub.map(x => [x.doc, x.nombre, x.mime]), [['auto', 'LIBRO_IVA_DIGITAL_VENTAS_CBTE_SASHA PERFUMERÍAS 2026-10.TXT', 'text/plain'], ['auto', 'Certificados-de-retenciones-octubre2026.zip', 'application/zip']]);
+  assert.equal(Buffer.from(sub[0].archivo, 'base64').toString(), 'comprobantes octubre');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(async () => (await (await caches.open('sasha-compartidos')).keys()).length), 0, 'después de subirlos se borran');
+  assert.doesNotMatch(page.url(), /compartido/);
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});
+
+test('Compartir › Sasha: el manifiesto acepta archivos y el service worker los guarda y abre la app', async () => {
+  const m = JSON.parse(fs.readFileSync(new URL('../manifest.webmanifest', import.meta.url), 'utf8'));
+  assert.equal(m.share_target.method, 'POST'); assert.equal(m.share_target.enctype, 'multipart/form-data');
+  assert.ok(m.share_target.params.files[0].accept.includes('.txt') && m.share_target.params.files[0].accept.includes('.zip'));
+  const ctx = await navegador.newContext({serviceWorkers: 'allow'});
+  const page = await ctx.newPage();
+  await ctx.route(URL_ECHU + '**', r => r.fulfill({status: 200, contentType: 'application/json', body: '{"ok":false,"error":"PIN"}'}));
+  await page.goto(web.url);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.reload(); await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+  const r = await page.evaluate(async () => {
+    const fd = new FormData(); fd.append('archivos', new File(['hola txt'], 'LIBRO.TXT', {type: 'text/plain'})); fd.append('archivos', new File(['PK'], 'R.zip', {type: 'application/zip'}));
+    const res = await fetch('./?compartir=1', {method: 'POST', body: fd});
+    const c = await caches.open('sasha-compartidos'); const ks = await c.keys();
+    const nombres = await Promise.all(ks.map(async k => decodeURIComponent((await c.match(k)).headers.get('X-Nombre'))));
+    return {url: res.url, nombres: nombres.sort()};
+  });
+  assert.match(r.url, /\?compartido=1$/);
+  assert.deepEqual(r.nombres, ['LIBRO.TXT', 'R.zip']);
+  await ctx.close();
+});
+
 test('Inicio: el aviso de la contadora lleva a la pantalla Contadora', async () => {
   const antes = DATOS.inicio.avisos;
   DATOS.inicio.avisos = [{nivel: 'amarillo', titulo: 'Contadora · faltan 3 de octubre', detalle: 'Vence el 05/11.', ir: 'contadora'}].concat(antes);
