@@ -5,7 +5,7 @@ import {automaticTurnMatch,declaredPaymentMethods} from './payment-reconciliatio
 import {reconcileTeam,pendingTeamExpenses,teamDeclarationTotals,replaceTeamInbox,visibleTeamDeclarations} from './team-domain.mjs';
 import {declaredCashWithdrawals,dailyTicketAverage} from './summary-metrics.mjs';
 import {sheetProjection} from './sheet-projection.mjs';
-import {compararExternos,cobrosEnTurno,respuestaAutomatica} from './externos.mjs';
+import {compararExternos,cobrosEnTurno,respuestaAutomatica,correccionCupones} from './externos.mjs';
 import {parseReport,cents,difference,summarize,ticketKey} from './parser.mjs';
 import {isClosedDay,LOAD_ERROR,normalizeState,reportKey,roster,assign,allTurns,dailyCloses,dayStatus,daySales,cashierMetrics,controlStatus,ticketTotalsConfirmed,ticketRows,paymentRows,transactionRows,productLines,rankProducts,receiptKey,couponSignature,couponStatus,closingBalance,closingAlerts,cashierBalances,turnKey,turnCollection,alertKey,operationalAlerts,openingChecks,cashCarryovers,withinTolerance,remainingCash,correctionKey,effectiveTurn,addClosingCorrection,productExcluded,storeExpenses} from './domain.mjs';
 // Sasha v94: transporte a ECHU (Apps Script) en lugar del servidor de Cloudflare. Las rutas ./api/... se atienden acá.
@@ -135,7 +135,7 @@ function externosHtml(d,x){const c=compararExternos(declaradoExterno(d),x);
  return `<h2>Lo que entró de verdad</h2>${filas.length?table(['','Declarado','Entró','Resultado'],filas):''}${c.comisiones.total?`<p><small>Comisiones del día: ${money(c.comisiones.total)} (Mercado Pago ${money(c.comisiones.mp)} · Cuenta DNI ${money(c.comisiones.cuentaDni)})</small></p>`:''}${c.notas.map(n=>`<p><small>${esc(n)}</small></p>`).join('')}`;}
 async function cargarExternos(d){const box=$('externos');if(!box||!d)return;let x=EXTERNOS[d];
  if(!x){try{x=await echu('pagos_externos',undefined,{fecha:d});EXTERNOS[d]=x;}catch(e){return;}}
- const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoResponderPagos(d,x))pistasPagos();}
+ const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x))pistasPagos();}
 // v111: "¿Cuánto recibió X por Mercado Pago / Cuenta DNI?" se contesta solo con lo que entró en el horario del turno.
 // Si coincide con el informe PDF, la cajera cargó mal (queda como error de carga, con lo que declaró); si coincide con lo declarado, estaba bien.
 const REAL_TURNO={};let AUTO_EN_CURSO=false;
@@ -149,6 +149,24 @@ function autoResponderPagos(d,x){if(AUTO_EN_CURSO)return false;const qs=guidedQu
   try{s=answerGuidedQuestion(s,q.key,a.monto,nota);cambio=true;}catch(e){}
  }
  if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Respondido solo con lo que entró de verdad');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
+// v120: si los cupones del PDF no coinciden con lo que declaró la cajera, lo que entró de verdad en el turno (Mercado Pago + Cuenta DNI) decide.
+// Si coincide con lo de la cajera, el PDF quedó mal cargado: se corrige solo, como error de carga de la cajera.
+function autoCorregirCupones(d,x){if(AUTO_EN_CURSO)return false;
+ if(!(x&&x.mp&&x.mp.cobros&&x.cuentaDni&&x.cuentaDni.cobros))return false;
+ const review=state.couponReviews.find(r=>r.date===d);if(!review||!review.allocations)return false;
+ const pend=new Set(guidedQuestions(state,d).filter(q=>q.kind==='payment').map(q=>turnKey(q)));
+ let s=state,cambio=false;
+ for(const t of allTurns(state,d).filter(t=>t.box==='0001')){
+  if(pend.has(turnKey(t))||correctionValue(t,'digital',true)!==t.digital)continue;
+  const a=review.allocations.find(a=>turnKey(a)===turnKey(t));if(!a||(a.other||0)!==0)continue;
+  const mp=cobrosEnTurno(x.mp.cobros,t.openTime,t.closeTime,['QR','Point']),dni=cobrosEnTurno(x.cuentaDni.cobros,t.openTime,t.closeTime,null);if(!mp||!dni)continue;
+  const incl=(s.failedPayments||[]).filter(f=>f.date===d&&turnKey(f)===turnKey(t)&&f.includedInCoupons).reduce((n,f)=>n+f.amount,0);
+  const cajera=a.mercadoPago+a.cuentaDni,r=correccionCupones(t.digital,cajera,mp.total+dni.total);if(!r)continue;
+  const after=cajera+(a.pendingOrders||0)+incl;if(after===t.digital)continue;
+  const nota=LOAD_ERROR+': en el turno de '+t.openTime+' a '+t.closeTime+' entraron '+money(mp.total+dni.total)+' (Mercado Pago '+money(mp.total)+' en '+mp.cantidad+' cobros + Cuenta DNI '+money(dni.total)+' en '+dni.cantidad+' cobros). Coincide con lo que declaró la cajera ('+money(cajera)+'); en el sistema cargó '+money(t.digital)+' de cupones.';
+  try{const c=structuredClone(s);addClosingCorrection(c,{date:d,branch:t.branch,box:t.box,batch:t.batch,field:'digital',after,note:nota});s=c;cambio=true;}catch(e){}
+ }
+ if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Cupones corregidos solos con lo que entró de verdad');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
 function pistasPagos(){document.querySelectorAll('[data-guided-key]').forEach(el=>{const r=REAL_TURNO[el.dataset.guidedKey],act=el.querySelector('.actions');if(!r||!act||el.querySelector('[data-real]'))return;
  const b=document.createElement('button');b.type='button';b.className='button';b.dataset.real='1';b.textContent='Entró de verdad: '+money(r.total)+' ('+r.cantidad+' cobros)';
  b.onclick=()=>{const inp=el.querySelector('[data-guided-amount]');if(inp){inp.value=(r.total/100).toFixed(2).replace('.',',');inp.focus();}const m=el.querySelector('[data-motivo]');if(m)m.value='error';};act.appendChild(b);});}

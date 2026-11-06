@@ -39,3 +39,13 @@ test('respuesta automática: coincida con el PDF o con lo declarado, es error de
   assert.equal(respuestaAutomatica(11652300, 13166301, 12000000), null);
   assert.equal(respuestaAutomatica(11652300, 13166301, NaN), null);
 });
+
+import {correccionCupones} from '../cajas/externos.mjs';
+test('cupones del turno: corrige solo si lo que entró da lo de la cajera y no lo del PDF', () => {
+  assert.deepEqual(correccionCupones(27762504, 27290600, 27290600), {monto: 27290600, coincide: 'cajera'});
+  assert.deepEqual(correccionCupones(27762504, 27290600, 27290650), {monto: 27290600, coincide: 'cajera'}, 'tolerancia $1');
+  assert.equal(correccionCupones(27762504, 27290600, 27762504), null, 'entró lo del PDF: está bien');
+  assert.equal(correccionCupones(27762504, 27290600, 1000), null, 'no coincide con nada: lo ve el encargado');
+  assert.equal(correccionCupones(100, 150, 150), null, 'PDF y cajera iguales (dentro de $1): nada que corregir');
+  assert.equal(correccionCupones(NaN, 1, 1), null);
+});

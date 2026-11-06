@@ -47,3 +47,13 @@ export function respuestaAutomatica(declarado, pdf, real) {
   if (cerca(real, pdf)) return {monto: pdf, errorCajera: true, coincide: 'pdf'};
   return null;
 }
+
+// v120: cupones del turno (total) con lo que entró de verdad (Mercado Pago QR/Point + Cuenta DNI en el horario del turno).
+// Todo en centavos. Si lo que entró coincide con lo que declaró la cajera y no con el PDF, el PDF quedó mal cargado: se corrige.
+// Si coincide con el PDF (o con ninguno), no se toca nada.
+export function correccionCupones(pdf, cajera, real) {
+  if (![pdf, cajera, real].every(Number.isFinite)) return null;
+  const cerca = (a, b) => Math.abs(a - b) <= 100;
+  if (cerca(cajera, pdf) || cerca(real, pdf) || !cerca(real, cajera)) return null;
+  return {monto: cajera, coincide: 'cajera'};
+}
