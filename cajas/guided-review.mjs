@@ -31,3 +31,20 @@ export function answerGuidedQuestion(original,key,amount,note='',receipt=null){
  }
  s.completedDays=s.completedDays.filter(d=>d!==q.date);return s;
 }
+
+// v124: vale lo que entró de verdad. Pone en la declaración del turno lo que entró por Mercado Pago y Cuenta DNI (centavos),
+// corrige los cupones del turno y deja contestadas las preguntas de esos medios con la misma nota (no se vuelven a preguntar).
+export function applyRealCollection(original,date,turn,mercadoPago,cuentaDni,note){
+ const s=structuredClone(original),r=s.couponReviews.find(r=>r.date===date),a=r&&r.allocations&&r.allocations.find(a=>turnKey(a)===turnKey(turn));
+ if(!a)throw Error('Ese turno no tiene declaración.');
+ const t=allTurns(s,date).find(t=>turnKey(t)===turnKey(turn));if(!t)throw Error('Los datos cambiaron.');
+ a.mercadoPago=mercadoPago;a.cuentaDni=cuentaDni;
+ const included=(s.failedPayments||[]).filter(f=>f.date===date&&turnKey(f)===turnKey(t)&&f.includedInCoupons).reduce((n,f)=>n+f.amount,0);
+ const total=a.mercadoPago+a.cuentaDni+(a.other||0)+(a.pendingOrders||0)+included;
+ if(total!==t.digital)addClosingCorrection(s,{date,branch:t.branch,box:t.box,batch:t.batch,field:'digital',after:total,note});
+ for(const k of ['mercadoPago','cuentaDni','other'])r[k]=r.allocations.reduce((n,x)=>n+(x[k]||0),0);
+ s.guidedAnswers??=[];
+ for(const q of paymentQuestions(s,date).filter(q=>turnKey(q)===turnKey(t)))s.guidedAnswers.push({key:q.key,date,signature:signature(q),amount:q.entered,note,answeredAt:new Date().toISOString()});
+ r.signature=couponSignature(s,date);const st=couponStatus(s,date);r.verified=!paymentQuestions(s,date).length&&st.allocationComplete&&withinTolerance(st.remaining);
+ return s;
+}

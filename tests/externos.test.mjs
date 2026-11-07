@@ -43,7 +43,7 @@ test('cobros del turno: solo los del horario (apertura a cierre, minuto incluido
 test('respuesta automática: coincida con el PDF o con lo declarado, es error de carga de la cajera (las dos las carga ella); si no coincide nada, pregunta', () => {
   assert.deepEqual(respuestaAutomatica(11652300, 13166301, 13166301), {monto: 13166301, errorCajera: true, coincide: 'pdf'});
   assert.deepEqual(respuestaAutomatica(11652300, 13166301, 11652350), {monto: 11652300, errorCajera: true, coincide: 'cajera'});
-  assert.equal(respuestaAutomatica(11652300, 13166301, 12000000), null);
+  assert.deepEqual(respuestaAutomatica(11652300, 13166301, 12000000), {monto: 12000000, errorCajera: true, coincide: 'ninguno'}, 'v124: vale lo que entró');
   assert.equal(respuestaAutomatica(11652300, 13166301, NaN), null);
 });
 
@@ -52,8 +52,9 @@ test('cupones del turno: corrige solo si lo que entró da lo de la cajera y no l
   assert.deepEqual(correccionCupones(27762504, 27290600, 27290600), {monto: 27290600, coincide: 'cajera'});
   assert.deepEqual(correccionCupones(27762504, 27290600, 27290650), {monto: 27290600, coincide: 'cajera'}, 'tolerancia $1');
   assert.equal(correccionCupones(27762504, 27290600, 27762504), null, 'entró lo del PDF: está bien');
-  assert.equal(correccionCupones(27762504, 27290600, 1000), null, 'no coincide con nada: lo ve el encargado');
-  assert.equal(correccionCupones(100, 150, 150), null, 'PDF y cajera iguales (dentro de $1): nada que corregir');
+  assert.deepEqual(correccionCupones(27762504, 27290600, 1000), {monto: 1000, coincide: 'ninguno'}, 'v124: no coincide con nada: vale lo que entró');
+  assert.deepEqual(correccionCupones(61243700, 61243700, 56584005), {monto: 56584005, coincide: 'ninguno'}, 'PDF y cajera iguales pero de más (caso del 05/11)');
+  assert.equal(correccionCupones(100, 150, 150), null, 'lo que entró da lo del PDF (dentro de $1): nada que corregir');
   assert.equal(correccionCupones(NaN, 1, 1), null);
 });
 

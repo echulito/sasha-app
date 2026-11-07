@@ -40,22 +40,22 @@ export function cobrosEnTurno(cobros, apertura, cierre, canales) {
   const horas = dentro.map(x => String(x.hora).slice(0, 5)).sort();
   return {total, cantidad: dentro.length, desde: horas[0] || '', hasta: horas[horas.length - 1] || ''};
 }
-/** Todo en centavos. Si lo que entró coincide con el informe PDF o con la cajera (±$1), esa es la respuesta. Si no, null (la contesta el encargado).
- *  Las dos cosas las carga la cajera (la declaración y el sistema del que sale el PDF): si no coinciden, siempre es error de carga de ella. */
+/** Todo en centavos. v124: vale lo que entró de verdad. Si coincide con la cajera o con el PDF se dice cuál; si no coincide
+ *  con ninguno, igual se toma lo que entró (coincide: 'ninguno'). Las dos cosas las carga la cajera: si no coinciden, es error de ella. */
 export function respuestaAutomatica(declarado, pdf, real) {
   if (!Number.isFinite(real)) return null;
   const cerca = (a, b) => Math.abs(a - b) <= 100;
   if (cerca(real, declarado)) return {monto: declarado, errorCajera: true, coincide: 'cajera'};
   if (cerca(real, pdf)) return {monto: pdf, errorCajera: true, coincide: 'pdf'};
-  return null;
+  return {monto: real, errorCajera: true, coincide: 'ninguno'};
 }
 
-// v120: cupones del turno (total) con lo que entró de verdad (Mercado Pago QR/Point + Cuenta DNI en el horario del turno).
-// Todo en centavos. Si lo que entró coincide con lo que declaró la cajera y no con el PDF, el PDF quedó mal cargado: se corrige.
-// Si coincide con el PDF (o con ninguno), no se toca nada.
+// v120/v124: cupones del turno (Mercado Pago QR/Point + Cuenta DNI) contra lo que entró de verdad en el horario del turno.
+// Todo en centavos. pdf y cajera son solo la parte de MP + Cuenta DNI. Si lo que entró da lo del PDF, está bien (null).
+// Si no, vale lo que entró: coincide 'cajera' (el PDF quedó mal cargado) o 'ninguno' (las dos cargas de la cajera están mal).
 export function correccionCupones(pdf, cajera, real) {
-  if (![pdf, cajera, real].every(Number.isFinite)) return null;
+  if (!Number.isFinite(pdf) || !Number.isFinite(real)) return null;
   const cerca = (a, b) => Math.abs(a - b) <= 100;
-  if (cerca(cajera, pdf) || cerca(real, pdf) || !cerca(real, cajera)) return null;
-  return {monto: cajera, coincide: 'cajera'};
+  if (cerca(real, pdf)) return null;
+  return Number.isFinite(cajera) && cerca(real, cajera) ? {monto: cajera, coincide: 'cajera'} : {monto: real, coincide: 'ninguno'};
 }

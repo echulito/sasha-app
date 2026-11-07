@@ -6,7 +6,7 @@ import {servir} from './servidor-estatico.mjs';
 import {crearECHU, URL_ECHU, TOKEN, DATOS} from './echu-falso.mjs';
 import {normalizeState, loadErrors} from '../cajas/domain.mjs';
 const date = '2026-10-16';
-function estado(sinDesglose) {
+function estado(sinDesglose, mp2468 = 23467400) {
   const rows = [
     {date: '2026-10-15', box: '0001', batch: '2466', cashier: 'Cajera B', opening: 3460000, cash: 4460000, remainder: 4460000, sales: 1000000, digital: 0, openTime: '15:39', closeTime: '19:34'},
     {date, box: '0001', batch: '2467', cashier: 'Cajera A', opening: 4460000, cash: 4460000, remainder: 4460000, sales: 38935801, digital: 38935800, sourceMercadoPagoDeclared: 25266200, sourceCouponDeclared: 13669600, openTime: '09:41', closeTime: '15:30'},
@@ -14,12 +14,12 @@ function estado(sinDesglose) {
     ...['2335', '2336'].map((batch, i) => ({date, box: '0003', batch, cashier: i ? 'Cajera B' : 'Cajera A', opening: 0, cash: 0, remainder: 0, sales: 0, digital: 0, openTime: i ? '15:39' : '09:41', closeTime: i ? '19:34' : '15:30'}))];
   if (sinDesglose) rows.forEach(r => { if (r.batch === '2468') { delete r.sourceMercadoPagoDeclared; delete r.sourceCouponDeclared; } });
   return normalizeState({manual: [], reports: rows.map(r => ({type: 'turnClose', date: r.date, branch: '01', rows: [{branch: '01', withdrawals: 0, closingWithdrawal: 0, ...r}]})),
-    couponReviews: [{date, allocations: rows.filter(r => r.date === date).map(r => ({branch: '01', box: r.box, batch: r.batch, mercadoPago: r.batch === '2467' ? 25266200 : r.batch === '2468' ? 23467400 : 0, cuentaDni: r.batch === '2467' ? 13669600 : r.batch === '2468' ? 3823200 : 0, other: 0, pendingOrders: 0})),
+    couponReviews: [{date, allocations: rows.filter(r => r.date === date).map(r => ({branch: '01', box: r.box, batch: r.batch, mercadoPago: r.batch === '2467' ? 25266200 : r.batch === '2468' ? mp2468 : 0, cuentaDni: r.batch === '2467' ? 13669600 : r.batch === '2468' ? 3823200 : 0, other: 0, pendingOrders: 0})),
       mercadoPago: 48733600, cuentaDni: 17492800, other: 0, verified: false, signature: '', note: ''}]});
 }
 async function abrirCajas(mp, opc = {}) {
   const antes = {e: DATOS.cajas_estado, p: DATOS.pagos_externos};
-  DATOS.cajas_estado = {state: estado(opc.sinDesglose), revision: 1, sheetUrl: ''};
+  DATOS.cajas_estado = {state: estado(opc.sinDesglose, opc.mp2468), revision: 1, sheetUrl: ''};
   DATOS.pagos_externos = {fecha: date, mp, cuentaDni: opc.dni || {cantidad: 0, total: 0, comisiones: 0, rechazados: 0, cobros: []}};
   const b = await chromium.launch(), web = await servir();
   const ctx = await b.newContext({viewport: {width: 390, height: 844}, serviceWorkers: 'block', locale: 'es-AR', timezoneId: 'America/Argentina/Buenos_Aires'});
@@ -97,5 +97,25 @@ test('v120: si lo que entró da lo del PDF, los cupones no se tocan', async () =
     await page.waitForFunction(() => document.querySelector('#externos') && !document.querySelector('#externos').hidden, null, {timeout: 15000});
     await page.waitForTimeout(800);
     assert.equal(guardados(echu).filter(x => (x.state.closingCorrections || []).some(c => c.field === 'digital')).length, 0);
+  } finally { await cerrar(); }
+});
+
+test('v124: si lo que entró no coincide ni con el PDF ni con la cajera pero explica la diferencia de caja, vale lo que entró', async () => {
+  // PDF $ 277.625,04 · cajera $ 288.232 · entró $ 272.905,85 = lo vendido: con eso la caja cierra justo.
+  const mpCobros = [{hora: '16:00:00', importe: 200000, canal: 'QR', comision: 0}, {hora: '18:00:00', importe: 34674, canal: 'Point', comision: 0}];
+  const dni = {cantidad: 1, total: 38231.85, comisiones: 0, rechazados: 0, cobros: [{hora: '17:00:00', importe: 38231.85}]};
+  const {page, echu, errores, cerrar} = await abrirCajas({cantidad: 2, total: 234674, comisiones: 0, porCanal: {QR: {cantidad: 1, total: 200000}, Point: {cantidad: 1, total: 34674}}, cobros: mpCobros}, {sinDesglose: true, dni, mp2468: 25000000});
+  try {
+    await page.waitForFunction(() => document.querySelector('#externos') && !document.querySelector('#externos').hidden, null, {timeout: 15000});
+    await page.waitForTimeout(900);
+    const g = guardados(echu); assert.ok(g.length > 0, 'tiene que corregir');
+    const st = g[g.length - 1].state;
+    const c = (st.closingCorrections || []).filter(x => x.field === 'digital' && x.batch === '2468');
+    assert.equal(c.length, 1); assert.equal(c[0].after, 27290585);
+    assert.match(c[0].note, /La cajera declaró \$\s?288\.232,00 y en el sistema cargó \$\s?277\.625,04 de cupones: no coincide ninguno, vale lo que entró\./);
+    const a = st.couponReviews[0].allocations.find(x => x.batch === '2468');
+    assert.deepEqual([a.mercadoPago, a.cuentaDni], [23467400, 3823185], 'la declaración pasa a ser lo que entró');
+    assert.equal((st.closingCorrections || []).filter(x => x.batch === '2467').length, 0, 'el turno de la mañana sin datos no se toca (lo empeoraría)');
+    assert.deepEqual(errores, []);
   } finally { await cerrar(); }
 });

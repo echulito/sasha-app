@@ -1,5 +1,5 @@
 import {monthlyPanel,monthlyReport,printDocument} from './monthly-report.mjs';
-import {guidedQuestions,answerGuidedQuestion} from './guided-review.mjs';
+import {guidedQuestions,answerGuidedQuestion,applyRealCollection} from './guided-review.mjs';
 import {mergeRemoteReviews} from './review-sync.mjs';
 import {automaticTurnMatch,declaredPaymentMethods} from './payment-reconciliation.mjs';
 import {reconcileTeam,pendingTeamExpenses,teamDeclarationTotals,replaceTeamInbox,visibleTeamDeclarations} from './team-domain.mjs';
@@ -145,8 +145,11 @@ function autoResponderPagos(d,x){if(AUTO_EN_CURSO)return false;const qs=guidedQu
   if(!src)continue;const r=cobrosEnTurno(src.cobros,t.openTime,t.closeTime,src.canales);if(!r)continue;REAL_TURNO[q.key]=r;
   const a=respuestaAutomatica(q.entered,q.pdf,r.total);if(!a)continue;
   const det=src.nombre+' acreditó '+money(r.total)+' ('+r.cantidad+' cobros'+(r.cantidad?' de '+r.desde+' a '+r.hasta:'')+', turno de '+t.openTime+' a '+t.closeTime+').';
-  const nota=LOAD_ERROR+': '+det+(a.coincide==='pdf'?' La cajera declaró '+money(q.entered)+' (en el sistema estaba bien).':' Coincide con lo que declaró la cajera; en el sistema cargó '+money(q.pdf)+'.');
-  try{s=answerGuidedQuestion(s,q.key,a.monto,nota);cambio=true;}catch(e){}
+  const nota=LOAD_ERROR+': '+det+(a.coincide==='pdf'?' La cajera declaró '+money(q.entered)+' (en el sistema estaba bien).':a.coincide==='cajera'?' Coincide con lo que declaró la cajera; en el sistema cargó '+money(q.pdf)+'.':' La cajera declaró '+money(q.entered)+' y en el sistema cargó '+money(q.pdf)+': no coincide ninguno, vale lo que entró.');
+  try{const c=answerGuidedQuestion(s,q.key,a.monto,nota);
+   // v124: si no coincide con ninguna carga, se toma lo que entró solo si explica la diferencia de caja (la acerca a cero).
+   if(a.coincide==='ninguno'){const t2=allTurns(c,d).find(z=>turnKey(z)===turnKey(t));if(!t2||Math.abs(closingBalance(c,t2).net)>=Math.abs(closingBalance(s,t).net))continue;}
+   s=c;cambio=true;}catch(e){}
  }
  if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Respondido solo con lo que entró de verdad');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
 // v120: si los cupones del PDF no coinciden con lo que declaró la cajera, lo que entró de verdad en el turno (Mercado Pago + Cuenta DNI) decide.
@@ -158,15 +161,28 @@ function autoCorregirCupones(d,x){if(AUTO_EN_CURSO)return false;
  let s=state,cambio=false;
  for(const t of allTurns(state,d).filter(t=>t.box==='0001')){
   if(pend.has(turnKey(t))||correctionValue(t,'digital',true)!==t.digital)continue;
-  const a=review.allocations.find(a=>turnKey(a)===turnKey(t));if(!a||(a.other||0)!==0)continue;
+  const a=review.allocations.find(a=>turnKey(a)===turnKey(t));if(!a)continue;
   const mp=cobrosEnTurno(x.mp.cobros,t.openTime,t.closeTime,['QR','Point']),dni=cobrosEnTurno(x.cuentaDni.cobros,t.openTime,t.closeTime,null);if(!mp||!dni)continue;
   const incl=(s.failedPayments||[]).filter(f=>f.date===d&&turnKey(f)===turnKey(t)&&f.includedInCoupons).reduce((n,f)=>n+f.amount,0);
-  const cajera=a.mercadoPago+a.cuentaDni,r=correccionCupones(t.digital,cajera,mp.total+dni.total);if(!r)continue;
-  const after=cajera+(a.pendingOrders||0)+incl;if(after===t.digital)continue;
-  const nota=LOAD_ERROR+': en el turno de '+t.openTime+' a '+t.closeTime+' entraron '+money(mp.total+dni.total)+' (Mercado Pago '+money(mp.total)+' en '+mp.cantidad+' cobros + Cuenta DNI '+money(dni.total)+' en '+dni.cantidad+' cobros). Coincide con lo que declaró la cajera ('+money(cajera)+'); en el sistema cargó '+money(t.digital)+' de cupones.';
-  try{const c=structuredClone(s);addClosingCorrection(c,{date:d,branch:t.branch,box:t.box,batch:t.batch,field:'digital',after,note:nota});s=c;cambio=true;}catch(e){}
+  // v124: se compara solo MP + Cuenta DNI (lo que se puede verificar); "otros" y pedidos online quedan como se declararon.
+  const resto=(a.other||0)+(a.pendingOrders||0)+incl,pdfMD=t.digital-resto,cajera=a.mercadoPago+a.cuentaDni,real=mp.total+dni.total;
+  const r=correccionCupones(pdfMD,cajera,real);if(!r)continue;
+  const after=r.monto+resto;if(after===t.digital)continue;
+  const nota=LOAD_ERROR+': en el turno de '+t.openTime+' a '+t.closeTime+' entraron '+money(real)+' (Mercado Pago '+money(mp.total)+' en '+mp.cantidad+' cobros + Cuenta DNI '+money(dni.total)+' en '+dni.cantidad+' cobros).'+
+   (r.coincide==='cajera'?' Coincide con lo que declaró la cajera ('+money(cajera)+'); en el sistema cargó '+money(pdfMD)+' de cupones.':' La cajera declaró '+money(cajera)+' y en el sistema cargó '+money(pdfMD)+' de cupones: no coincide ninguno, vale lo que entró.')+
+   (resto?' Otros medios y pedidos ('+money(resto)+') quedan como se declararon.':'');
+  try{
+   if(r.coincide==='cajera'){const c=structuredClone(s);addClosingCorrection(c,{date:d,branch:t.branch,box:t.box,batch:t.batch,field:'digital',after,note:nota});s=c;cambio=true;}
+   else{
+    // No coincide ninguna carga: la declaración del turno pasa a ser lo que entró. Solo si eso explica la diferencia de caja
+    // (la deja más cerca de cero); si la empeora, faltan datos (por ejemplo avisos de Redlink sin llegar) y no se toca.
+    const c=applyRealCollection(s,d,t,mp.total,dni.total,nota),t2=allTurns(c,d).find(z=>turnKey(z)===turnKey(t));
+    const antes=Math.abs(closingBalance(s,t).net),despues=t2?Math.abs(closingBalance(c,t2).net):Infinity;
+    if(despues<antes){s=c;cambio=true;}
+   }
+  }catch(e){}
  }
- if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Cupones corregidos solos con lo que entró de verdad');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
+ if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Cupones corregidos con lo que entró de verdad');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
 function pistasPagos(){document.querySelectorAll('[data-guided-key]').forEach(el=>{const r=REAL_TURNO[el.dataset.guidedKey],act=el.querySelector('.actions');if(!r||!act||el.querySelector('[data-real]'))return;
  const b=document.createElement('button');b.type='button';b.className='button';b.dataset.real='1';b.textContent='Entró de verdad: '+money(r.total)+' ('+r.cantidad+' cobros)';
  b.onclick=()=>{const inp=el.querySelector('[data-guided-amount]');if(inp){inp.value=(r.total/100).toFixed(2).replace('.',',');inp.focus();}const m=el.querySelector('[data-motivo]');if(m)m.value='error';};act.appendChild(b);});}
