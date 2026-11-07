@@ -64,7 +64,7 @@ export function correccionCupones(pdf, cajera, real) {
 // Lo que entró y no tiene ticket explica sobrantes; lo que el sistema dice cobrado y no entró explica faltantes.
 // pagos: filas del "Detalle de Ventas por Forma de Pago" del turno {method, amount (centavos), ticket, time 'HH:MM'}.
 export const medioDeTicket = m => /BANELCO|DNI/i.test(m) ? 'Cuenta DNI' : /EFECTIVO/i.test(m) ? 'Efectivo' : 'Mercado Pago';
-export function cruzarCobros(realMp, realDni, pagos, apertura, cierre) {
+export function cruzarCobros(realMp, realDni, pagos, apertura, cierre, anulados) {
   const a = minuto(apertura), c = minuto(cierre);
   if (a === null || c === null) return null;
   const dentro = (lista, medio) => (lista || []).filter(x => { const m = minuto(x.hora); return m !== null && m >= a && m <= c; })
@@ -77,16 +77,21 @@ export function cruzarCobros(realMp, realDni, pagos, apertura, cierre) {
   const sinTicket = [], diferencias = [];
   // 1) mismo medio e importe exacto (±$1).
   let pendientes = reales.filter(r => { const t = buscar(r, true); if (t) { t.usado = true; return false; } return true; });
-  // 2) v126: mismo medio, importe parecido (hasta 5% y $ 2.000) y hora cercana (20 min): es ese ticket, cobrado con diferencia
+  // 2) v131: tickets que están en el detalle de tickets pero no en el cierre ni en los cobros del sistema (anulados en el sistema).
+  //    Si entró un cobro por ese importe cerca de esa hora, se cobró un ticket que después se anuló.
+  const anul = (anulados || []).map(t => ({ticket: t.ticket, hora: t.hora || '', importe: t.importe, usado: false}));
+  pendientes = pendientes.filter(r => { const t = anul.filter(t => !t.usado && Math.abs(t.importe - r.importe) <= 100 && dist(r, t) <= 30).sort((x, y) => dist(r, x) - dist(r, y))[0];
+    if (!t) return true; t.usado = true; sinTicket.push({...r, anulado: {ticket: t.ticket, hora: t.hora, importe: t.importe}}); return false; });
+  // 3) v126: mismo medio, importe parecido (hasta 5% y $ 2.000) y hora cercana (20 min): es ese ticket, cobrado con diferencia
   //    (por ejemplo, el ticket era de $ 10.107 y le cobró $ 10.100).
   const parecido = r => tickets.filter(t => !t.usado && t.medio === r.medio && t.medio !== 'Efectivo' && dist(r, t) <= 20 &&
     Math.abs(t.importe - r.importe) <= Math.min(200000, Math.round(t.importe * 0.05))).sort((x, y) => dist(r, x) - dist(r, y) || Math.abs(x.importe - r.importe) - Math.abs(y.importe - r.importe))[0];
   pendientes = pendientes.filter(r => { const t = parecido(r); if (!t) return true; t.usado = true;
     diferencias.push({...r, ticket: t.ticket, metodo: t.metodo, importeTicket: t.importe, dif: r.importe - t.importe}); return false; });
-  // 3) lo que queda, mismo importe con otro medio y hora cercana (por ejemplo, cobrado por QR y registrado en efectivo).
+  // 4) lo que queda, mismo importe con otro medio y hora cercana (por ejemplo, cobrado por QR y registrado en efectivo).
   pendientes.forEach(r => { let t = buscar(r, false); if (t && dist(r, t) > 30) t = null; if (t) t.usado = true; sinTicket.push(t ? {...r, registrado: {ticket: t.ticket, medio: t.metodo}} : r); });
   const sinEntrar = tickets.filter(t => !t.usado && t.medio !== 'Efectivo').map(t => ({medio: t.medio, metodo: t.metodo, ticket: t.ticket, hora: t.hora, importe: t.importe}));
   const suma = l => l.reduce((n, x) => n + x.importe, 0);
-  return {sinTicket, sinEntrar, diferencias, totalSinTicket: suma(sinTicket.filter(x => !x.registrado)), totalOtroMedio: suma(sinTicket.filter(x => x.registrado)),
+  return {sinTicket, sinEntrar, diferencias, totalSinTicket: suma(sinTicket.filter(x => !x.registrado && !x.anulado)), totalOtroMedio: suma(sinTicket.filter(x => x.registrado)), totalAnulado: suma(sinTicket.filter(x => x.anulado)),
     totalSinEntrar: suma(sinEntrar), totalDiferencia: diferencias.reduce((n, x) => n + x.dif, 0), reales: reales.length};
 }

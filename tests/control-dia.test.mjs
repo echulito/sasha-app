@@ -15,7 +15,7 @@ function st(extraPago, ventas2468 = 2000000){closes[1].sales = ventas2468; close
 test('ticket sin cobro y fuera del cierre: se toma como anulado y no frena el día', () => {
   const a = controlStatus(st(false), date);
   assert.deepEqual(a.issues.filter(i => /tickets|cobros/i.test(i)), []);
-  assert.ok(a.warnings.some(w => w === 'El ticket 0001-00000002 (15:49, $ 7.200,00) figura en el detalle de tickets pero no se cobró ni está en el cierre: se toma como anulado.'));
+  assert.ok(a.warnings.some(w => w === 'El ticket 0001-00000002 (15:49, $ 7.200,00) figura en el detalle de tickets pero no se cobró ni está en el cierre: se toma como anulado en el sistema. Si se cobró igual, aparece en «Cobros contra tickets».'));
 });
 test('si el cierre sí incluye ese ticket (falta el cobro), sigue siendo algo para revisar', () => {
   const a = controlStatus(st(false, 2720000), date);

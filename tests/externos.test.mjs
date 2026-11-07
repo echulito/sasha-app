@@ -94,3 +94,12 @@ test('cruce v126: un cobro con unos pesos de diferencia y hora cercana se asocia
   const otro = cruzarCobros([{hora: '16:00:00', importe: 7000}], [], [{method: 'Efectivo $', amount: 700000, ticket: 'T', time: '19:00'}], '15:29', '19:33');
   assert.deepEqual(JSON.parse(JSON.stringify(otro.sinTicket)), [{medio: 'Mercado Pago', hora: '16:00', importe: 700000}]);
 });
+
+test('v131: un cobro real que coincide con un ticket anulado en el sistema (no está en el cierre ni en los cobros) se muestra así', async () => {
+  const {cruzarCobros} = await import('../cajas/externos.mjs');
+  const pagos = [{method: 'M PAGO OFFLINE', amount: 2925600, ticket: 'Tk B 0001-00000059', time: '16:36'}];
+  const r = cruzarCobros([{hora: '16:31:10', importe: 43248, canal: 'QR'}, {hora: '16:36:00', importe: 29256, canal: 'QR'}], [], pagos, '15:34', '19:37',
+    [{ticket: '0001-00000058', hora: '16:30', importe: 4324800}]);
+  assert.equal(r.sinTicket.length, 1); assert.deepEqual(r.sinTicket[0].anulado, {ticket: '0001-00000058', hora: '16:30', importe: 4324800});
+  assert.equal(r.totalAnulado, 4324800); assert.equal(r.totalSinTicket, 0); assert.equal(r.diferencias.length, 0);
+});
