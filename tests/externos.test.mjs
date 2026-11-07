@@ -103,3 +103,21 @@ test('v131: un cobro real que coincide con un ticket anulado en el sistema (no e
   assert.equal(r.sinTicket.length, 1); assert.deepEqual(r.sinTicket[0].anulado, {ticket: '0001-00000058', hora: '16:30', importe: 4324800});
   assert.equal(r.totalAnulado, 4324800); assert.equal(r.totalSinTicket, 0); assert.equal(r.diferencias.length, 0);
 });
+
+test('v133: dos cobros en el mismo minuto o con 1 minuto de diferencia que juntos dan un ticket se asocian a ese ticket', async () => {
+  const {cruzarCobros} = await import('../cajas/externos.mjs');
+  const pagos = [{method: 'Efectivo $', amount: 1504600, ticket: 'Tk B 0001-00000066', time: '16:49'}, {method: 'M PAGO OFFLINE', amount: 2939900, ticket: 'Tk B 0001-00000065', time: '16:48'}];
+  const r = cruzarCobros([{hora: '16:48:30', importe: 29399, canal: 'QR'}, {hora: '16:49:40', importe: 1506, canal: 'QR'}, {hora: '16:50:10', importe: 13540, canal: 'QR'}], [], pagos, '15:34', '19:37', []);
+  assert.equal(r.sinTicket.length, 0, 'no queda nada sin ticket');
+  assert.equal(r.combinados.length, 1);
+  const c = r.combinados[0];
+  assert.equal(c.ticket, 'Tk B 0001-00000066'); assert.equal(c.metodo, 'Efectivo $'); assert.equal(c.importe, 1504600); assert.equal(c.dif, 0);
+  assert.deepEqual(c.movimientos.map(m => m.hora), ['16:49', '16:50']);
+  assert.equal(r.totalCombinadoOtroMedio, 1504600);
+});
+test('v133: si los dos cobros están a más de 1 minuto del ticket, no se juntan', async () => {
+  const {cruzarCobros} = await import('../cajas/externos.mjs');
+  const pagos = [{method: 'Efectivo $', amount: 1504600, ticket: 'Tk B 0001-00000066', time: '16:49'}];
+  const r = cruzarCobros([{hora: '16:49:40', importe: 1506, canal: 'QR'}, {hora: '16:53:10', importe: 13540, canal: 'QR'}], [], pagos, '15:34', '19:37', []);
+  assert.equal(r.combinados.length, 0); assert.equal(r.sinTicket.length, 2);
+});
