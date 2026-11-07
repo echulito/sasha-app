@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=138;
+var APP_V=139;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -2928,7 +2928,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=138');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=139');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3140,6 +3140,8 @@ function cForm(){
     h+='<div class="g2">'+inp('cf_n21','Neto 21%',cNum(n['21']))+inp('cf_i21','IVA 21%',cNum(iv['21']))+inp('cf_n105','Neto 10,5%',cNum(n['10.5']))+inp('cf_i105','IVA 10,5%',cNum(iv['10.5']))+inp('cf_n27','Neto 27%',cNum(n['27']))+inp('cf_i27','IVA 27%',cNum(iv['27']))+'</div>'+
       '<div class="g2">'+inp('cf_ng','No gravado / exento',cNum(d.noGravado))+inp('cf_piva','Percepción IVA',cNum(d.percIVA))+inp('cf_piibb','Percepción IIBB',cNum(d.percIIBB))+inp('cf_otros','Otros impuestos',cNum(d.otros))+'</div>'+
       '<div class="g2">'+inp('cf_total','Total',cNum(d.total))+(t==='factura'&&d.lado!=='venta'?inp('cf_rem','Remitos que menciona',(d.remitos||[]).join(', '),' '):'<div></div>')+'</div>';
+    // v139: CAE y su vencimiento (los lee de la foto; van en el IVA Compras para la contadora)
+    if(t!=='cierre_z')h+='<div class="g2">'+inp('cf_cae','CAE',d.cae||'',' inputmode="numeric"')+'<div><label>Vto. del CAE</label><input id="cf_caevto" type="date" value="'+esc(d.caeVto||'')+'"></div></div>';
     if(t==='cierre_z')h+='<label style="margin-top:12px">Notas de crédito / devoluciones del día</label><div class="g3">'+inp('cf_ncn','Neto',cNum(nc.neto))+inp('cf_nci','IVA',cNum(nc.iva))+inp('cf_nct','Total',cNum(nc.total))+'</div>';
   }else{
     var fs=(CT.mes.facturasParaVincular||[]),mismo=function(x){return (d.cuit&&x.cuit===String(d.cuit).replace(/\D/g,''))||(d.nombre&&String(x.nombre).toUpperCase()===String(d.nombre).toUpperCase())};
@@ -3180,6 +3182,7 @@ function cLeerForm(){
   if(d.tipo!=='remito'){d.neto={'21':n('cf_n21'),'10.5':n('cf_n105'),'27':n('cf_n27')};d.iva={'21':n('cf_i21'),'10.5':n('cf_i105'),'27':n('cf_i27')};
     d.noGravado=n('cf_ng');d.percIVA=n('cf_piva');d.percIIBB=n('cf_piibb');d.otros=n('cf_otros');d.total=n('cf_total');
     if($('cf_rem'))d.remitos=String(v('cf_rem')||'').split(/[,;\s]+/).filter(Boolean);
+    if($('cf_cae')){d.cae=String(v('cf_cae')||'').replace(/\D/g,'');d.caeVto=v('cf_caevto')||''}
     if(d.tipo==='cierre_z')d.nc={neto:n('cf_ncn'),iva:n('cf_nci'),total:n('cf_nct')};}
   else d.vinculo=v('cf_vinc')||'';
   return d;
@@ -3189,7 +3192,7 @@ function cGuardar(){
   if(!d.fecha){$('cf_msg').innerHTML='<span class="neg">Falta la fecha.</span>';return}
   if($('cf_prov')&&!String(d.nombre||'').trim()){$('cf_msg').innerHTML='<span class="neg">Escribí o elegí el proveedor.</span>';return}
   var envio={tipo:d.tipo,letra:d.letra,pv:d.pv,numero:d.numero,fecha:d.fecha,periodo:d.periodo,lado:d.lado,neto:d.neto,iva:d.iva,noGravado:d.noGravado,percIVA:d.percIVA,percIIBB:d.percIIBB,otros:d.otros,total:d.total,
-    remitos:d.remitos,facturaMencionada:d.facturaMencionada,notas:d.notas,cae:d.cae,nc:d.nc,vinculo:d.tipo==='remito'?d.vinculo:undefined,revisado:$('cf_ok')?$('cf_ok').checked:false,id:CT.form.nuevo?'':d.id,hash:CT.hash};
+    remitos:d.remitos,facturaMencionada:d.facturaMencionada,notas:d.notas,cae:d.cae,caeVto:d.caeVto,nc:d.nc,vinculo:d.tipo==='remito'?d.vinculo:undefined,revisado:$('cf_ok')?$('cf_ok').checked:false,id:CT.form.nuevo?'':d.id,hash:CT.hash};
   if(d.lado==='venta'){envio.receptorCuit=d.cuit;envio.receptorNombre=d.nombre}else{envio.emisorCuit=d.cuit;envio.emisorNombre=d.nombre}
   b.disabled=true;b.textContent='Guardando…';
   cPost('conta_guardar',{datos:JSON.stringify(envio),imagen:CT.form.nuevo?CT.foto:'',mime:CT.mime}).then(function(r){

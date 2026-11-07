@@ -553,3 +553,20 @@ test('Sueldos v136: al abrir un empleado de monotributo no hay recibo de Comerci
   assert.deepEqual(errores, []);
   await ctx.close();
 });
+
+test('Facturas v139: el comprobante tiene CAE y vencimiento del CAE, y se mandan al guardar', async () => {
+  DATOS.conta_guardar = p => ({comprobante: Object.assign(JSON.parse(p.datos), {id: 'N1', periodo: '2026-11', estado: 'ok'})});
+  const {ctx, page, errores, echu} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="iva"]');
+  await page.locator('#ctiles .card').nth(3).waitFor();
+  await page.evaluate(() => { CT.form = {nuevo: true, datos: {tipo: 'factura', letra: 'A', lado: 'compra', fecha: '2026-11-05', cae: '76451234567890', caeVto: '2026-11-15'}}; cForm(); });
+  assert.equal(await page.inputValue('#cf_cae'), '76451234567890'); assert.equal(await page.inputValue('#cf_caevto'), '2026-11-15');
+  await page.fill('#cf_prov', 'RAZ Y CIA'); await page.fill('#cf_total', '1.210'); await page.fill('#cf_cae', '7645 1234 5678 91');
+  await page.click('#cf_guardar'); await page.waitForTimeout(500);
+  const q = echu.pedidos.find(x => /conta_guardar/.test(x.cuerpo || x.url || ''));
+  assert.ok(q, 'se mandó'); const datos = JSON.parse(JSON.parse(q.cuerpo).datos);
+  assert.equal(datos.cae, '76451234567891'); assert.equal(datos.caeVto, '2026-11-15');
+  assert.deepEqual(errores, []);
+  delete DATOS.conta_guardar;
+  await ctx.close();
+});
