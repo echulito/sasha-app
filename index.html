@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=137;
+var APP_V=138;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -2928,7 +2928,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=137');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=138');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3557,13 +3557,21 @@ function sPagoHtml(){
       (p.tipo==='monotributo'&&!p.cuotaDelMes?'<div class="rk" style="margin-top:3px">Monotributo de '+cMesTxt(d.periodo)+': '+(p.cuota?'¿sigue en '+pesos(p.cuota)+'? <button class="lnk" onclick="sCuota(\''+e.id+'\','+p.cuota+')">Sí, igual</button> · ':'')+'<button class="lnk" onclick="sCuotaForm(\''+e.id+'\')">'+(p.cuota?'Aumentó':'Cargar')+'</button></div>':'')+
       '</div>'}).join('');
   du.forEach(function(x){tDu+=Number(x.monto)||0});
+  // v138: pago confirmado (queda registrado en ECHU y se tilda en ADMINISTRACION).
+  var pd=d.pagado;
   return '<div class="card"><h2>Pagar sueldos de '+cMesTxt(d.periodo)+'</h2>'+
+    (pd?'<div class="sp" style="margin-top:0"><span class="chip v">✓ Pago confirmado el '+esc(pd.fecha.split('-').reverse().join('/'))+'</span> <span class="rk">Efectivo '+pesos(pd.ef)+' · Mercado Pago '+pesos(pd.mp)+' · total '+pesos(pd.total)+'</span>'+
+      '<div class="rk" style="margin-top:4px">Ya no figura por pagar en Inicio. <button class="lnk" onclick="sDeshacerPago()">Deshacer el pago</button></div></div>':'')+
     (act.length?filas:'<div class="note" style="margin-top:0">No hay empleados en este mes.</div>')+
     '<div class="rowb" style="margin-top:6px"><span>Empleados</span><b>'+pesos(tEmp)+'</b></div>'+
     du.map(function(x){return '<div class="rowb"><span>'+esc(x.nombre)+' (dueño)</span><b>'+pesos(x.monto)+'</b></div>'}).join('')+
     '<div class="rowb"><span><b>Total sueldos</b></span><b>'+pesos(tEmp+tDu)+'</b></div>'+
-    '<div class="btns">'+(act.length?'<button class="btn" id="spagar">Pagar sueldos</button>':'')+'<label class="btn sec" style="margin:0;text-align:center">Subir recibo o factura<input id="sdocup" type="file" accept="application/pdf,image/jpeg,image/png" class="oculto"></label></div>'+
+    '<div class="btns">'+(act.length?'<button class="btn'+(pd?' sec':'')+'" id="spagar">'+(pd?'Volver a bajar los PDF':'Pagar sueldos')+'</button>':'')+'<label class="btn sec" style="margin:0;text-align:center">Subir recibo o factura<input id="sdocup" type="file" accept="application/pdf,image/jpeg,image/png" class="oculto"></label></div>'+
     '<div class="note" id="sdocmsg">'+(faltan?(faltan===1?'Falta 1 documento':'Faltan '+faltan+' documentos')+'. Llegan solos cuando la contadora los manda a proveedores@ (o subilos acá). ':'')+'<button class="lnk" onclick="sDuenosForm()">sueldo de los dueños</button></div></div>';
+}
+function sDeshacerPago(){
+  if(!confirm('¿Deshacer el pago de los sueldos de '+cMesTxt(SU.per)+'? Vuelven a figurar por pagar.'))return;
+  api('sue_pagado',{datos:JSON.stringify({periodo:SU.per,deshacer:true})}).then(function(){SU.D.pagado=null;INI=null;try{cargarInicio()}catch(e){}sPintar()}).catch(function(e){alert(e.message)});
 }
 function sBindPago(){
   if($('spagar'))$('spagar').onclick=sPagarForm;
@@ -3613,7 +3621,8 @@ function sDuenosForm(){
 // Confirmar cómo se pagó de verdad (por defecto: recibo o factura por Mercado Pago y el resto en efectivo) y bajar los PDFs.
 function sPagarForm(){
   var d=SU.D,act=sActivos().filter(function(e){return d.pagos[e.id]}),box=$('sform');box.classList.remove('oculto');
-  SP.conf=act.map(function(e){var p=d.pagos[e.id];return {id:e.id,nombre:e.nombre,tipo:p.tipo,total:r2(p.total),mp:r2(p.mp),ef:r2(p.ef),cuota:p.tipo==='monotributo'?r2(p.cuota):0}});
+  SP.conf=act.map(function(e){var p=d.pagos[e.id],y=d.pagado&&(d.pagado.pagos||[]).filter(function(z){return z.id===e.id})[0];
+    return {id:e.id,nombre:e.nombre,tipo:p.tipo,total:r2(y?y.total:p.total),mp:r2(y?y.mp:p.mp),ef:r2(y?y.ef:p.ef),cuota:p.tipo==='monotributo'?r2(p.cuota):0}});
   box.innerHTML='<h2>Confirmá cómo se paga</h2><div class="note" style="margin-top:0">Así salen los PDFs. Cambiá lo que haya sido distinto.</div>'+
     '<label>Fecha del pago</label><input id="sp_fecha" type="date" value="'+lHoy()+'">'+
     SP.conf.map(function(x,i){return '<div class="sp"><b>'+esc(x.nombre)+'</b>'+
@@ -3631,7 +3640,13 @@ function sPagarForm(){
   }});
   box.scrollIntoView({behavior:'smooth',block:'start'});
   $('sp_ok').onclick=function(){var b=this;b.disabled=true;$('sp_msg').textContent='Armando los PDFs…';
-    sPagoPDF(SP.conf,$('sp_fecha').value||lHoy()).then(function(n){b.disabled=false;$('sp_msg').innerHTML='<span class="pos">Listo: '+n+'</span>'})
+    var fecha=$('sp_fecha').value||lHoy(),conf=SP.conf.map(function(x){return {id:x.id,total:x.total,mp:x.mp,ef:x.ef}});
+    sPagoPDF(SP.conf,fecha).then(function(n){$('sp_msg').innerHTML='<span class="pos">Listo: '+n+'</span> Registrando el pago…';
+      // v138: el pago queda confirmado en ECHU y se tildan los sueldos en ADMINISTRACION (Inicio ya no los muestra por pagar).
+      return api('sue_pagado',{datos:JSON.stringify({periodo:SU.per,fecha:fecha,pagos:conf})}).then(function(r){
+        b.disabled=false;SU.D.pagado=r&&r.pagado||null;$('sp_msg').innerHTML='<span class="pos">Listo: '+n+'</span> <b class="pos">Pago confirmado y registrado.</b>';
+        INI=null;try{cargarInicio()}catch(e2){}var y=window.scrollY;sPintar();window.scrollTo(0,y)
+      }).catch(function(e2){b.disabled=false;$('sp_msg').innerHTML='<span class="pos">Listo: '+n+'</span> <span class="neg">No se pudo registrar el pago: '+esc(/ACCI|desconoc|no existe/i.test(e2.message)?'falta pegar ECHU 6.33':e2.message)+'.</span>'})})
       .catch(function(e){b.disabled=false;$('sp_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'})};
 }
 // Un PDF con todo: el recibo o la factura de cada uno y, si cobra algo en efectivo, el recibo de efectivo (copia tuya y copia del empleado).

@@ -262,7 +262,13 @@ test('Pagar sueldos: estado del recibo, monotributo, dueños aparte; confirmar e
   await page.fill('[data-i="1"][data-sp="ef"]', '100000'); await page.dispatchEvent('[data-i="1"][data-sp="ef"]', 'change');
   await page.click('#sp_ok');
   await page.locator('#sp_msg .pos').waitFor();
-  assert.match(await page.locator('#sp_msg').innerText(), /1 recibo\/factura y 2 recibos de efectivo/);
+  await page.locator('#slista .chip.v', {hasText: 'Pago confirmado'}).waitFor();
+  // v138: queda confirmado y registrado en ECHU (con la fecha y lo de cada uno) y el botón pasa a "Volver a bajar los PDF"
+  const reg = JSON.parse(JSON.parse(echu.pedidos.find(x => /"accion":"sue_pagado"/.test(x.cuerpo || '')).cuerpo).datos);
+  assert.equal(reg.pagos.length, 2); assert.match(reg.fecha, /^\d{4}-\d{2}-\d{2}$/);
+  assert.match(await page.locator('#slista').innerText(), /✓ Pago confirmado el \d{2}\/\d{2}\/\d{4}\s*Efectivo \$ 400\.000 · Mercado Pago \$ 1\.050\.000 · total \$ 1\.450\.000/);
+  assert.equal(await page.locator('#spagar').innerText(), 'Volver a bajar los PDF');
+  assert.match(await page.locator('#sp_msg').innerText(), /1 recibo\/factura y 2 recibos de efectivo[\s\S]*Pago confirmado y registrado/);
   // v137: siempre queda la barra para abrir/imprimir el PDF (el celular no deja abrir el menú de compartir sin un toque nuevo)
   assert.match(await page.locator('#pdfbarra').innerText(), /PDF listo[\s\S]*Abrir \/ imprimir[\s\S]*Compartir[\s\S]*Guardar/);
   const b64 = await page.evaluate(() => { let s = ''; ULT_PDF.bytes.forEach(b => { s += String.fromCharCode(b); }); return btoa(s); });
