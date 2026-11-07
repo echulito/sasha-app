@@ -226,3 +226,25 @@ test('v128: al sacar "Otros" sin aval, el saldo de la cajera baja ese importe y 
   assert.equal(le(s2, {}).filter(x => x.what === 'Otros').length, 1);
   assert.equal(applyOtherWithoutBacking(s2, {date, turn: t, note: 'x'}).otherChecks.length, 1, 'una sola vez');
 });
+
+test('v129: caja 1: si declaró por Mercado Pago + Cuenta DNI más de lo que entró, lo que no aparece es error al declarar (no sobrante)', async () => {
+  const {closingBalance, allTurns} = await import('../cajas/domain.mjs');
+  // Cajera B declaró MP $ 234.674 + DNI $ 38.232 = $ 272.906, igual que el PDF. Entró MP $ 234.674 y DNI $ 33.232: $ 5.000 no aparecen.
+  const fijarPdf = st => { st.reports.find(r => r.rows[0].batch === '2468').rows[0].digital = 27290600; };
+  const dni = {cantidad: 1, total: 33232, comisiones: 0, rechazados: 0, cobros: [{hora: '17:00:00', importe: 33232}]};
+  const {page, echu, errores, cerrar} = await abrirCajas({cantidad: 1, total: 234674, comisiones: 0, porCanal: {QR: {cantidad: 1, total: 234674}}, cobros: [{hora: '16:00:00', importe: 234674, canal: 'QR', comision: 0}]}, {sinDesglose: true, dni, mutar: fijarPdf});
+  try {
+    await page.waitForFunction(() => /no aparecen en los movimientos/.test((document.querySelector('#externos') || {}).textContent || ''), null, {timeout: 15000});
+    await page.waitForTimeout(900);
+    const g = guardados(echu), st = normalizeState(g[g.length - 1].state);
+    const a = st.couponReviews[0].allocations.find(x => x.batch === '2468');
+    assert.deepEqual([a.mercadoPago, a.cuentaDni], [23467400, 3323200], 'vale lo que entró');
+    const e = loadErrors(st, {}).filter(x => x.batch === '2468');
+    assert.equal(e.length, 1, 'un solo error de carga');
+    assert.match(e[0].note, /declaró \$\s?272\.906,00 entre Mercado Pago \(\$\s?234\.674,00\) y Cuenta DNI \(\$\s?38\.232,00\) y en su horario \(15:39 a 19:34\) entró \$\s?267\.906,00 .*Los \$\s?5\.000,00 de más no aparecen en los movimientos: es un error al declarar, no un sobrante\./);
+    const t = allTurns(st, date).find(x => x.batch === '2468');
+    assert.equal(closingBalance(st, t).net, -499985, 'no es sobrante: faltan los $ 5.000 (vendido $ 272.905,85, entró $ 267.906)');
+    assert.equal((st.closingCorrections || []).filter(c => c.batch === '2467').length, 0, 'el turno de la mañana sin cobros no se toca');
+    assert.deepEqual(errores, []);
+  } finally { await cerrar(); }
+});

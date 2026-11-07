@@ -7,7 +7,7 @@ export function missingOpenDays(before,after,state){for(let t=Date.parse(before+
 import {difference,summarize} from './parser.mjs';
 export const defaultCashiers=[{id:'vanesa',name:'Vanesa',shift:'mañana',start:'09:30',end:'15:30',active:true},{id:'fernanda',name:'Fernanda',shift:'tarde',start:'15:30',end:'19:30',active:true}];
 export const reportKey=r=>[r.type,r.date,r.branch,...(r.type==='turnClose'?[r.rows[0].box,r.rows[0].batch]:[])].join('|');
-export function normalizeState(s){s.cashiers??=structuredClone(defaultCashiers);s.attendance??=[];s.completedDays??=[];s.couponReviews??=[];s.failedPayments??=[];s.alertReviews??=[];s.closingCorrections??=[];s.ticketDifferences??=[];s.otherChecks??=[];s.excludedProductCodes??=[];s.expenseReceipts??=[];s.metricGoals??={};s.teamSubmissions??=[];s.teamApplied??=[];s.closedDays??=[{date:'2026-10-12',reason:'Feriado · Local cerrado'}];return s}
+export function normalizeState(s){s.cashiers??=structuredClone(defaultCashiers);s.attendance??=[];s.completedDays??=[];s.couponReviews??=[];s.failedPayments??=[];s.alertReviews??=[];s.closingCorrections??=[];s.ticketDifferences??=[];s.otherChecks??=[];s.declarationErrors??=[];s.excludedProductCodes??=[];s.expenseReceipts??=[];s.metricGoals??={};s.teamSubmissions??=[];s.teamApplied??=[];s.closedDays??=[{date:'2026-10-12',reason:'Feriado · Local cerrado'}];return s}
 export const withinTolerance=n=>Number.isSafeInteger(n)&&Math.abs(n)<=4000;
 export const remainingCash=r=>r.cash-(r.closingWithdrawal??(r.remainder!==undefined?(r.sourceCash??r.cash)-r.remainder:0));
 const minute=t=>Number(t.slice(0,2))*60+Number(t.slice(3,5));
@@ -91,7 +91,9 @@ export const LOAD_ERROR='Error de carga de la cajera';
 const esErrorCarga=n=>typeof n==='string'&&n.includes(LOAD_ERROR);
 const QUE={cash:'Efectivo contado',opening:'Apertura',digital:'Cupones',withdrawals:'Alivios',closingWithdrawal:'Retiro al cierre'};
 export function loadErrors(s,{month='',cashierId=''}={}){const out=new Map(),add=(date,branch,box,batch,que,note,id)=>{if(month&&!date.startsWith(month))return;const t=allTurns(s,date).find(t=>t.branch===branch&&t.box===box&&t.batch===batch),who=id||(t?assign(s,t,'close').id:''),name=t?assign(s,t,'close').name:'';if(cashierId&&who!==cashierId)return;const k=[date,branch,box,batch,que].join('|');if(!out.has(k))out.set(k,{date,branch,box,batch,cashierId:who,cashier:name,what:que,note:note.trim()});};
- for(const c of s.closingCorrections||[])if(esErrorCarga(c.note))add(c.date,c.branch,c.box,c.batch,QUE[c.field]||c.field,c.note,c.cashierId);
+ // v129: los errores de declaración y "Otros" sin aval se anotan con su propio detalle (antes que la corrección de cupones que generan).
+ for(const e of s.declarationErrors||[])if(esErrorCarga(e.note))add(e.date,e.branch,e.box,e.batch,'Cupones',e.note,'');
+ for(const c of s.closingCorrections||[])if(esErrorCarga(c.note)&&!String(c.note).startsWith('Otros sin aval: '))add(c.date,c.branch,c.box,c.batch,QUE[c.field]||c.field,c.note,c.cashierId);
  for(const r of s.alertReviews||[])if(esErrorCarga(r.note))add(r.date,r.branch,r.box,r.batch,r.type==='opening'?'Apertura':'Cierre',r.note,r.cashierId);
  for(const o of s.otherChecks||[])if(esErrorCarga(o.note))add(o.date,o.branch,o.box,o.batch,'Otros',o.note,'');
  for(const g of s.guidedAnswers||[]){if(!esErrorCarga(g.note))continue;const [,date,branch,box,batch]=String(g.key).split('|');if(date&&box)add(date,branch,box,batch,'Cupones',g.note,'');}

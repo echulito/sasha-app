@@ -132,7 +132,7 @@ function declaradoExterno(d){const t=teamDeclarationTotals(state,d);if(t.declara
 function externosHtml(d,x){const c=compararExternos(declaradoExterno(d),x);
  const extra=f=>f.nombre==='Mercado Pago'?'QR y Point · '+f.extra.cobros+' cobros'+(f.extra.otros.length?' · además: '+f.extra.otros.map(o=>esc(o.canal)+' '+money(o.total)).join(' · '):'')+(f.extra.pedidosOnline?' · pedidos online declarados '+money(f.extra.pedidosOnline):''):f.extra.cobros+' cobros según Redlink'+(f.extra.rechazados?' · <span class="bad">'+f.extra.rechazados+(f.extra.rechazados>1?' rechazados':' rechazado')+(f.extra.rechazadosLista&&f.extra.rechazadosLista.length?': '+f.extra.rechazadosLista.map(r=>money(Math.round((Number(r.importe)||0)*100))+' a las '+esc(String(r.hora||'').slice(0,5))).join(', '):'')+' (no entraron)</span>':'');
  const filas=c.filas.map(f=>[`<b>${f.nombre}</b><br><small>${extra(f)}</small>`,money(f.declarado),money(f.entro),`<span class="${f.ok?'status-ok':'bad'}">${f.ok?'✓ coincide':(f.dif>0?'entró de más ':'faltan ')+money(Math.abs(f.dif))}</span>`]);
- return `<h2>Lo que entró de verdad</h2>${filas.length?table(['','Declarado','Entró','Resultado'],filas):''}${cruceHtml(d,x)}${(state.otherChecks||[]).filter(o=>o.date===d).map(o=>`<p><small><b>${esc(o.cashier)} · caja ${esc(o.box)}:</b> ${esc(o.note.replace(/^.*?Error de carga de la cajera:\s*/,''))}</small></p>`).join('')}${c.comisiones.total?`<p><small>Comisiones del día: ${money(c.comisiones.total)} (Mercado Pago ${money(c.comisiones.mp)} · Cuenta DNI ${money(c.comisiones.cuentaDni)})</small></p>`:''}${c.notas.map(n=>`<p><small>${esc(n)}</small></p>`).join('')}`;}
+ return `<h2>Lo que entró de verdad</h2>${filas.length?table(['','Declarado','Entró','Resultado'],filas):''}${cruceHtml(d,x)}${(state.otherChecks||[]).concat(state.declarationErrors||[]).filter(o=>o.date===d).map(o=>`<p><small><b>${esc(o.cashier)} · caja ${esc(o.box)}:</b> ${esc(o.note.replace(/^.*?Error de carga de la cajera:\s*/,''))}</small></p>`).join('')}${c.comisiones.total?`<p><small>Comisiones del día: ${money(c.comisiones.total)} (Mercado Pago ${money(c.comisiones.mp)} · Cuenta DNI ${money(c.comisiones.cuentaDni)})</small></p>`:''}${c.notas.map(n=>`<p><small>${esc(n)}</small></p>`).join('')}`;}
 // v125: cada cobro real contra los tickets del turno (caja 0001): qué entró sin ticket y qué figura cobrado y no entró.
 function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuentaDni&&x.cuentaDni.cobros);if(!mpOk&&!dniOk)return '';
  let pagos;try{pagos=paymentRows(state,d);}catch(e){return '';}
@@ -150,7 +150,7 @@ function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuenta
  return out.length?`<h2>Cobros contra tickets</h2>${out.join('')}`:'';}
 async function cargarExternos(d){const box=$('externos');if(!box||!d)return;let x=EXTERNOS[d];
  if(!x||Date.now()-(x.__t||0)>120000){try{x=await echu('pagos_externos',undefined,{fecha:d});x.__t=Date.now();EXTERNOS[d]=x;}catch(e){if(!x)return;}}
- const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoOtrosSinAval(d)&&!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x)&&!autoDiferenciasTickets(d,x))pistasPagos();}
+ const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoOtrosSinAval(d)&&!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x)&&!autoDiferenciasTickets(d,x)&&!autoSobreDeclarado(d,x))pistasPagos();}
 // v111: "¿Cuánto recibió X por Mercado Pago / Cuenta DNI?" se contesta solo con lo que entró en el horario del turno.
 // Si coincide con el informe PDF, la cajera cargó mal (queda como error de carga, con lo que declaró); si coincide con lo declarado, estaba bien.
 const REAL_TURNO={};let AUTO_EN_CURSO=false;
@@ -237,6 +237,29 @@ function autoOtrosSinAval(d){if(AUTO_EN_CURSO)return false;
   try{s=applyOtherWithoutBacking(s,{date:d,turn:t,note});cambio=true;}catch(e){}
  }
  if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('"Otros" sin aval: no se cuenta como cobro');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
+// v129: en la caja 1, lo declarado por Mercado Pago + Cuenta DNI tiene que aparecer en los movimientos del horario del turno.
+// Si declaró más de lo que entró, lo que no aparece es un error al declarar (no un sobrante): vale lo que entró.
+// No se toca un turno que el encargado corrigió o corroboró a mano.
+function correccionDelEncargado(t){const mismo=c=>c.date===t.date&&c.branch===t.branch&&c.box===t.box&&c.batch===t.batch,auto=n=>{n=String(n||'');return n.includes(LOAD_ERROR)||n.startsWith(DIF_COBRO)||n.startsWith(OTROS_SIN_AVAL);};
+ return (state.closingCorrections||[]).some(c=>mismo(c)&&c.field==='digital'&&!auto(c.note))||(state.guidedAnswers||[]).some(g=>String(g.key).startsWith('payment|'+t.date+'|'+turnKey(t)+'|')&&!auto(g.note));}
+function autoSobreDeclarado(d,x){if(AUTO_EN_CURSO)return false;
+ if(!(x&&x.mp&&x.mp.cobros&&x.cuentaDni&&x.cuentaDni.cobros))return false;
+ const review=state.couponReviews.find(r=>r.date===d);if(!review||!review.allocations)return false;
+ const pend=new Set(guidedQuestions(state,d).filter(q=>q.kind==='payment').map(q=>turnKey(q)));
+ let s=state,cambio=false;
+ for(const t of allTurns(state,d).filter(t=>t.box==='0001')){
+  if(pend.has(turnKey(t))||correccionDelEncargado(t))continue;
+  const a=review.allocations.find(a=>turnKey(a)===turnKey(t));if(!a)continue;
+  const mp=cobrosEnTurno(x.mp.cobros,t.openTime,t.closeTime,['QR','Point']),dni=cobrosEnTurno(x.cuentaDni.cobros,t.openTime,t.closeTime,null);if(!mp||!dni)continue;
+  // Si declaró un medio y no hay ningún cobro de ese medio en el horario, pueden faltar datos (avisos sin llegar): no se toca.
+  if(a.mercadoPago>0&&!mp.cantidad||a.cuentaDni>0&&!dni.cantidad)continue;
+  const declarado=a.mercadoPago+a.cuentaDni,real=mp.total+dni.total,demas=declarado-real;if(demas<=100)continue;
+  const note=LOAD_ERROR+': declaró '+money(declarado)+' entre Mercado Pago ('+money(a.mercadoPago)+') y Cuenta DNI ('+money(a.cuentaDni)+') y en su horario ('+t.openTime+' a '+t.closeTime+') entró '+money(real)+
+   ' (Mercado Pago '+money(mp.total)+' en '+mp.cantidad+' cobros + Cuenta DNI '+money(dni.total)+' en '+dni.cantidad+' cobros). Los '+money(demas)+' de más no aparecen en los movimientos: es un error al declarar, no un sobrante.';
+  try{const c=applyRealCollection(s,d,t,mp.total,dni.total,note);c.declarationErrors??=[];
+   c.declarationErrors.push({key:[d,turnKey(t),real].join('|'),date:d,branch:t.branch,box:t.box,batch:t.batch,cashier:assign(state,t,'close').name,declarado,real,note,createdAt:new Date().toISOString()});s=c;cambio=true;}catch(e){}
+ }
+ if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Declarado de más: vale lo que entró');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
 function pistasPagos(){document.querySelectorAll('[data-guided-key]').forEach(el=>{const r=REAL_TURNO[el.dataset.guidedKey],act=el.querySelector('.actions');if(!r||!act||el.querySelector('[data-real]'))return;
  const b=document.createElement('button');b.type='button';b.className='button';b.dataset.real='1';b.textContent='Entró de verdad: '+money(r.total)+' ('+r.cantidad+' cobros)';
  b.onclick=()=>{const inp=el.querySelector('[data-guided-amount]');if(inp){inp.value=(r.total/100).toFixed(2).replace('.',',');inp.focus();}const m=el.querySelector('[data-motivo]');if(m)m.value='error';};act.appendChild(b);});}
