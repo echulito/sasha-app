@@ -1,14 +1,21 @@
 // v110: comparación de lo declarado por las cajeras con lo que entró de verdad (datos inventados).
 import test from 'node:test'; import assert from 'node:assert/strict';
 import {compararExternos} from '../cajas/externos.mjs';
-const X = {mp: {cantidad: 12, total: 520000, comisiones: 4100.5, porCanal: {QR: {cantidad: 10, total: 400000}, Point: {cantidad: 1, total: 50000}, Transferencia: {cantidad: 1, total: 70000}}},
-  cuentaDni: {cantidad: 3, total: 77403, comisiones: 696.63, rechazados: 1}};
-test('coincide dentro de $100; Mercado Pago compara QR + Point y muestra aparte lo demás', () => {
+// ECHU manda pesos; Cajas trabaja en centavos.
+const X = {mp: {cantidad: 12, total: 5200, comisiones: 41.005, porCanal: {QR: {cantidad: 10, total: 4000}, Point: {cantidad: 1, total: 500}, Transferencia: {cantidad: 1, total: 700}}},
+  cuentaDni: {cantidad: 3, total: 774.03, comisiones: 6.9663, rechazados: 1}};
+test('coincide dentro de $100; Mercado Pago compara QR + Point (pesos de ECHU pasados a centavos) y muestra aparte lo demás', () => {
   const r = compararExternos({mercadoPago: 450050, cuentaDni: 77403, pendingOrders: 0}, X);
   assert.deepEqual(r.filas.map(f => [f.nombre, f.declarado, f.entro, f.dif, f.ok]), [['Mercado Pago', 450050, 450000, -50, true], ['Cuenta DNI', 77403, 77403, 0, true]]);
+  assert.equal(r.filas[0].extra.cobros, 11);
   assert.deepEqual(r.filas[0].extra.otros, [{canal: 'Transferencia', total: 70000}]);
-  assert.deepEqual(r.comisiones, {mp: 4100.5, cuentaDni: 696.63, total: 4797.13});
+  assert.deepEqual(r.comisiones, {mp: 4101, cuentaDni: 697, total: 4798});
   assert.deepEqual(r.notas, []);
+});
+test('el caso del 06/11: declarado $ 770.860 y entraron $ 770.860 por Mercado Pago: coincide (antes decía que faltaban)', () => {
+  const r = compararExternos({mercadoPago: 77086000, cuentaDni: 0, pendingOrders: 0}, {mp: {cantidad: 30, total: 789893.48, comisiones: 189.06, porCanal: {QR: {cantidad: 29, total: 770860}, 'Online / otros': {cantidad: 1, total: 19033.48}}}});
+  assert.deepEqual([r.filas[0].entro, r.filas[0].ok], [77086000, true]);
+  assert.deepEqual(r.filas[0].extra.otros, [{canal: 'Online / otros', total: 1903348}]);
 });
 test('diferencias: falta plata en Cuenta DNI, sobra en Mercado Pago', () => {
   const r = compararExternos({mercadoPago: 400000, cuentaDni: 90000, pendingOrders: 30000}, X);
@@ -19,7 +26,7 @@ test('sin clave de Mercado Pago o sin declaraciones: avisa y no compara', () => 
   const r = compararExternos({mercadoPago: 1, cuentaDni: 77403}, {mp: {sinClave: true}, cuentaDni: X.cuentaDni});
   assert.deepEqual(r.filas.map(f => f.nombre), ['Cuenta DNI']); assert.match(r.notas[0], /falta la clave/);
   const s = compararExternos(null, X);
-  assert.equal(s.filas.length, 0); assert.match(s.notas[0], /no hay declaraciones/); assert.equal(s.comisiones.total, 4797.13);
+  assert.equal(s.filas.length, 0); assert.match(s.notas[0], /no hay declaraciones/); assert.equal(s.comisiones.total, 4798);
   assert.match(compararExternos(null, {mp: {error: 'la clave de Mercado Pago no sirve'}, cuentaDni: {error: 'x'}}).notas.join(' '), /no sirve.*Cuenta DNI: x/);
 });
 
