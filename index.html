@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=135;
+var APP_V=136;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -2892,7 +2892,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=135');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=136');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -3259,10 +3259,11 @@ function sPintar(){
   if(SU.emp){sRecibo();return}
   $('sdet').classList.add('oculto');
   var act=sActivos(),netos=0,costo=0,falta=0;
-  var filas=act.map(function(e){var l=sLiq(e.id),p=d.pagos&&d.pagos[e.id],real=p&&!p.falta;
+  var filas=act.map(function(e){var l=sLiq(e.id),p=d.pagos&&d.pagos[e.id],real=p&&!p.falta,mono=e.pago&&e.pago.tipo==='monotributo';
     // v113: con el recibo (o la factura) de la contadora, abajo van los importes reales: el neto total (recibo + efectivo) y su costo.
-    var c=real?{totales:{neto:p.total,costo:p.costo||p.total}}:l?{totales:l.totales}:sCalcular(e,per,{});if(!l&&!real)falta++;netos+=c.totales.neto;costo+=c.totales.costo;
-    return '<div class="cmp" style="margin-top:8px" onclick="sAbrir(\''+e.id+'\')"><div class="t"><b>'+esc(e.nombre)+'</b><b>'+pesos(c.totales.neto)+'</b></div><div class="s"><button class="lnk" style="float:right" onclick="event.stopPropagation();sEmpForm(\''+e.id+'\')">editar</button>'+esc(e.categoria)+' · '+sAnios(e.ingreso,per)+(sAnios(e.ingreso,per)===1?' año':' años')+(e.jornada<100?' · '+(e.jornada===50?'media jornada':e.jornada+'% jornada'):'')+' · '+(real?'<span class="chip v">'+(p.tipo==='monotributo'?'factura':'recibo')+' de la contadora</span>'+(p.ef>0?' <span class="rk">MP '+pesos(p.mp)+' + efectivo '+pesos(p.ef)+'</span>':''):l?'<span class="chip v">liquidado</span>':'<span class="chip a">sin liquidar</span>')+'</div></div>'}).join('');
+    // v136: monotributo: no se liquida por Comercio; lo que cobra es lo cargado (factura + efectivo) más la cuota.
+    var c=real||mono?{totales:{neto:p?p.total:0,costo:p?(p.costo||p.total):0}}:l?{totales:l.totales}:sCalcular(e,per,{});if(!l&&!real&&!mono)falta++;netos+=c.totales.neto;costo+=c.totales.costo;
+    return '<div class="cmp" style="margin-top:8px" onclick="sAbrir(\''+e.id+'\')"><div class="t"><b>'+esc(e.nombre)+'</b><b>'+pesos(c.totales.neto)+'</b></div><div class="s"><button class="lnk" style="float:right" onclick="event.stopPropagation();sEmpForm(\''+e.id+'\')">editar</button>'+(mono?'Monotributo'+(p&&p.cuota?' (cuota '+pesos(p.cuota)+')':''):esc(e.categoria))+' · '+sAnios(e.ingreso,per)+(sAnios(e.ingreso,per)===1?' año':' años')+(!mono&&e.jornada<100?' · '+(e.jornada===50?'media jornada':e.jornada+'% jornada'):'')+' · '+(real?'<span class="chip v">'+(p.tipo==='monotributo'?'factura':'recibo')+' de la contadora</span>'+(p.ef>0?' <span class="rk">MP '+pesos(p.mp)+' + efectivo '+pesos(p.ef)+'</span>':''):mono?'<span class="chip a">falta la factura</span>':l?'<span class="chip v">liquidado</span>':'<span class="chip a">sin liquidar</span>')+'</div></div>'}).join('');
   var es=sEscala(per);
   $('slista').innerHTML=sPagoHtml()+'<h2 style="margin:14px 2px 0">Liquidación de Comercio</h2><div class="tiles"><div class="card"><span class="rk">Netos a pagar</span><b>'+pesos(netos)+'</b></div><div class="card"><span class="rk">Costo empresa</span><b class="neg">'+pesos(costo)+'</b></div><div class="card"><span class="rk">Empleados</span><b>'+act.length+'</b></div></div>'+
     (act.length?filas:'<div class="card" style="margin-top:8px"><div class="note" style="margin-top:0">Todavía no cargaste empleados. Tocá <b>+ Empleado</b>.</div></div>')+
@@ -3277,6 +3278,7 @@ function sPintar(){
 function sAbrir(id){SU.emp=id;var l=sLiq(id);SU.nov=l?JSON.parse(JSON.stringify(l.novedades||{})):{};sPintar();window.scrollTo(0,0)}
 function sRecibo(){
   var d=SU.D,per=d.periodo,act=sActivos(),e=(d.empleados||[]).filter(function(x){return x.id===SU.emp})[0];if(!e){SU.emp='';return sPintar()}
+  if(e.pago&&e.pago.tipo==='monotributo')return sMonoDetalle(e,act);
   var l=sLiq(e.id),c=sCalcular(e,per,SU.nov),m=Number(per.slice(5,7)),T=c.totales;
   var chips='<div class="mes">'+act.map(function(x){return '<button class="'+(x.id===e.id?'on':'')+'" onclick="sAbrir(\''+x.id+'\')">'+esc(x.nombre.split(' ')[0])+'</button>'}).join('')+'<button onclick="SU.emp=\'\';sPintar()">← Todos</button></div>';
   var fila=function(x){var v=x.rem||x.nr||-x.desc;return '<tr><td>'+esc(x.c)+(x.u?' <span class="rk">'+esc(x.u)+'</span>':'')+'</td><td style="text-align:right'+(v<0?';color:var(--rojo)':'')+'">'+cNum2(v)+'</td></tr>'};
@@ -3313,6 +3315,22 @@ function sRecibo(){
   $('sn_oadd').onclick=function(){leer();var c2=$('sn_oc').value.trim(),mo=parsePesos($('sn_om').value);if(!c2||!mo)return;SU.nov.otros=SU.nov.otros||[];SU.nov.otros.push({c:c2,monto:mo,t:$('sn_ot').value,aportes:$('sn_ot').value==='nr'});var y=window.scrollY;sRecibo();window.scrollTo(0,y)};
   $('sguardar').onclick=function(){leer();sGuardar(e,this)};
 }
+// v136: monotributo: no lleva recibo de Comercio (ni categoría, jornada, horas extra o presentismo). Va lo que cobra, la cuota y la factura.
+function sMonoDetalle(e,act){
+  var d=SU.D,per=d.periodo,p=(d.pagos||{})[e.id]||{},dd=(d.docs||{})[e.id]||{},doc=dd.monotributo;
+  var chips='<div class="mes">'+act.map(function(x){return '<button class="'+(x.id===e.id?'on':'')+'" onclick="sAbrir(\''+x.id+'\')">'+esc(x.nombre.split(' ')[0])+'</button>'}).join('')+'<button onclick="SU.emp=\'\';sPintar()">← Todos</button></div>';
+  $('slista').innerHTML=chips+'<div class="card" style="margin-top:8px"><h2>'+esc(e.nombre)+' · monotributo · '+cMesTxt(per)+'</h2>'+
+    '<div class="rk" style="margin-bottom:6px">CUIT '+esc(cuitTextoJS(e.cuil)||'sin cargar')+' · ingreso '+e.ingreso.split('-').reverse().join('/')+'</div>'+
+    (p.total?'<div class="rowb"><span>'+(doc?'Factura':'Lo que cobra')+(p.mpSueldo>0&&p.ef>0?' · Mercado Pago':p.ef>0?' · efectivo':' · Mercado Pago')+'</span><b>'+sPesos(p.ef>0&&p.mpSueldo>0?p.mpSueldo:p.neto)+'</b></div>'+
+      (p.mpSueldo>0&&p.ef>0?'<div class="rowb"><span>Efectivo</span><b>'+sPesos(p.ef)+'</b></div>':'')+
+      '<div class="rowb"><span>Cuota de monotributo · Mercado Pago</span><b>'+(p.cuota?sPesos(p.cuota):'<span class="warn">sin cargar</span>')+'</b></div>'+
+      '<div class="rowb"><span><b>Total que cobra</b></span><b>'+sPesos(p.total)+'</b></div>':'<div class="note" style="margin-top:0">Cargá lo que cobra por mes en los datos.</div>')+
+    '<div class="note">'+(doc?'Factura de la contadora de '+cMesTxt(per)+': '+sPesos(doc.importe)+'.':'Falta la factura de '+cMesTxt(per)+': llega sola cuando la contadora la manda a proveedores@ (o subila en Pagar sueldos).')+' No lleva recibo de sueldo ni cargas sociales.</div>'+
+    '<div class="btns">'+(doc&&doc.archivo?'<button class="btn sec" id="sverdoc">Ver la factura</button>':'')+'<button class="btn sec" onclick="sEmpForm(\''+e.id+'\')">Datos y cuota</button></div></div>';
+  if($('sverdoc'))$('sverdoc').onclick=function(){var b=this;b.disabled=true;b.textContent='Bajando…';
+    api('sue_doc_pdf',{id:doc.id}).then(function(f){var by=Uint8Array.from(atob(f.b64),function(c){return c.charCodeAt(0)});ULT_PDF={bytes:by,nombre:f.nombre||'factura.pdf'};compartirPDF();b.disabled=false;b.textContent='Ver la factura'})
+      .catch(function(err2){b.disabled=false;b.textContent='Ver la factura';alert(err2.message)})};
+}
 function cNum2(n){n=r2(n);return (n<0?'-':'')+Math.abs(n).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function cuitTextoJS(c){c=String(c||'').replace(/\D/g,'');return c.length===11?c.slice(0,2)+'-'+c.slice(2,10)+'-'+c.slice(10):c}
 function sGuardar(e,b){
@@ -3325,7 +3343,7 @@ function sGuardar(e,b){
   }).catch(function(err2){b.disabled=false;b.textContent='Guardar y PDF para firmar';$('smsg').innerHTML='<span class="neg">'+esc(err2.message)+'</span>'});
 }
 function sLiquidarFaltan(){
-  var b=$('sliqall'),per=SU.D.periodo,fal=sActivos().filter(function(e){return !sLiq(e.id)});
+  var b=$('sliqall'),per=SU.D.periodo,fal=sActivos().filter(function(e){return !sLiq(e.id)&&!(e.pago&&e.pago.tipo==='monotributo')});
   if(!confirm('Se liquidan '+fal.length+' empleados sin horas extra ni faltas. Si alguno tuvo novedades, abrilo y corregilo después. ¿Seguimos?'))return;
   b.disabled=true;var i=0;
   var sig=function(){if(i>=fal.length){sPintar();return}var e=fal[i++];b.textContent='Liquidando '+i+' de '+fal.length+'…';var c=sCalcular(e,per,{});
@@ -3368,17 +3386,21 @@ function sMixMpGuardar(){if(!$('se_pmed')||$('se_pmed').value!=='mixto')return 0
 function sEmpForm(id){
   var e=(SU.D.empleados||[]).filter(function(x){return x.id===id})[0]||{jornada:100,categoria:'Vendedores A',activo:true};
   var box=$('sform');box.classList.remove('oculto');
+  // v136: si cobra con factura de monotributo, el formulario cambia: CUIT, cuota del monotributo; sin categoría, jornada ni sindicato.
+  var pg=e.pago||{},mono=pg.tipo==='monotributo',cuotaIni=((SU.D.pagos||{})[id]||{}).cuota||0;
   box.innerHTML='<h2>'+(id?'Datos del empleado':'Nuevo empleado')+'</h2><label>Nombre y apellido</label><input id="se_nom" value="'+esc(e.nombre||'')+'">'+
-    '<div class="g2"><div><label>CUIL</label><input id="se_cuil" inputmode="numeric" value="'+esc(cuitTextoJS(e.cuil))+'"></div><div><label>Fecha de ingreso</label><input id="se_ing" type="date" value="'+esc(e.ingreso||'')+'"></div></div>'+
-    '<label>Categoría</label><select id="se_cat">'+SU.D.cats.map(function(k){return '<option'+(k===e.categoria?' selected':'')+'>'+k+'</option>'}).join('')+'</select>'+
+    '<label>Cobra con</label><select id="se_ptipo"><option value="recibo">Recibo de sueldo</option><option value="monotributo"'+(mono?' selected':'')+'>Factura de monotributo</option></select>'+
+    '<div class="g2"><div><label id="se_cuillbl">'+(mono?'CUIT':'CUIL')+'</label><input id="se_cuil" inputmode="numeric" value="'+esc(cuitTextoJS(e.cuil))+'"></div><div><label>Fecha de ingreso</label><input id="se_ing" type="date" value="'+esc(e.ingreso||'')+'"></div></div>'+
+    '<div id="se_recibo"><label>Categoría</label><select id="se_cat">'+SU.D.cats.map(function(k){return '<option'+(k===e.categoria?' selected':'')+'>'+k+'</option>'}).join('')+'</select>'+
     '<div class="g2"><div><label>Jornada</label><select id="se_jor"><option value="100"'+(e.jornada==100?' selected':'')+'>Completa</option><option value="50"'+(e.jornada==50?' selected':'')+'>Media jornada</option><option value="otra"'+([100,50].indexOf(Number(e.jornada))<0?' selected':'')+'>Otra (%)</option></select></div><div><label>% de la jornada</label><input id="se_pct" inputmode="numeric" value="'+(e.jornada||100)+'"></div></div>'+
-    '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="se_afi" style="width:auto"'+(e.afiliado?' checked':'')+'> Afiliado al sindicato</label>'+
-    (function(){var pg=e.pago||{};return '<div class="g2"><div><label>Cobra con</label><select id="se_ptipo"><option value="recibo">Recibo de sueldo</option><option value="monotributo"'+(pg.tipo==='monotributo'?' selected':'')+'>Factura de monotributo</option></select></div>'+
-      '<div><label>Se le paga con</label><select id="se_pmed"><option value="mp">Mercado Pago</option><option value="efectivo"'+(pg.medio==='efectivo'?' selected':'')+'>Efectivo</option><option value="mixto"'+(pg.medio==='mixto'?' selected':'')+'>Mixto</option></select></div></div>'+
-      '<label>Neto que cobra por mes (recibo + efectivo)</label><input id="se_pneto" data-pesos inputmode="decimal" value="'+(pg.neto?'$ '+cNum(pg.neto):'')+'" placeholder="Vacío = el Sueldo de ADMINISTRACION">'+
-      // v114: mixto: cuánto por Mercado Pago y cuánto en efectivo (por defecto, lo del recibo por MP; se puede cambiar)
-      '<div id="se_mix" class="g2"><div><label>Por Mercado Pago</label><input id="se_pmp" data-pesos inputmode="decimal"></div><div><label>En efectivo</label><input id="se_pef" data-pesos inputmode="decimal"></div></div>'+
-      '<div class="note" id="se_mixnota"></div>'})()+
+    '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="se_afi" style="width:auto"'+(e.afiliado?' checked':'')+'> Afiliado al sindicato</label></div>'+
+    '<div id="se_mono"><label>Cuota de monotributo por mes</label><input id="se_pcuota" data-pesos inputmode="decimal" value="'+(cuotaIni?'$ '+cNum(cuotaIni):'')+'" placeholder="$ 0">'+
+      '<div class="note">Se le suma a lo que cobra y va siempre por Mercado Pago. Si aumenta, cambiala acá (vale desde '+cMesTxt(SU.per)+').</div></div>'+
+    '<label>Se le paga con</label><select id="se_pmed"><option value="mp">Mercado Pago</option><option value="efectivo"'+(pg.medio==='efectivo'?' selected':'')+'>Efectivo</option><option value="mixto"'+(pg.medio==='mixto'?' selected':'')+'>Mixto</option></select>'+
+    '<label id="se_pnetolbl"></label><input id="se_pneto" data-pesos inputmode="decimal" value="'+(pg.neto?'$ '+cNum(pg.neto):'')+'" placeholder="Vacío = el Sueldo de ADMINISTRACION">'+
+    // v114: mixto: cuánto por Mercado Pago y cuánto en efectivo (por defecto, lo del recibo por MP; se puede cambiar)
+    '<div id="se_mix" class="g2"><div><label>Por Mercado Pago</label><input id="se_pmp" data-pesos inputmode="decimal"></div><div><label>En efectivo</label><input id="se_pef" data-pesos inputmode="decimal"></div></div>'+
+    '<div class="note" id="se_mixnota"></div>'+
     (id?'<div class="g2"><div><label>Fecha de egreso (si dejó)</label><input id="se_egr" type="date" value="'+esc(e.egreso||'')+'"></div><div></div></div>':'')+
     '<div class="btns"><button class="btn" id="se_ok">Guardar</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button>'+(id?'<button class="btn sec" style="color:var(--rojo)" id="se_del">Borrar empleado</button>':'')+'</div><div class="note" id="se_msg"></div>';
   if($('se_del'))$('se_del').onclick=function(){var b=this;
@@ -3389,12 +3411,22 @@ function sEmpForm(id){
       .catch(function(e2){b.disabled=false;$('se_msg').innerHTML='<span class="neg">'+esc(/Acci/i.test(e2.message)?'Actualizá ECHU a la versión 6.12 (Nueva versión).':e2.message)+'</span>'});
   };
   $('se_jor').onchange=function(){if(this.value!=='otra')$('se_pct').value=this.value};
+  var esMono=function(){return $('se_ptipo').value==='monotributo'};
+  var porTipo=function(){var m=esMono();$('se_recibo').style.display=m?'none':'';$('se_mono').style.display=m?'':'none';$('se_cuillbl').textContent=m?'CUIT':'CUIL';
+    $('se_pnetolbl').textContent=m?'Lo que cobra por mes (factura + efectivo, sin la cuota)':'Neto que cobra por mes (recibo + efectivo)'};
+  $('se_ptipo').addEventListener('change',porTipo);porTipo();pesosEnVivo($('se_pcuota'));
   sMixForm(e);
   box.scrollIntoView({behavior:'smooth',block:'start'});
-  $('se_ok').onclick=function(){$('se_msg').textContent='Guardando…';
-    var emp={id:id||'',nombre:$('se_nom').value,cuil:$('se_cuil').value,ingreso:$('se_ing').value,categoria:$('se_cat').value,jornada:Number($('se_pct').value)||100,afiliado:$('se_afi').checked,egreso:$('se_egr')?$('se_egr').value:'',activo:!($('se_egr')&&$('se_egr').value),
+  $('se_ok').onclick=function(){var m=esMono(),cuota=parsePesos($('se_pcuota').value);
+    if(m&&!(cuota>0)){$('se_msg').innerHTML='<span class="neg">Poné la cuota del monotributo.</span>';return}
+    $('se_msg').textContent='Guardando…';
+    // monotributo: la categoría de Comercio no se usa (ECHU la pide igual: queda la que tenía).
+    var emp={id:id||'',nombre:$('se_nom').value,cuil:$('se_cuil').value,ingreso:$('se_ing').value,categoria:m&&SU.D.cats.indexOf(e.categoria)<0?SU.D.cats[0]:m?e.categoria:$('se_cat').value,jornada:m?100:Number($('se_pct').value)||100,afiliado:m?false:$('se_afi').checked,egreso:$('se_egr')?$('se_egr').value:'',activo:!($('se_egr')&&$('se_egr').value),
       pago:{tipo:$('se_ptipo').value,medio:$('se_pmed').value,neto:parsePesos($('se_pneto').value),mp:sMixMpGuardar()}};
-    api('sue_empleado',{datos:JSON.stringify(emp)}).then(function(r){var L=SU.D.empleados||[],i=L.findIndex(function(x){return x.id===r.id});if(i>=0)L[i]=r;else L.push(r);SU.D.empleados=L;box.classList.add('oculto');sPintar()})
+    api('sue_empleado',{datos:JSON.stringify(emp)}).then(function(r){var L=SU.D.empleados||[],i=L.findIndex(function(x){return x.id===r.id});if(i>=0)L[i]=r;else L.push(r);SU.D.empleados=L;
+      // v136: la cuota del monotributo se guarda desde este mes (los meses siguientes siguen con esa hasta que cambie).
+      if(m&&Math.abs(cuota-cuotaIni)>0.5)return api('sue_monotributo',{datos:JSON.stringify({periodo:SU.per,empleado:(r&&r.id)||id,importe:cuota})}).then(function(){box.classList.add('oculto');return sCargar(SU.per)});
+      box.classList.add('oculto');return id?sCargar(SU.per):sPintar()})
       .catch(function(err2){$('se_msg').innerHTML='<span class="neg">'+esc(err2.message)+'</span>'})};
 }
 function sEscalaForm(){

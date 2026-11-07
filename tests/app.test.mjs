@@ -242,7 +242,7 @@ test('Pagar sueldos: estado del recibo, monotributo, dueños aparte; confirmar e
   assert.match(t, /Empleados\s*\$ 1\.450\.000/);
   // abajo, en la liquidación, también van los importes reales del recibo (neto total con el efectivo)
   assert.match(await page.locator('#slista .cmp').nth(0).innerText(), /\$ 900\.000[\s\S]*recibo de la contadora\s*MP \$ 600\.000 \+ efectivo \$ 300\.000/);
-  assert.match(await page.locator('#slista .cmp').nth(1).innerText(), /sin liquidar/); assert.match(t, /Dueño Uno \(dueño\)\s*\$ 1\.000\.000/); assert.match(t, /Total sueldos\s*\$ 2\.850\.000/);
+  assert.match(await page.locator('#slista .cmp').nth(1).innerText(), /\$ 550\.000[\s\S]*Monotributo \(cuota \$ 50\.000\)[\s\S]*falta la factura/, 'monotributo: sin categoría ni liquidación de Comercio'); assert.match(t, /Dueño Uno \(dueño\)\s*\$ 1\.000\.000/); assert.match(t, /Total sueldos\s*\$ 2\.850\.000/);
   // monotributo: "sigue igual" guarda la cuota del mes
   await page.getByText('Sí, igual').click(); await page.waitForTimeout(400);
   assert.ok(echu.pedidos.some(p => /"accion":"sue_monotributo"/.test(p.cuerpo || '') && /\\"importe\\":50000/.test(p.cuerpo || '')));
@@ -271,8 +271,18 @@ test('Sueldos: el empleado guarda cómo cobra (recibo o monotributo), con qué s
   await page.locator('#slista .cmp').nth(0).waitFor();
   await page.locator('#slista .cmp').nth(0).getByText('editar').click();
   assert.equal(await page.inputValue('#se_pmed'), 'mixto');
-  await page.selectOption('#se_ptipo', 'monotributo'); await page.selectOption('#se_pmed', 'efectivo'); await page.fill('#se_pneto', '1.200.000');
-  await page.click('#se_ok'); await page.waitForTimeout(400);
+  assert.ok(await page.locator('#se_cat').isVisible()); assert.ok(!(await page.locator('#se_pcuota').isVisible()));
+  await page.selectOption('#se_ptipo', 'monotributo');
+  // v136: con monotributo cambia el formulario: CUIT y cuota; sin categoría, jornada ni sindicato
+  assert.ok(!(await page.locator('#se_cat').isVisible())); assert.ok(!(await page.locator('#se_pct').isVisible())); assert.ok(!(await page.locator('#se_afi').isVisible()));
+  assert.equal(await page.locator('#se_cuillbl').innerText(), 'CUIT'); assert.ok(await page.locator('#se_pcuota').isVisible());
+  await page.selectOption('#se_pmed', 'efectivo'); await page.fill('#se_pneto', '1.200.000');
+  await page.click('#se_ok'); await page.waitForTimeout(300);
+  assert.match(await page.locator('#se_msg').innerText(), /Poné la cuota del monotributo/);
+  await page.fill('#se_pcuota', '75.000');
+  await page.click('#se_ok'); await page.waitForTimeout(500);
+  const q = echu.pedidos.find(x => /"accion":"sue_monotributo"/.test(x.cuerpo || ''));
+  assert.ok(q, 'la cuota se guarda'); const dq = JSON.parse(JSON.parse(q.cuerpo).datos); assert.equal(dq.empleado, 'E1'); assert.equal(dq.importe, 75000); assert.match(dq.periodo, /^\d{4}-\d{2}$/);
   const p = echu.pedidos.find(x => /"accion":"sue_empleado"/.test(x.cuerpo || ''));
   assert.ok(p); const datos = JSON.parse(JSON.parse(p.cuerpo).datos);
   assert.deepEqual(datos.pago, {tipo: 'monotributo', medio: 'efectivo', neto: 1200000, mp: 0});
@@ -514,4 +524,18 @@ test('pantallas iguales a las aprobadas (regresión visual)', {skip: !CON_CAPTUR
   }
   await ctx.close();
   assert.deepEqual(cambios, [], 'Cambió cómo se ve: ' + cambios.join(', ') + '. Mirá tests/capturas/*.NUEVA.png');
+});
+
+test('Sueldos v136: al abrir un empleado de monotributo no hay recibo de Comercio: lo que cobra, la cuota y la factura', async () => {
+  const {ctx, page, errores} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="sue"]');
+  await page.locator('#slista .cmp').nth(1).waitFor();
+  await page.locator('#slista .cmp').nth(1).click();
+  const t = await page.locator('#slista').innerText();
+  assert.match(t, /monotributo/); assert.match(t, /Lo que cobra · Mercado Pago\s*\$ 500\.000/); assert.match(t, /Cuota de monotributo · Mercado Pago\s*\$ 50\.000/);
+  assert.match(t, /Total que cobra\s*\$ 550\.000/); assert.match(t, /Falta la factura/);
+  assert.doesNotMatch(t, /Horas extra|Presentismo|NETO A COBRAR/);
+  await page.screenshot({path: process.env.CAPTURA || '/dev/null'}).catch(() => {});
+  assert.deepEqual(errores, []);
+  await ctx.close();
 });
