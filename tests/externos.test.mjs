@@ -56,3 +56,9 @@ test('cupones del turno: corrige solo si lo que entró da lo de la cajera y no l
   assert.equal(correccionCupones(100, 150, 150), null, 'PDF y cajera iguales (dentro de $1): nada que corregir');
   assert.equal(correccionCupones(NaN, 1, 1), null);
 });
+
+test('Cuenta DNI: los rechazados llegan con su importe y hora para mostrarlos (no suman a lo que entró)', () => {
+  const r = compararExternos({mercadoPago: 0, cuentaDni: 10000}, {cuentaDni: {cantidad: 1, total: 100, comisiones: 0, rechazados: 1, rechazadosLista: [{hora: '14:39:38', importe: 61291, estado: 'RECHAZADA'}]}});
+  assert.equal(r.filas[0].entro, 10000);
+  assert.deepEqual(r.filas[0].extra.rechazadosLista, [{hora: '14:39:38', importe: 61291, estado: 'RECHAZADA'}]);
+});

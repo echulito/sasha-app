@@ -23,7 +23,7 @@ export function compararExternos(dec, x) {
   if (dni && dni.error) notas.push('Cuenta DNI: ' + dni.error + '.');
   else if (dni) {
     comDni = c(dni.comisiones);
-    if (dec) fila('Cuenta DNI', dec.cuentaDni || 0, c(dni.total), {cobros: dni.cantidad || 0, rechazados: dni.rechazados || 0});
+    if (dec) fila('Cuenta DNI', dec.cuentaDni || 0, c(dni.total), {cobros: dni.cantidad || 0, rechazados: dni.rechazados || 0, rechazadosLista: dni.rechazadosLista || []});
   }
   if (!dec) notas.push('Todavía no hay declaraciones de este día para comparar.');
   return {filas, notas, comisiones: {mp: comMp, cuentaDni: comDni, total: comMp + comDni}};
