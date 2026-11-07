@@ -261,7 +261,7 @@ test('Pagar sueldos: estado del recibo, monotributo, dueños aparte; confirmar e
   assert.equal(await page.inputValue('[data-i="1"][data-sp="mp"]'), '$ 50.000', 'el monotributo queda por Mercado Pago');
   await page.fill('[data-i="1"][data-sp="ef"]', '100000'); await page.dispatchEvent('[data-i="1"][data-sp="ef"]', 'change');
   await page.click('#sp_ok');
-  await page.locator('#sp_msg .pos').waitFor();
+  await page.locator('#sp_msg .pos').first().waitFor();
   await page.locator('#slista .chip.v', {hasText: 'Pago confirmado'}).waitFor();
   // v138: queda confirmado y registrado en ECHU (con la fecha y lo de cada uno) y el botón pasa a "Volver a bajar los PDF"
   const reg = JSON.parse(JSON.parse(echu.pedidos.find(x => /"accion":"sue_pagado"/.test(x.cuerpo || '')).cuerpo).datos);
