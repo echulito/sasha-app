@@ -190,7 +190,13 @@ test('Inicio (modelo A): números, avisos y cada botón lleva al lugar para reso
   assert.equal(await page.locator('#bnav button.on').getAttribute('data-b'), 'caja');
   // Ver pagos -> Plata y pagos
   await page.click('#bnav button[data-b="inicio"]'); await page.click('#inicio .iav button[data-ir="pagos"]');
-  assert.match(await page.locator('#caja-plata').innerText(), /Libre para mercadería\s*\$ 412\.000[\s\S]*Alquiler · 04\/11\s*\$ 180\.000/);
+  const pl = await page.locator('#caja-plata').innerText();
+  assert.match(pl, /Libre para mercadería\s*\$ 412\.000[\s\S]*Alquiler · 04\/11\s*MP \$ 180\.000\s*\$ 180\.000/);
+  // v137: cuánto va en efectivo y cuánto por Mercado Pago (sin los datos nuevos de ECHU sale del medio de cada pago)
+  assert.match(pl, /Hay ahora\s*\$ 250\.000\s*\$ 480\.000\s*Pagos 7 días\s*\$ 0\s*− \$ 180\.000\s*Queda\s*\$ 250\.000\s*\$ 300\.000/);
+  assert.match(pl, /cualquiera de los dos: \$ 58\.500 de los 7 días/);
+  await page.click('#bnav button[data-b="inicio"]');
+  assert.match(await page.locator('#inicio').innerText(), /Pagos 7 días\s*\$ 238\.500\s*2 vencimientos\s*Efectivo \$ 0 · MP \$ 180\.000 · cualquiera \$ 58\.500/);
   // Armar pedido -> Compras › Simular › Armar pedido
   await page.click('#bnav button[data-b="inicio"]'); await page.click('#inicio .iav button[data-ir="pedido"]');
   assert.equal(await page.locator('#simulador').isVisible(), true);
@@ -257,6 +263,8 @@ test('Pagar sueldos: estado del recibo, monotributo, dueños aparte; confirmar e
   await page.click('#sp_ok');
   await page.locator('#sp_msg .pos').waitFor();
   assert.match(await page.locator('#sp_msg').innerText(), /1 recibo\/factura y 2 recibos de efectivo/);
+  // v137: siempre queda la barra para abrir/imprimir el PDF (el celular no deja abrir el menú de compartir sin un toque nuevo)
+  assert.match(await page.locator('#pdfbarra').innerText(), /PDF listo[\s\S]*Abrir \/ imprimir[\s\S]*Compartir[\s\S]*Guardar/);
   const b64 = await page.evaluate(() => { let s = ''; ULT_PDF.bytes.forEach(b => { s += String.fromCharCode(b); }); return btoa(s); });
   const L = createRequire(import.meta.url)('../pdf-lib.min.js');
   const doc = await L.PDFDocument.load(Buffer.from(b64, 'base64'));

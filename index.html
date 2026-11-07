@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=136;
+var APP_V=137;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -680,7 +680,7 @@ function pintarInicio(){
     '<div class="card" data-ir="ventas"><div class="lbl">'+(ult?'Último día · '+esc(ult.etiqueta):'Último día')+'</div><div class="big">'+(ult?pesos(ult.ventas):'…')+'</div></div>'+
     '<div class="card" data-ir="ventas"><div class="lbl">Ventas del mes</div><div class="big">'+(m?pesos(m.fact):'…')+'</div></div>'+
     '<div class="card" data-ir="pagos"><div class="lbl">Plata libre</div>'+(pl&&!pl.sinDatos?'<div class="big '+(pl.libre>=0?'pos':'neg')+'">'+pesos(pl.libre)+'</div><div class="chico">saldos del '+esc(pl.fechaSaldo)+'</div>':'<div class="big" style="font-size:16px;color:var(--gris)">'+(INI?'Sin datos':'…')+'</div>')+'</div>'+
-    '<div class="card" data-ir="pagos"><div class="lbl">Pagos 7 días</div><div class="big">'+(pg?pesos(pg.total):'…')+'</div>'+(pg&&pg.items.length?'<div class="chico">'+pg.items.length+' '+(pg.items.length===1?'vencimiento':'vencimientos')+'</div>':'')+'</div>'+
+    '<div class="card" data-ir="pagos"><div class="lbl">Pagos 7 días</div><div class="big">'+(pg?pesos(pg.total):'…')+'</div>'+(pg&&pg.items.length?'<div class="chico">'+pg.items.length+' '+(pg.items.length===1?'vencimiento':'vencimientos')+'</div><div class="chico">'+(function(){var t=plSplit(pg);return 'Efectivo '+pesos(t.ef)+' · MP '+pesos(t.mp)+(t.cual>0?' · cualquiera '+pesos(t.cual):'')})()+'</div>':'')+'</div>'+
   '</div>';
   if(INI_ERR)h+='<div class="card"><b class="neg">No se pudieron traer los avisos.</b> <span class="note">'+esc(INI_ERR)+'</span></div>';
   else if(!INI)h+='<div class="cargando">Buscando lo que hay que resolver…</div>';
@@ -716,6 +716,23 @@ function cajSec(s){
   if(CAJSEC==='cajas'&&a){a.classList.remove('oculto');cajAbrir()}
   if(CAJSEC==='plata'){pintarPlata();if(!INI&&!INI_ERR)cargarInicio()}
 }
+// v137: cuánto va en efectivo y cuánto por Mercado Pago (ECHU 6.32 lo manda; si no, sale del medio de cada pago).
+function plParte(x){if(x&&x.ef!=null)return {ef:x.ef||0,mp:x.mp||0,cual:x.cual||0};var m=x&&x.medio,v=Number(x&&x.monto)||0;return {ef:m==='EFECTIVO'?v:0,mp:m==='MERCADO PAGO'?v:0,cual:m==='EFECTIVO'||m==='MERCADO PAGO'?0:v}}
+function plSplit(pg){if(pg&&pg.ef!=null)return {ef:pg.ef||0,mp:pg.mp||0,cual:pg.cual||0};var t={ef:0,mp:0,cual:0};((pg&&pg.items)||[]).forEach(function(x){var p=plParte(x);t.ef+=p.ef;t.mp+=p.mp;t.cual+=p.cual});return t}
+function plReparto(pl,pg,mes){
+  var p7=plSplit(pg),fila=function(t,ef,mp,cls){return '<tr'+(cls?' class="'+cls+'"':'')+'><td>'+t+'</td><td style="text-align:right">'+ef+'</td><td style="text-align:right">'+mp+'</td></tr>'},
+    neg=function(v){return v>0?'− '+pesos(v):pesos(0)},col=function(v){return '<span class="'+(v<0?'neg':'')+'">'+pesos(v)+'</span>'};
+  var h='<div class="card"><h2>Cómo se paga · efectivo y Mercado Pago</h2><table style="width:100%;font-size:14px;border-collapse:collapse"><tr class="rk"><td></td><td style="text-align:right">Efectivo</td><td style="text-align:right">Mercado Pago</td></tr>';
+  if(!pl.sinDatos)h+=fila('Hay ahora',pesos(pl.efectivo),pesos(pl.mp));
+  h+=fila('Pagos 7 días',neg(p7.ef),neg(p7.mp));
+  if(!pl.sinDatos)h+=fila('<b>Queda</b>','<b>'+col(pl.efectivo-p7.ef)+'</b>','<b>'+col(pl.mp-p7.mp)+'</b>');
+  if(mes&&mes.cantidad){h+=fila('Falta pagar en el mes',neg(mes.ef),neg(mes.mp));
+    if(!pl.sinDatos)h+=fila('<b>Queda a fin de mes</b>','<b>'+col(pl.efectivo-mes.ef)+'</b>','<b>'+col(pl.mp-mes.mp)+'</b>');}
+  h+='</table>';
+  var cual=[p7.cual>0?pesos(p7.cual)+' de los 7 días':'',mes&&mes.cual>0?pesos(mes.cual)+' del mes':''].filter(Boolean);
+  h+='<div class="note">'+(cual.length?'Además se pueden pagar con cualquiera de los dos: '+cual.join(' · ')+'. ':'')+(mes&&mes.cantidad?'"Falta pagar en el mes" incluye los 7 días. ':'')+'Sin contar lo que entre por las cajas de acá en adelante.</div></div>';
+  return h;
+}
 function pintarPlata(){
   var el=$('caja-plata');if(!el)return;
   if(INI_ERR){el.innerHTML='<div class="card"><b class="neg">No se pudo traer la plata.</b> <span class="note">'+esc(INI_ERR)+'</span></div>';return}
@@ -729,9 +746,11 @@ function pintarPlata(){
     '<div class="row"><span>Apartado para gastos fijos</span><span>'+pesos(pl.reservado)+'</span></div>'+
     '<div class="row"><span><b>Libre para mercadería</b></span><span class="'+(pl.libre>=0?'pos':'neg')+'">'+pesos(pl.libre)+'</span></div>'+
     '<div class="note">Es una estimación: los saldos que cargaste más lo que entró por las cajas, menos lo que ya tendría que estar apartado para cada vencimiento. No es la contabilidad oficial.</div></div>';
+  h+=plReparto(pl,pg,INI.mes);
   h+='<div class="card"><h2>Pagos de los próximos 7 días · '+pesos(pg.total)+'</h2>';
   if(!pg.items.length)h+='<div class="note" style="margin-top:0">No vence nada en los próximos 7 días.</div>';
-  pg.items.forEach(function(x){h+='<div class="row"><span>'+(x.vencido?'<b class="neg">Venció</b> ':'')+esc(x.nombre)+' · '+esc(x.vence)+(x.dias===0&&!x.vencido?' (hoy)':'')+'</span><span>'+pesos(x.monto)+'</span></div>'});
+  pg.items.forEach(function(x){var p=plParte(x),med=[p.ef>0?'efectivo '+pesos(p.ef):'',p.mp>0?'MP '+pesos(p.mp):'',p.cual>0?'cualquiera '+pesos(p.cual):''].filter(Boolean).join(' + ');
+    h+='<div class="row"><span>'+(x.vencido?'<b class="neg">Venció</b> ':'')+esc(x.nombre)+' · '+esc(x.vence)+(x.dias===0&&!x.vencido?' (hoy)':'')+'<br><span class="rk">'+med+'</span></span><span>'+pesos(x.monto)+'</span></div>'});
   h+='</div><div class="note">Los saldos, los vencimientos y los pagados se cargan en ECHU › ADMINISTRACION › Reparto de la plata. Próximo paso: cargarlos desde acá, con Cuenta DNI y los aportes y retiros de cada dueño.</div>';
   el.innerHTML=h;
 }
@@ -1657,10 +1676,27 @@ function bajarArchivo(bytes,nombre){
 }
 var ULT_PDF=null;
 // Con el PDF ya armado: en el celular abre el menú de compartir (WhatsApp, Drive, Guardar en Archivos); si no, lo baja o lo abre.
+// v137: si el PDF tardó en armarse, el celular ya no deja abrir el menú de compartir (hace falta un toque nuevo) y no pasaba nada.
+// Ahora siempre queda una barra abajo con "Abrir / imprimir", "Compartir" y "Guardar".
+function pdfBarra(){
+  var b=$('pdfbarra');if(!b){b=document.createElement('div');b.id='pdfbarra';b.setAttribute('role','dialog');
+    b.style.cssText='position:fixed;left:8px;right:8px;bottom:calc(78px + env(safe-area-inset-bottom));z-index:9999;background:var(--card,#fff);border:1px solid var(--linea,#dde3ea);border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:10px 12px';
+    document.body.appendChild(b)}
+  b.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">PDF listo · '+esc(ULT_PDF.nombre)+'</b><button class="lnk" id="pdfcerrar" aria-label="Cerrar">✕</button></div>'+
+    '<div class="btns" style="margin-top:8px"><button class="btn" id="pdfabrir">Abrir / imprimir</button><button class="btn sec" id="pdfcomp">Compartir</button><button class="btn sec" id="pdfguardar">Guardar</button></div>';
+  $('pdfcerrar').onclick=function(){b.remove()};
+  $('pdfabrir').onclick=function(){var url=URL.createObjectURL(new Blob([ULT_PDF.bytes],{type:'application/pdf'}));var w=window.open(url,'_blank');if(!w)bajarArchivo(ULT_PDF.bytes,ULT_PDF.nombre)};
+  $('pdfguardar').onclick=function(){bajarArchivo(ULT_PDF.bytes,ULT_PDF.nombre)};
+  $('pdfcomp').onclick=function(){var f=null;try{f=new File([ULT_PDF.bytes],ULT_PDF.nombre,{type:'application/pdf'})}catch(e){f=null}
+    if(f&&navigator.canShare&&navigator.canShare({files:[f]}))navigator.share({files:[f],title:ULT_PDF.nombre}).catch(function(){});else bajarArchivo(ULT_PDF.bytes,ULT_PDF.nombre)};
+}
 function compartirPDF(){
   if(!ULT_PDF)return;
+  pdfBarra();
+  var activo=!navigator.userActivation||navigator.userActivation.isActive;
   var f=null;try{f=new File([ULT_PDF.bytes],ULT_PDF.nombre,{type:'application/pdf'})}catch(e){f=null}
-  if(f&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:ULT_PDF.nombre}).catch(function(){});return}
+  if(activo&&f&&navigator.canShare&&navigator.canShare({files:[f]})){navigator.share({files:[f],title:ULT_PDF.nombre}).catch(function(){});return}
+  if(!activo)return;
   var url=URL.createObjectURL(new Blob([ULT_PDF.bytes],{type:'application/pdf'}));
   var w=window.open(url,'_blank');if(!w)bajarArchivo(ULT_PDF.bytes,ULT_PDF.nombre);
 }
@@ -2892,7 +2928,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=136');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=137');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
