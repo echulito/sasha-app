@@ -63,3 +63,19 @@ test('Cuenta DNI: los rechazados llegan con su importe y hora para mostrarlos (n
   assert.equal(r.filas[0].entro, 10000);
   assert.deepEqual(r.filas[0].extra.rechazadosLista, [{hora: '14:39:38', importe: 61291, estado: 'RECHAZADA'}]);
 });
+
+import {cruzarCobros, medioDeTicket} from '../cajas/externos.mjs';
+test('cruce: cada cobro real busca su ticket (mismo importe, hora más cercana); lo que sobra de cada lado se muestra', () => {
+  assert.equal(medioDeTicket('BANELCO'), 'Cuenta DNI'); assert.equal(medioDeTicket('M PAGO OFFLINE'), 'Mercado Pago'); assert.equal(medioDeTicket('VISA'), 'Mercado Pago'); assert.equal(medioDeTicket('Efectivo $'), 'Efectivo');
+  const mp = [{hora: '15:50:10', importe: 160140}, {hora: '16:10:00', importe: 4798}, {hora: '17:12:30', importe: 58293.95}, {hora: '18:00:00', importe: 7000}, {hora: '09:00:00', importe: 999}];
+  const dni = [{hora: '16:58:12', importe: 61518}];
+  const pagos = [{method: 'M PAGO OFFLINE', amount: 16014000, ticket: 'Tk 1', time: '15:51'}, {method: 'M PAGO OFFLINE', amount: 479800, ticket: 'Tk 2', time: '16:11'},
+    {method: 'BANELCO', amount: 6151800, ticket: 'Tk 3', time: '16:59'}, {method: 'Efectivo $', amount: 700000, ticket: 'Tk 4', time: '18:01'},
+    {method: 'M PAGO OFFLINE', amount: 250000, ticket: 'Tk 5', time: '19:00'}, {method: 'Efectivo $', amount: 150000, ticket: 'Tk 6', time: '19:10'}];
+  const r = JSON.parse(JSON.stringify(cruzarCobros(mp, dni, pagos, '15:34', '19:37')));
+  assert.equal(r.reales, 5, 'el de las 09:00 es de otro turno');
+  assert.deepEqual(r.sinTicket, [{medio: 'Mercado Pago', hora: '17:12', importe: 5829395}, {medio: 'Mercado Pago', hora: '18:00', importe: 700000, registrado: {ticket: 'Tk 4', medio: 'Efectivo $'}}]);
+  assert.deepEqual(r.sinEntrar, [{medio: 'Mercado Pago', metodo: 'M PAGO OFFLINE', ticket: 'Tk 5', hora: '19:00', importe: 250000}]);
+  assert.deepEqual([r.totalSinTicket, r.totalOtroMedio, r.totalSinEntrar], [5829395, 700000, 250000]);
+  assert.equal(cruzarCobros([], [], [], 'x', '19:00'), null);
+});

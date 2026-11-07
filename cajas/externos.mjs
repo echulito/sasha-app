@@ -59,3 +59,26 @@ export function correccionCupones(pdf, cajera, real) {
   if (cerca(real, pdf)) return null;
   return Number.isFinite(cajera) && cerca(real, cajera) ? {monto: cajera, coincide: 'cajera'} : {monto: real, coincide: 'ninguno'};
 }
+
+// v125: cruce de cada cobro real (Mercado Pago y Cuenta DNI del horario del turno) con los cobros de los tickets del turno.
+// Lo que entró y no tiene ticket explica sobrantes; lo que el sistema dice cobrado y no entró explica faltantes.
+// pagos: filas del "Detalle de Ventas por Forma de Pago" del turno {method, amount (centavos), ticket, time 'HH:MM'}.
+export const medioDeTicket = m => /BANELCO|DNI/i.test(m) ? 'Cuenta DNI' : /EFECTIVO/i.test(m) ? 'Efectivo' : 'Mercado Pago';
+export function cruzarCobros(realMp, realDni, pagos, apertura, cierre) {
+  const a = minuto(apertura), c = minuto(cierre);
+  if (a === null || c === null) return null;
+  const dentro = (lista, medio) => (lista || []).filter(x => { const m = minuto(x.hora); return m !== null && m >= a && m <= c; })
+    .map(x => ({medio, hora: String(x.hora).slice(0, 5), importe: Math.round((Number(x.importe) || 0) * 100)}));
+  const reales = dentro(realMp, 'Mercado Pago').concat(dentro(realDni, 'Cuenta DNI')).sort((x, y) => minuto(x.hora) - minuto(y.hora));
+  const tickets = (pagos || []).map(p => ({medio: medioDeTicket(p.method), metodo: p.method, ticket: p.ticket, hora: p.time || '', importe: p.amount, usado: false}));
+  const dist = (r, t) => (minuto(t.hora) === null ? 9999 : Math.abs(minuto(t.hora) - minuto(r.hora)));
+  const buscar = (r, mismoMedio) => tickets.filter(t => !t.usado && Math.abs(t.importe - r.importe) <= 100 && (mismoMedio ? t.medio === r.medio : t.medio !== r.medio))
+    .sort((x, y) => dist(r, x) - dist(r, y))[0];
+  const sinTicket = [];
+  // 1) mismo medio e importe; 2) lo que queda, con otro medio (por ejemplo, cobrado por QR y registrado en efectivo).
+  const pendientes = reales.filter(r => { const t = buscar(r, true); if (t) { t.usado = true; return false; } return true; });
+  pendientes.forEach(r => { const t = buscar(r, false); if (t) t.usado = true; sinTicket.push(t ? {...r, registrado: {ticket: t.ticket, medio: t.metodo}} : r); });
+  const sinEntrar = tickets.filter(t => !t.usado && t.medio !== 'Efectivo').map(t => ({medio: t.medio, metodo: t.metodo, ticket: t.ticket, hora: t.hora, importe: t.importe}));
+  const suma = l => l.reduce((n, x) => n + x.importe, 0);
+  return {sinTicket, sinEntrar, totalSinTicket: suma(sinTicket.filter(x => !x.registrado)), totalOtroMedio: suma(sinTicket.filter(x => x.registrado)), totalSinEntrar: suma(sinEntrar), reales: reales.length};
+}

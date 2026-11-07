@@ -5,7 +5,7 @@ import {automaticTurnMatch,declaredPaymentMethods} from './payment-reconciliatio
 import {reconcileTeam,pendingTeamExpenses,teamDeclarationTotals,replaceTeamInbox,visibleTeamDeclarations} from './team-domain.mjs';
 import {declaredCashWithdrawals,dailyTicketAverage} from './summary-metrics.mjs';
 import {sheetProjection} from './sheet-projection.mjs';
-import {compararExternos,cobrosEnTurno,respuestaAutomatica,correccionCupones} from './externos.mjs';
+import {compararExternos,cobrosEnTurno,respuestaAutomatica,correccionCupones,cruzarCobros,medioDeTicket} from './externos.mjs';
 import {parseReport,cents,difference,summarize,ticketKey} from './parser.mjs';
 import {isClosedDay,LOAD_ERROR,normalizeState,reportKey,roster,assign,allTurns,dailyCloses,dayStatus,daySales,cashierMetrics,controlStatus,ticketTotalsConfirmed,ticketRows,paymentRows,transactionRows,productLines,rankProducts,receiptKey,couponSignature,couponStatus,closingBalance,closingAlerts,cashierBalances,turnKey,turnCollection,alertKey,operationalAlerts,openingChecks,cashCarryovers,withinTolerance,remainingCash,correctionKey,effectiveTurn,addClosingCorrection,productExcluded,storeExpenses} from './domain.mjs';
 // Sasha v94: transporte a ECHU (Apps Script) en lugar del servidor de Cloudflare. Las rutas ./api/... se atienden acá.
@@ -132,7 +132,21 @@ function declaradoExterno(d){const t=teamDeclarationTotals(state,d);if(t.declara
 function externosHtml(d,x){const c=compararExternos(declaradoExterno(d),x);
  const extra=f=>f.nombre==='Mercado Pago'?'QR y Point · '+f.extra.cobros+' cobros'+(f.extra.otros.length?' · además: '+f.extra.otros.map(o=>esc(o.canal)+' '+money(o.total)).join(' · '):'')+(f.extra.pedidosOnline?' · pedidos online declarados '+money(f.extra.pedidosOnline):''):f.extra.cobros+' cobros según Redlink'+(f.extra.rechazados?' · <span class="bad">'+f.extra.rechazados+(f.extra.rechazados>1?' rechazados':' rechazado')+(f.extra.rechazadosLista&&f.extra.rechazadosLista.length?': '+f.extra.rechazadosLista.map(r=>money(Math.round((Number(r.importe)||0)*100))+' a las '+esc(String(r.hora||'').slice(0,5))).join(', '):'')+' (no entraron)</span>':'');
  const filas=c.filas.map(f=>[`<b>${f.nombre}</b><br><small>${extra(f)}</small>`,money(f.declarado),money(f.entro),`<span class="${f.ok?'status-ok':'bad'}">${f.ok?'✓ coincide':(f.dif>0?'entró de más ':'faltan ')+money(Math.abs(f.dif))}</span>`]);
- return `<h2>Lo que entró de verdad</h2>${filas.length?table(['','Declarado','Entró','Resultado'],filas):''}${c.comisiones.total?`<p><small>Comisiones del día: ${money(c.comisiones.total)} (Mercado Pago ${money(c.comisiones.mp)} · Cuenta DNI ${money(c.comisiones.cuentaDni)})</small></p>`:''}${c.notas.map(n=>`<p><small>${esc(n)}</small></p>`).join('')}`;}
+ return `<h2>Lo que entró de verdad</h2>${filas.length?table(['','Declarado','Entró','Resultado'],filas):''}${cruceHtml(d,x)}${c.comisiones.total?`<p><small>Comisiones del día: ${money(c.comisiones.total)} (Mercado Pago ${money(c.comisiones.mp)} · Cuenta DNI ${money(c.comisiones.cuentaDni)})</small></p>`:''}${c.notas.map(n=>`<p><small>${esc(n)}</small></p>`).join('')}`;}
+// v125: cada cobro real contra los tickets del turno (caja 0001): qué entró sin ticket y qué figura cobrado y no entró.
+function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuentaDni&&x.cuentaDni.cobros);if(!mpOk&&!dniOk)return '';
+ let pagos;try{pagos=paymentRows(state,d);}catch(e){return '';}
+ const out=[];
+ for(const t of allTurns(state,d).filter(t=>t.box==='0001')){
+  const pt=pagos.filter(p=>p.box===t.box&&p.batch===t.batch&&(dniOk||medioDeTicket(p.method)!=='Cuenta DNI')&&(mpOk||medioDeTicket(p.method)!=='Mercado Pago'));
+  const r=cruzarCobros(mpOk?x.mp.cobros.filter(c=>c.canal==='QR'||c.canal==='Point'):[],dniOk?x.cuentaDni.cobros:[],pt,t.openTime,t.closeTime);
+  if(!r||(!r.sinTicket.length&&!r.sinEntrar.length))continue;
+  const filas=r.sinTicket.map(c=>[esc(c.hora),money(c.importe),c.registrado?`Entró por ${esc(c.medio)}; el ticket ${esc(c.registrado.ticket)} dice ${esc(c.registrado.medio)}`:`<span class="bad">Entró por ${esc(c.medio)} y no tiene ticket</span>`])
+   .concat(r.sinEntrar.map(c=>[esc(c.hora||'—'),money(c.importe),`<span class="bad">Ticket ${esc(c.ticket)} (${esc(c.metodo)}): figura cobrado y no entró</span>`]));
+  const resumen=[r.totalSinTicket?'entraron '+money(r.totalSinTicket)+' sin ticket':'',r.totalOtroMedio?money(r.totalOtroMedio)+' con otro medio en el ticket':'',r.totalSinEntrar?money(r.totalSinEntrar)+' cobrados en el sistema que no entraron':''].filter(Boolean).join(' · ');
+  out.push(`<h3>${esc(assign(state,t,'close').name)} · caja ${esc(t.box)} · ${esc(t.openTime)} a ${esc(t.closeTime)}</h3><p><small>${resumen}</small></p>${filas.map(f=>`<div style="padding:8px 0;border-top:1px solid #e6e8eb;white-space:normal"><b>${f[0]} · ${f[1]}</b><br><small>${f[2]}</small></div>`).join('')}`);
+ }
+ return out.length?`<h2>Cobros contra tickets</h2>${out.join('')}`:'';}
 async function cargarExternos(d){const box=$('externos');if(!box||!d)return;let x=EXTERNOS[d];
  if(!x||Date.now()-(x.__t||0)>120000){try{x=await echu('pagos_externos',undefined,{fecha:d});x.__t=Date.now();EXTERNOS[d]=x;}catch(e){if(!x)return;}}
  const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x))pistasPagos();}
