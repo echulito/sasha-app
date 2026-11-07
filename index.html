@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=139;
+var APP_V=140;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -444,7 +444,7 @@ body.consulta #bnav .solo-completo{display:none}
       <div class="card oculto" id="cform" style="margin-top:8px"></div>
       <div class="seg seg4c" id="cseg"><button class="on" data-s="compras">Facturas</button><button data-s="ventas">Ventas Z</button><button data-s="remitos">Remitos</button><button data-s="revisar">Revisar</button></div>
       <div id="clista"><div class="cargando">Cargando…</div></div>
-      <input id="ccam" type="file" accept="image/*" capture="environment" class="oculto"><input id="cadj" type="file" accept="image/*" class="oculto">
+      <input id="ccam" type="file" accept="image/*" capture="environment" class="oculto"><input id="cadj" type="file" accept="image/*,application/pdf" class="oculto">
       <div class="fab"><div class="card oculto" id="cque" style="margin-bottom:6px;padding:10px 12px"><div style="font-weight:700;margin-bottom:6px">¿Qué es?</div><div class="ph2" style="flex-wrap:wrap">
         <button class="btn" data-t="factura">Factura / nota de crédito</button><button class="btn" data-t="remito">Remito</button><button class="btn" data-t="cierre_z">Cierre Z</button></div>
         <div class="btns" style="margin-top:4px"><button class="lnk" onclick="$('cque').classList.add('oculto')">Cancelar</button></div></div>
@@ -2928,7 +2928,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=139');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=140');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
@@ -2991,6 +2991,12 @@ function cDetalle(refrescar){
 function cArchivo(input){
   var f=input.files&&input.files[0];input.value='';if(!f)return;
   CT.provNuevo=false;CT.hash='';
+  // v140: factura electrónica en PDF: se lee directo (sin escanear) y se guarda el PDF.
+  if(f.type==='application/pdf'||/\.pdf$/i.test(f.name)){
+    if(f.size>9.5*1024*1024){alert('El PDF es muy grande (hasta 9 MB).');return}
+    hashArchivo(f).then(function(h){CT.hash=h});
+    leerDataURL(f).then(function(u){CT.foto=u.replace(/^data:[^,]*,/,'data:application/pdf;base64,');CT.mime='application/pdf';CT.scan=null;cLeerYa()}).catch(function(){alert('No se pudo abrir el PDF.')});
+    return}
   (window.crypto&&crypto.subtle?f.arrayBuffer().then(function(b){return crypto.subtle.digest('SHA-256',b)}).then(function(h){return Array.prototype.map.call(new Uint8Array(h),function(x){return ('0'+x.toString(16)).slice(-2)}).join('')}):Promise.resolve('')).then(function(h){CT.hash=h}).catch(function(){});
   var url=URL.createObjectURL(f),img=new Image();
   img.onload=function(){
@@ -3094,15 +3100,20 @@ function scanUsar(entera){
   var b=$('cscan_ok');if(b){b.disabled=true;b.textContent='Escaneando…'}
   setTimeout(function(){
     try{CT.foto=scanResultado(entera)}catch(e){alert('No se pudo escanear: '+e.message);return}
-    CT.mime='image/jpeg';CT.scan=null;CT.form={nuevo:true,leyendo:true};CT.t0=Date.now();cForm();
+    CT.mime='image/jpeg';CT.scan=null;cLeerYa();
+  },30);
+}
+function cLeerYa(){
+    CT.form={nuevo:true,leyendo:true};CT.t0=Date.now();cForm();
     clearInterval(CT.reloj);CT.reloj=setInterval(function(){var e=$('cf_seg');if(!e||!CT.form||!CT.form.leyendo){clearInterval(CT.reloj);return}e.textContent=Math.round((Date.now()-CT.t0)/1000)+' s'},1000);
     cPost('conta_leer',{imagen:CT.foto,mime:CT.mime,tipo:CT.tipoFoto||''}).then(function(r){
       var seg=Math.round((Date.now()-CT.t0)/1000);
       if(!r.ok){CT.form={nuevo:true,datos:{tipo:CT.tipoFoto||'factura',letra:CT.tipoFoto==='remito'?'R':'A',lado:CT.tipoFoto==='cierre_z'?'venta':'compra',fecha:lHoy(),periodo:CT.per},aviso:r.mensaje};cForm();return}
       CT.form={nuevo:true,datos:r,aviso:(r.dudas&&r.dudas.length?'No se leyó bien: '+r.dudas.join(', ')+'. Revisalo. ':'')+'(leído en '+seg+' s)'};cForm();
     }).catch(function(e){CT.form={nuevo:true,datos:{tipo:CT.tipoFoto||'factura',letra:CT.tipoFoto==='remito'?'R':'A',lado:CT.tipoFoto==='cierre_z'?'venta':'compra',fecha:lHoy()},aviso:e.message+' Cargalo a mano.'};cForm()});
-  },30);
 }
+function leerDataURL(f){return new Promise(function(ok,mal){var r=new FileReader();r.onload=function(){ok(String(r.result))};r.onerror=mal;r.readAsDataURL(f)})}
+function hashArchivo(f){return (window.crypto&&crypto.subtle?f.arrayBuffer().then(function(b){return crypto.subtle.digest('SHA-256',b)}).then(function(h){return Array.prototype.map.call(new Uint8Array(h),function(x){return ('0'+x.toString(16)).slice(-2)}).join('')}):Promise.resolve('')).catch(function(){return ''})}
 function cPreguntar(inp){CT.inp=inp;$('cque').classList.remove('oculto')}
 document.querySelectorAll('#cque [data-t]').forEach(function(b){b.onclick=function(){CT.tipoFoto=b.dataset.t;$('cque').classList.add('oculto');$(CT.inp||'cadj').click()}});
 $('ccam').addEventListener('change',function(){cArchivo(this)});
@@ -3115,7 +3126,7 @@ function cForm(){
   if(fab)fab.classList.toggle('oculto',!!F);
   if(!F){box.classList.add('oculto');box.innerHTML='';return}
   box.classList.remove('oculto');
-  var fotoH=CT.foto?'<div class="lfoto"><img src="'+CT.foto+'" alt="Foto del comprobante"></div>':'';
+  var fotoH=CT.foto?(CT.mime==='application/pdf'?'<div class="note" style="margin-top:0">📄 Factura electrónica (PDF): se guarda el PDF.</div>':'<div class="lfoto"><img src="'+CT.foto+'" alt="Foto del comprobante"></div>'):'';
   if(F.escaneando){box.innerHTML='<h2>Escanear</h2><div class="note" style="margin-top:0">Mové los 4 puntos azules a las esquinas del papel. Se endereza y se pasa a blanco y negro: se lee más rápido y mejor.</div>'+
       '<div style="text-align:center;margin-top:6px"><canvas id="cscan" style="touch-action:none;border-radius:8px;max-width:100%"></canvas></div>'+
       '<div class="btns"><button class="btn" id="cscan_ok">Escanear y leer</button><button class="btn sec" onclick="scanUsar(true)">Usar la foto entera</button></div>'+
@@ -3890,8 +3901,61 @@ function gPintar(){
       (abierto?gEditor(c.k):'<div class="s">'+esc(sub||'sin cargar')+'</div>')+'</div>';
   });
   h+='<div class="btns"><button class="btn sec" onclick="gNuevo()">+ Otro gasto</button></div><div id="gnuevo"></div>'+
+    // v140: gasto con factura (foto o factura electrónica en PDF)
+    '<div class="card" style="margin-top:8px"><h2>Cargar la factura de un gasto</h2><div class="note" style="margin-top:0">Luz, agua, alarma, internet… El importe de la factura pasa a ser el del mes y su vencimiento cuenta para la plata.</div>'+
+    '<div class="btns"><button class="btn" onclick="$(\'gfcam\').click()">📷 Sacar foto</button><button class="btn sec" onclick="$(\'gfadj\').click()">📎 Adjuntar (PDF o foto)</button></div>'+
+    '<input id="gfcam" type="file" accept="image/*" capture="environment" class="oculto"><input id="gfadj" type="file" accept="image/*,application/pdf" class="oculto"><div id="gfac"></div></div>'+
     '<div class="note">Es la solapa ADMINISTRACION de ECHU: lo que cambies acá cambia allá. Los gastos con cartel azul se completan solos.</div>';
   $('c-gas').innerHTML=h;
+  $('gfcam').onchange=function(){gFacArchivo(this)};$('gfadj').onchange=function(){gFacArchivo(this)};
+  if(GA.fac&&GA.fac.listo)gFacListo();
+}
+// v140: factura de un gasto: se lee, se elige el gasto (la próxima del mismo proveedor ya viene elegido) y se guarda.
+function gFacArchivo(input){
+  var f=input.files&&input.files[0];input.value='';if(!f)return;
+  var pdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);
+  if(f.size>9.5*1024*1024){alert('El archivo es muy grande (hasta 9 MB).');return}
+  GA.fac={mime:pdf?'application/pdf':'image/jpeg'};
+  hashArchivo(f).then(function(h){if(GA.fac)GA.fac.hash=h});
+  var datos=pdf?leerDataURL(f).then(function(u){return u.replace(/^data:[^,]*,/,'data:application/pdf;base64,')}):new Promise(function(ok,mal){
+    var url=URL.createObjectURL(f),img=new Image();
+    img.onload=function(){var k=Math.min(1,1800/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');cv.width=Math.round(img.naturalWidth*k);cv.height=Math.round(img.naturalHeight*k);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);URL.revokeObjectURL(url);ok(cv.toDataURL('image/jpeg',0.82))};
+    img.onerror=function(){mal(new Error('No se pudo abrir la foto.'))};img.src=url});
+  var t0=Date.now();$('gfac').innerHTML='<div class="note">Leyendo la factura… <b id="gf_seg">0 s</b></div>';$('gfac').scrollIntoView({behavior:'smooth',block:'center'});
+  var reloj=setInterval(function(){var e=$('gf_seg');if(!e){clearInterval(reloj);return}e.textContent=Math.round((Date.now()-t0)/1000)+' s'},1000);
+  datos.then(function(u){GA.fac.data=u;return lPost('gastos_factura_leer',{imagen:u,mime:GA.fac.mime})}).then(function(r){clearInterval(reloj);
+    GA.fac.r=r&&r.ok?r:{comprobante:{tipo:'factura',lado:'compra'},gastos:(GA.D.filas||[]).filter(function(x){return x.col}).map(function(x){return {label:x.label,valor:Number(x.valor)||0}}),sugerido:'',aviso:(r&&r.mensaje)||'No se pudo leer: completalo a mano.'};gFacForm()})
+    .catch(function(e){clearInterval(reloj);$('gfac').innerHTML='<div class="note neg">'+esc(e.message)+'</div>'});
+}
+function gFacForm(){
+  var r=GA.fac.r,c=r.comprobante||{},gs=r.gastos||[],sel=r.sugerido||'';
+  var ops='<option value="">Elegí el gasto…</option>'+gs.map(function(g){return '<option value="'+esc(g.label)+'"'+(g.label===sel?' selected':'')+'>'+esc(g.label)+(g.valor?' · hoy '+pesos(g.valor):'')+'</option>'}).join('')+'<option value="__nuevo">+ Gasto nuevo…</option>';
+  $('gfac').innerHTML=(r.aviso?'<div class="note warn">'+esc(r.aviso)+'</div>':'')+
+    '<div class="rk" style="margin-top:8px">'+(GA.fac.mime==='application/pdf'?'📄 ':'📷 ')+'<b>'+esc(c.nombre||'Proveedor sin leer')+'</b>'+(c.cuit?' · CUIT '+cuitTextoJS(c.cuit):'')+(c.periodoFacturado?' · '+esc(c.periodoFacturado):'')+'</div>'+
+    '<label>Va al gasto</label><select id="gf_gasto">'+ops+'</select><div id="gf_nuevo" class="oculto"><label>Nombre del gasto nuevo</label><input id="gf_nom" placeholder="Ej.: Alarma"></div>'+
+    '<div class="g2"><div><label>Importe de la factura</label><input id="gf_monto" data-pesos inputmode="decimal" value="'+(c.total?'$ '+cNum(c.total):'')+'"></div><div><label>Vence</label><input id="gf_vence" type="date" value="'+esc(c.vencimiento||'')+'"></div></div>'+
+    '<div class="note" id="gf_dif"></div>'+
+    '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="gf_iva" style="width:auto"'+(c.cuit?' checked':'')+'> Cargarla también en IVA Compras (para la contadora)</label>'+
+    '<div class="btns"><button class="btn" id="gf_ok">Guardar</button><button class="btn sec" onclick="GA.fac=null;$(\'gfac\').innerHTML=\'\'">Cancelar</button></div><div class="note" id="gf_msg"></div>';
+  pesosEnVivo($('gf_monto'));
+  var dif=function(){var g=$('gf_gasto').value,m=parsePesos($('gf_monto').value),x=gs.filter(function(y){return y.label===g})[0];
+    $('gf_nuevo').classList.toggle('oculto',g!=='__nuevo');
+    $('gf_dif').innerHTML=x&&x.valor&&m?(Math.abs(m-x.valor)<1?'Igual que el mes que tenías cargado.':'Tenías '+pesos(x.valor)+' → pasa a '+pesos(m)+' <b class="'+(m>x.valor?'neg':'pos')+'">('+(m>x.valor?'+':'')+pct(m/x.valor-1)+')</b>. Se aplica en el mes.'):''};
+  $('gf_gasto').onchange=dif;$('gf_monto').addEventListener('input',dif);dif();
+  $('gf_ok').onclick=function(){var b=this,g=$('gf_gasto').value,m=parsePesos($('gf_monto').value),v=$('gf_vence').value,nom=$('gf_nom').value.trim();
+    if(!g||(g==='__nuevo'&&!nom)){$('gf_msg').innerHTML='<span class="neg">Elegí a qué gasto va.</span>';return}
+    if(!(m>0)){$('gf_msg').innerHTML='<span class="neg">Poné el importe.</span>';return}
+    if(!v){$('gf_msg').innerHTML='<span class="neg">Poné cuándo vence.</span>';return}
+    b.disabled=true;b.textContent='Guardando…';
+    var datos={gasto:g==='__nuevo'?'':g,nuevo:g==='__nuevo'?nom:'',monto:m,vence:v,iva:$('gf_iva').checked,comprobante:Object.assign({},c,{total:m,hash:GA.fac.hash||''})};
+    lPost('gastos_factura_guardar',{datos:JSON.stringify(datos),imagen:$('gf_iva').checked?GA.fac.data:'',mime:GA.fac.mime}).then(function(r2){
+      GA.fac={listo:r2};GA.D=r2.gastos;INI=null;try{cargarInicio()}catch(e){}gPintar();
+    }).catch(function(e){b.disabled=false;b.textContent='Guardar';$('gf_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'})};
+}
+function gFacListo(){var r=GA.fac.listo;GA.fac=null;
+  $('gfac').innerHTML='<div class="note pos" style="font-weight:600">Listo: '+esc(r.gasto)+' '+pesos(r.monto)+(r.antes&&Math.abs(r.antes-r.monto)>=1?' (tenías '+pesos(r.antes)+')':'')+', vence el '+esc(r.vence.split('-').reverse().join('/'))+
+    (r.comprobante?(r.duplicado?' · esa factura ya estaba en IVA Compras':' · quedó en IVA Compras'):'')+'.</div>';
 }
 function gEditor(k){
   var d=GA.D,h='<div style="margin-top:6px">';

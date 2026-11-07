@@ -570,3 +570,41 @@ test('Facturas v139: el comprobante tiene CAE y vencimiento del CAE, y se mandan
   delete DATOS.conta_guardar;
   await ctx.close();
 });
+
+test('Gastos v140: factura de un gasto en PDF: se lee, viene el gasto elegido, muestra el aumento y guarda importe, vencimiento e IVA Compras', async () => {
+  DATOS.gastos_factura_leer = () => ({ok: true, sugerido: 'Luz', comprobante: {tipo: 'factura', letra: 'B', nombre: 'EDENOR SA', cuit: '30655116202', total: 207000, vencimiento: '2026-11-18', periodoFacturado: 'Octubre 2026'},
+    gastos: [{label: 'Alquiler', valor: 1500000}, {label: 'Luz', valor: 180000}]});
+  DATOS.gastos_factura_guardar = p => { const d = JSON.parse(p.datos); return {gasto: d.gasto, antes: 180000, monto: d.monto, vence: d.vence, comprobante: d.iva ? {id: 'C1'} : null, gastos: DATOS.gastos_datos}; };
+  const {ctx, page, errores, echu} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="gas"]');
+  await page.locator('#c-gas .cmp').first().waitFor();
+  await page.setInputFiles('#gfadj', {name: 'factura.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 ' + 'x'.repeat(300))});
+  await page.locator('#gf_gasto').waitFor();
+  assert.equal(await page.inputValue('#gf_gasto'), 'Luz'); assert.equal(await page.inputValue('#gf_vence'), '2026-11-18');
+  assert.match(await page.locator('#gf_dif').innerText(), /Tenías \$ 180\.000 → pasa a \$ 207\.000 \(\+15,0%\)\. Se aplica en el mes\./);
+  assert.ok(await page.locator('#gf_iva').isChecked());
+  await page.click('#gf_ok');
+  await page.locator('#gfac .pos').waitFor();
+  assert.match(await page.locator('#gfac').innerText(), /Listo: Luz \$ 207\.000 \(tenías \$ 180\.000\), vence el 18\/11\/2026 · quedó en IVA Compras\./);
+  const q = echu.pedidos.find(x => /gastos_factura_guardar/.test(x.cuerpo || ''));
+  const cuerpo = JSON.parse(q.cuerpo), d = JSON.parse(cuerpo.datos);
+  assert.equal(cuerpo.mime, 'application/pdf'); assert.match(cuerpo.imagen, /^data:application\/pdf;base64,/);
+  assert.deepEqual([d.gasto, d.monto, d.vence, d.iva], ['Luz', 207000, '2026-11-18', true]); assert.equal(d.comprobante.cuit, '30655116202');
+  assert.deepEqual(errores, []);
+  delete DATOS.gastos_factura_leer; delete DATOS.gastos_factura_guardar;
+  await ctx.close();
+});
+
+test('Contabilidad v140: se puede adjuntar la factura electrónica en PDF (se lee directo, sin escanear)', async () => {
+  DATOS.conta_leer = p => { if (p.mime !== 'application/pdf' || !/^data:application\/pdf;base64,/.test(p.imagen)) throw new Error('no llegó el PDF'); return {ok: true, tipo: 'factura', letra: 'A', lado: 'compra', fecha: '2026-11-05', nombre: 'RAZ Y CIA', total: 1210, cae: '76451234567890', caeVto: '2026-11-15'}; };
+  const {ctx, page, errores} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="iva"]');
+  await page.locator('#ctiles .card').nth(3).waitFor();
+  await page.setInputFiles('#cadj', {name: 'fe.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 ' + 'y'.repeat(300))});
+  await page.locator('#cf_cae').waitFor();
+  assert.equal(await page.inputValue('#cf_cae'), '76451234567890');
+  assert.match(await page.locator('#cform').innerText().catch(() => page.locator('body').innerText()), /Factura electrónica \(PDF\)/);
+  assert.deepEqual(errores, []);
+  delete DATOS.conta_leer;
+  await ctx.close();
+});
