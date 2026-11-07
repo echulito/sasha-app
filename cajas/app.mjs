@@ -140,10 +140,11 @@ function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuenta
  for(const t of allTurns(state,d).filter(t=>t.box==='0001')){
   const pt=pagos.filter(p=>p.box===t.box&&p.batch===t.batch&&(dniOk||medioDeTicket(p.method)!=='Cuenta DNI')&&(mpOk||medioDeTicket(p.method)!=='Mercado Pago'));
   const r=cruzarCobros(mpOk?x.mp.cobros.filter(c=>c.canal==='QR'||c.canal==='Point'):[],dniOk?x.cuentaDni.cobros:[],pt,t.openTime,t.closeTime);
-  if(!r||(!r.sinTicket.length&&!r.sinEntrar.length))continue;
+  if(!r||(!r.sinTicket.length&&!r.sinEntrar.length&&!r.diferencias.length))continue;
   const filas=r.sinTicket.map(c=>[esc(c.hora),money(c.importe),c.registrado?`Entró por ${esc(c.medio)}; el ticket ${esc(c.registrado.ticket)} dice ${esc(c.registrado.medio)}`:`<span class="bad">Entró por ${esc(c.medio)} y no tiene ticket</span>`])
+   .concat(r.diferencias.map(c=>[esc(c.hora),money(c.importe),`Entró por ${esc(c.medio)} para el ticket ${esc(c.ticket)} de ${money(c.importeTicket)}: cobró ${money(Math.abs(c.dif))} de ${c.dif<0?'menos':'más'}`]))
    .concat(r.sinEntrar.map(c=>[esc(c.hora||'—'),money(c.importe),`<span class="bad">Ticket ${esc(c.ticket)} (${esc(c.metodo)}): figura cobrado y no entró</span>`]));
-  const resumen=[r.totalSinTicket?'entraron '+money(r.totalSinTicket)+' sin ticket':'',r.totalOtroMedio?money(r.totalOtroMedio)+' con otro medio en el ticket':'',r.totalSinEntrar?money(r.totalSinEntrar)+' cobrados en el sistema que no entraron':''].filter(Boolean).join(' · ');
+  const resumen=[r.totalSinTicket?'entraron '+money(r.totalSinTicket)+' sin ticket':'',r.totalOtroMedio?money(r.totalOtroMedio)+' con otro medio en el ticket':'',r.totalSinEntrar?money(r.totalSinEntrar)+' cobrados en el sistema que no entraron':'',r.diferencias.length?money(Math.abs(r.totalDiferencia))+' de diferencia en '+r.diferencias.length+(r.diferencias.length>1?' cobros':' cobro')+' ('+(r.totalDiferencia<0?'cobró de menos':'cobró de más')+')':''].filter(Boolean).join(' · ');
   out.push(`<h3>${esc(assign(state,t,'close').name)} · caja ${esc(t.box)} · ${esc(t.openTime)} a ${esc(t.closeTime)}</h3><p><small>${resumen}</small></p>${filas.map(f=>`<div style="padding:8px 0;border-top:1px solid #e6e8eb;white-space:normal"><b>${f[0]} · ${f[1]}</b><br><small>${f[2]}</small></div>`).join('')}`);
  }
  return out.length?`<h2>Cobros contra tickets</h2>${out.join('')}`:'';}

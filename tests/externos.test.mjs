@@ -79,3 +79,18 @@ test('cruce: cada cobro real busca su ticket (mismo importe, hora más cercana);
   assert.deepEqual([r.totalSinTicket, r.totalOtroMedio, r.totalSinEntrar], [5829395, 700000, 250000]);
   assert.equal(cruzarCobros([], [], [], 'x', '19:00'), null);
 });
+
+test('cruce v126: un cobro con unos pesos de diferencia y hora cercana se asocia a su ticket (caso del 06/11: $ 10.100 por un ticket de $ 10.107)', () => {
+  const r = JSON.parse(JSON.stringify(cruzarCobros([], [{hora: '18:06:50', importe: 10100}], [{method: 'BANELCO', amount: 1010700, ticket: 'Tk B 0001-00122320', time: '18:04'}], '15:29', '19:33')));
+  assert.deepEqual(r.sinTicket, []); assert.deepEqual(r.sinEntrar, []);
+  assert.deepEqual(r.diferencias, [{medio: 'Cuenta DNI', hora: '18:06', importe: 1010000, ticket: 'Tk B 0001-00122320', metodo: 'BANELCO', importeTicket: 1010700, dif: -700}]);
+  assert.equal(r.totalDiferencia, -700);
+  // lejos en la hora o muy distinto: no se asocia
+  const lejos = cruzarCobros([], [{hora: '18:40:00', importe: 10100}], [{method: 'BANELCO', amount: 1010700, ticket: 'T', time: '18:04'}], '15:29', '19:33');
+  assert.equal(lejos.diferencias.length, 0); assert.equal(lejos.sinTicket.length, 1); assert.equal(lejos.sinEntrar.length, 1);
+  const distinto = cruzarCobros([], [{hora: '18:05:00', importe: 8000}], [{method: 'BANELCO', amount: 1010700, ticket: 'T', time: '18:04'}], '15:29', '19:33');
+  assert.equal(distinto.diferencias.length, 0);
+  // mismo importe exacto en otro medio pero lejos en la hora: no se asocia
+  const otro = cruzarCobros([{hora: '16:00:00', importe: 7000}], [], [{method: 'Efectivo $', amount: 700000, ticket: 'T', time: '19:00'}], '15:29', '19:33');
+  assert.deepEqual(JSON.parse(JSON.stringify(otro.sinTicket)), [{medio: 'Mercado Pago', hora: '16:00', importe: 700000}]);
+});

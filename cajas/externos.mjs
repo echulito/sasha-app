@@ -74,11 +74,19 @@ export function cruzarCobros(realMp, realDni, pagos, apertura, cierre) {
   const dist = (r, t) => (minuto(t.hora) === null ? 9999 : Math.abs(minuto(t.hora) - minuto(r.hora)));
   const buscar = (r, mismoMedio) => tickets.filter(t => !t.usado && Math.abs(t.importe - r.importe) <= 100 && (mismoMedio ? t.medio === r.medio : t.medio !== r.medio))
     .sort((x, y) => dist(r, x) - dist(r, y))[0];
-  const sinTicket = [];
-  // 1) mismo medio e importe; 2) lo que queda, con otro medio (por ejemplo, cobrado por QR y registrado en efectivo).
-  const pendientes = reales.filter(r => { const t = buscar(r, true); if (t) { t.usado = true; return false; } return true; });
-  pendientes.forEach(r => { const t = buscar(r, false); if (t) t.usado = true; sinTicket.push(t ? {...r, registrado: {ticket: t.ticket, medio: t.metodo}} : r); });
+  const sinTicket = [], diferencias = [];
+  // 1) mismo medio e importe exacto (±$1).
+  let pendientes = reales.filter(r => { const t = buscar(r, true); if (t) { t.usado = true; return false; } return true; });
+  // 2) v126: mismo medio, importe parecido (hasta 5% y $ 2.000) y hora cercana (20 min): es ese ticket, cobrado con diferencia
+  //    (por ejemplo, el ticket era de $ 10.107 y le cobró $ 10.100).
+  const parecido = r => tickets.filter(t => !t.usado && t.medio === r.medio && t.medio !== 'Efectivo' && dist(r, t) <= 20 &&
+    Math.abs(t.importe - r.importe) <= Math.min(200000, Math.round(t.importe * 0.05))).sort((x, y) => dist(r, x) - dist(r, y) || Math.abs(x.importe - r.importe) - Math.abs(y.importe - r.importe))[0];
+  pendientes = pendientes.filter(r => { const t = parecido(r); if (!t) return true; t.usado = true;
+    diferencias.push({...r, ticket: t.ticket, metodo: t.metodo, importeTicket: t.importe, dif: r.importe - t.importe}); return false; });
+  // 3) lo que queda, mismo importe con otro medio y hora cercana (por ejemplo, cobrado por QR y registrado en efectivo).
+  pendientes.forEach(r => { let t = buscar(r, false); if (t && dist(r, t) > 30) t = null; if (t) t.usado = true; sinTicket.push(t ? {...r, registrado: {ticket: t.ticket, medio: t.metodo}} : r); });
   const sinEntrar = tickets.filter(t => !t.usado && t.medio !== 'Efectivo').map(t => ({medio: t.medio, metodo: t.metodo, ticket: t.ticket, hora: t.hora, importe: t.importe}));
   const suma = l => l.reduce((n, x) => n + x.importe, 0);
-  return {sinTicket, sinEntrar, totalSinTicket: suma(sinTicket.filter(x => !x.registrado)), totalOtroMedio: suma(sinTicket.filter(x => x.registrado)), totalSinEntrar: suma(sinEntrar), reales: reales.length};
+  return {sinTicket, sinEntrar, diferencias, totalSinTicket: suma(sinTicket.filter(x => !x.registrado)), totalOtroMedio: suma(sinTicket.filter(x => x.registrado)),
+    totalSinEntrar: suma(sinEntrar), totalDiferencia: diferencias.reduce((n, x) => n + x.dif, 0), reales: reales.length};
 }
