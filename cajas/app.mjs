@@ -145,9 +145,9 @@ function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuenta
   const r=cruzarCobros(mpOk?x.mp.cobros.filter(c=>c.canal==='QR'||c.canal==='Point'):[],dniOk?x.cuentaDni.cobros:[],pt,t.openTime,t.closeTime,ticketsAnulados(d,t,pagos));
   const comb=(r?r.combinados:[]).filter(c=>c.anulado||c.dif||c.metodo&&medioDeTicket(c.metodo)!==c.medio);
   if(!r||(!r.sinTicket.length&&!r.sinEntrar.length&&!r.diferencias.length&&!comb.length))continue;
-  const filas=r.sinTicket.map(c=>[esc(c.hora),money(c.importe),c.anulado?`<span class="bad">Entró por ${esc(c.medio)} para el ticket ${esc(c.anulado.ticket)} de ${money(c.anulado.importe)} (${esc(c.anulado.hora)}), pero ese ticket no está en el cierre ni en el detalle de cobros del sistema: por eso la plata sobra. Fijate en el sistema qué pasó con ese ticket.</span>`:c.registrado?`Entró por ${esc(c.medio)}; el ticket ${esc(c.registrado.ticket)} dice ${esc(c.registrado.medio)}`:`<span class="bad">Entró por ${esc(c.medio)} y no tiene ticket</span>`])
+  const filas=r.sinTicket.map(c=>[esc(c.hora),money(c.importe),c.anulado?`<span class="bad">Entró por ${esc(c.medio)} para el ticket ${esc(c.anulado.ticket)} de ${money(c.anulado.importe)} (${esc(c.anulado.hora)}), pero ese ticket no está en el cierre ni en el detalle de cobros del sistema: por eso la plata sobra. Fijate en el sistema qué pasó con ese ticket.</span>`:c.registrado?`Entró por ${esc(c.medio)}; el ticket ${esc(c.registrado.ticket)} dice ${esc(c.registrado.medio)}`+anotadoMedio(d,t,c.registrado.ticket):`<span class="bad">Entró por ${esc(c.medio)} y no tiene ticket</span>`])
    .concat(r.diferencias.map(c=>[esc(c.hora),money(c.importe),`Entró por ${esc(c.medio)} para el ticket ${esc(c.ticket)} de ${money(c.importeTicket)}: cobró ${money(Math.abs(c.dif))} de ${c.dif<0?'menos':'más'}`+((state.ticketDifferences||[]).some(z=>z.key===ticketDifferenceKey(d,t,c.ticket,c.medio))?` · <b>anotado en observaciones de ${esc(assign(state,t,'close').name)}: ${c.dif<0?'faltante':'sobrante'} de ${money(Math.abs(c.dif))} en su saldo</b>`:'')]))
-   .concat(comb.map(c=>[esc(c.hora),money(c.importe),`Entró por ${esc(c.medio)} en 2 cobros (${c.movimientos.map(m=>money(m.importe)+' a las '+esc(m.hora)).join(' + ')}) para el ticket ${esc(c.ticket)} de ${money(c.importeTicket)} (${esc(c.horaTicket)})`+(c.anulado?': <span class="bad">ese ticket no está en el cierre ni en el detalle de cobros del sistema</span>':c.metodo&&medioDeTicket(c.metodo)!==c.medio?`; en el sistema dice ${esc(c.metodo)}`:'')+(c.dif?`: cobró ${money(Math.abs(c.dif))} de ${c.dif<0?'menos':'más'}`:'')]))
+   .concat(comb.map(c=>[esc(c.hora),money(c.importe),`Entró por ${esc(c.medio)} en 2 cobros (${c.movimientos.map(m=>money(m.importe)+' a las '+esc(m.hora)).join(' + ')}) para el ticket ${esc(c.ticket)} de ${money(c.importeTicket)} (${esc(c.horaTicket)})`+(c.anulado?': <span class="bad">ese ticket no está en el cierre ni en el detalle de cobros del sistema</span>':c.metodo&&medioDeTicket(c.metodo)!==c.medio?`; en el sistema dice ${esc(c.metodo)}`+anotadoMedio(d,t,c.ticket):'')+(c.dif?`: cobró ${money(Math.abs(c.dif))} de ${c.dif<0?'menos':'más'}`:'')]))
    .concat(r.sinEntrar.map(c=>[esc(c.hora||'—'),money(c.importe),`<span class="bad">Ticket ${esc(c.ticket)} (${esc(c.metodo)}): figura cobrado y no entró</span>`]));
   const resumen=[r.totalAnulado?'entraron '+money(r.totalAnulado)+' de tickets que no están en el cierre':'',r.totalSinTicket?'entraron '+money(r.totalSinTicket)+' sin ticket':'',r.totalOtroMedio?money(r.totalOtroMedio)+' con otro medio en el ticket':'',r.totalCombinadoOtroMedio?money(r.totalCombinadoOtroMedio)+' cobrados en 2 partes con otro medio en el ticket':'',r.totalSinEntrar?money(r.totalSinEntrar)+' cobrados en el sistema que no entraron':'',r.diferencias.length?money(Math.abs(r.totalDiferencia))+' de diferencia en '+r.diferencias.length+(r.diferencias.length>1?' cobros':' cobro')+' ('+(r.totalDiferencia<0?'cobró de menos':'cobró de más')+')':''].filter(Boolean).join(' · ');
   out.push(`<h3>${esc(assign(state,t,'close').name)} · caja ${esc(t.box)} · ${esc(t.openTime)} a ${esc(t.closeTime)}</h3><p><small>${resumen}</small></p>${filas.map(f=>`<div style="padding:8px 0;border-top:1px solid #e6e8eb;white-space:normal"><b>${f[0]} · ${f[1]}</b><br><small>${f[2]}</small></div>`).join('')}`);
@@ -155,7 +155,7 @@ function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuenta
  return out.length?`<h2>Cobros contra tickets</h2>${out.join('')}`:'';}
 async function cargarExternos(d){const box=$('externos');if(!box||!d)return;let x=EXTERNOS[d];
  if(!x||Date.now()-(x.__t||0)>120000){try{x=await echu('pagos_externos',undefined,{fecha:d});x.__t=Date.now();EXTERNOS[d]=x;}catch(e){if(!x)return;}}
- const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoOtrosSinAval(d)&&!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x)&&!autoDiferenciasTickets(d,x)&&!autoSobreDeclarado(d,x))pistasPagos();}
+ const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoOtrosSinAval(d)&&!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x)&&!autoDiferenciasTickets(d,x)&&!autoSobreDeclarado(d,x)&&!autoMediosMalCargados(d,x))pistasPagos();}
 // v111: "¿Cuánto recibió X por Mercado Pago / Cuenta DNI?" se contesta solo con lo que entró en el horario del turno.
 // Si coincide con el informe PDF, la cajera cargó mal (queda como error de carga, con lo que declaró); si coincide con lo declarado, estaba bien.
 const REAL_TURNO={};let AUTO_EN_CURSO=false;
@@ -265,6 +265,26 @@ function autoSobreDeclarado(d,x){if(AUTO_EN_CURSO)return false;
    c.declarationErrors.push({key:[d,turnKey(t),real].join('|'),date:d,branch:t.branch,box:t.box,batch:t.batch,cashier:assign(state,t,'close').name,declarado,real,note,createdAt:new Date().toISOString()});s=c;cambio=true;}catch(e){}
  }
  if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Declarado de más: vale lo que entró');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
+const anotadoMedio=(d,t,ticket)=>(state.paymentMethodErrors||[]).some(z=>z.key===[d,turnKey(t),ticket].join('|'))?` · <b>anotado en observaciones de ${esc(assign(state,t,'close').name)}</b>`:'';
+// v134: ticket cargado en el sistema con un medio de pago distinto al que se cobró (por ejemplo, "Efectivo" y entró por Mercado Pago).
+// Queda en las observaciones de la cajera (resumen del mes general e individual). No cambia el saldo. Una sola vez por ticket.
+function autoMediosMalCargados(d,x){if(AUTO_EN_CURSO)return false;
+ const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuentaDni&&x.cuentaDni.cobros);if(!mpOk&&!dniOk)return false;
+ let pagos;try{pagos=paymentRows(state,d);}catch(e){return false;}
+ const mpLista=mpOk?x.mp.cobros.filter(c=>c.canal==='QR'||c.canal==='Point'):[],dniLista=dniOk?x.cuentaDni.cobros:[];
+ let s=state,cambio=false;
+ for(const t of allTurns(state,d).filter(t=>t.box==='0001')){
+  const pt=pagos.filter(p=>p.box===t.box&&p.batch===t.batch&&(dniOk||medioDeTicket(p.method)!=='Cuenta DNI')&&(mpOk||medioDeTicket(p.method)!=='Mercado Pago'));
+  const r=cruzarCobros(mpLista,dniLista,pt,t.openTime,t.closeTime,ticketsAnulados(d,t,pagos));if(!r)continue;
+  const casos=r.sinTicket.filter(c=>c.registrado).map(c=>({ticket:c.registrado.ticket,metodo:c.registrado.medio,medio:c.medio,importe:c.importe,hora:c.hora,como:'a las '+c.hora}))
+   .concat(r.combinados.filter(c=>!c.anulado&&c.metodo&&medioDeTicket(c.metodo)!==c.medio).map(c=>({ticket:c.ticket,metodo:c.metodo,medio:c.medio,importe:c.importeTicket,hora:c.horaTicket,como:'en 2 cobros: '+c.movimientos.map(m=>money(m.importe)+' a las '+m.hora).join(' + ')})));
+  const who=assign(state,t,'close');
+  for(const c of casos){const key=[d,turnKey(t),c.ticket].join('|');if((s.paymentMethodErrors||[]).some(z=>z.key===key))continue;
+   const note='Medio de pago mal cargado: el ticket '+c.ticket+' ('+money(c.importe)+', '+c.hora+') está en el sistema como '+c.metodo+' y se cobró por '+c.medio+' ('+c.como+').';
+   if(s===state)s=structuredClone(state);s.paymentMethodErrors??=[];
+   s.paymentMethodErrors.push({kind:'medio',key,date:d,branch:t.branch,box:t.box,batch:t.batch,cashierId:who.id||'',cashier:who.name||'',ticket:c.ticket,metodo:c.metodo,medio:c.medio,importe:c.importe,hora:c.hora,note,createdAt:new Date().toISOString()});cambio=true;}
+ }
+ if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Medio de pago mal cargado: anotado en observaciones');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
 function pistasPagos(){document.querySelectorAll('[data-guided-key]').forEach(el=>{const r=REAL_TURNO[el.dataset.guidedKey],act=el.querySelector('.actions');if(!r||!act||el.querySelector('[data-real]'))return;
  const b=document.createElement('button');b.type='button';b.className='button';b.dataset.real='1';b.textContent='Entró de verdad: '+money(r.total)+' ('+r.cantidad+' cobros)';
  b.onclick=()=>{const inp=el.querySelector('[data-guided-amount]');if(inp){inp.value=(r.total/100).toFixed(2).replace('.',',');inp.focus();}const m=el.querySelector('[data-motivo]');if(m)m.value='error';};act.appendChild(b);});}

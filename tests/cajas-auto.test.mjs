@@ -248,3 +248,22 @@ test('v129: caja 1: si declaró por Mercado Pago + Cuenta DNI más de lo que ent
     assert.deepEqual(errores, []);
   } finally { await cerrar(); }
 });
+
+test('v134: ticket cargado con otro medio (Efectivo y entró por Mercado Pago en 2 cobros): queda en observaciones de la cajera', async () => {
+  const {dayObservations} = await import('../cajas/domain.mjs');
+  const v = (method, amount, ticket, time) => ({date, branch: '01', method, box: '0001', batch: '2468', ticket, amount, cashier: 'B', time});
+  const ventas = [v('M PAGO OFFLINE', 23467400, 'Tk B 0001-1', '16:01'), v('BANELCO', 3823200, 'Tk B 0001-4', '17:01'), v('Efectivo $', 1504600, 'Tk B 0001-6', '16:49')];
+  const mpCobros = [{hora: '16:00:00', importe: 234674, canal: 'QR', comision: 0}, {hora: '16:49:30', importe: 1506, canal: 'QR', comision: 0}, {hora: '16:50:10', importe: 13540, canal: 'QR', comision: 0}];
+  const dni = {cantidad: 1, total: 38232, comisiones: 0, rechazados: 0, cobros: [{hora: '17:00:00', importe: 38232}]};
+  const {page, echu, errores, cerrar} = await abrirCajas({cantidad: 3, total: 249720, comisiones: 0, porCanal: {QR: {cantidad: 3, total: 249720}}, cobros: mpCobros}, {sinDesglose: true, dni, ventas});
+  try {
+    await page.waitForFunction(() => /anotado en observaciones de/.test((document.querySelector('#externos') || {}).textContent || ''), null, {timeout: 15000});
+    const t = await page.locator('#externos').textContent();
+    assert.match(t, /Entró por Mercado Pago en 2 cobros \(\$\s?1\.506,00 a las 16:49 \+ \$\s?13\.540,00 a las 16:50\) para el ticket Tk B 0001-6 de \$\s?15\.046,00 \(16:49\); en el sistema dice Efectivo \$ · anotado en observaciones de Fernanda/);
+    const g = guardados(echu), st = normalizeState(g[g.length - 1].state);
+    const o = dayObservations(st, date).filter(x => x.kind === 'medio');
+    assert.equal(o.length, 1); assert.equal(o[0].cashier, 'Fernanda'); assert.equal(o[0].amount, 1504600);
+    assert.equal(o[0].text, 'Medio de pago mal cargado: el ticket Tk B 0001-6 ($ 15.046,00, 16:49) está en el sistema como Efectivo $ y se cobró por Mercado Pago (en 2 cobros: $ 1.506,00 a las 16:49 + $ 13.540,00 a las 16:50).'.replace(/ /g, o[0].text.includes('$ ') ? ' ' : ' '));
+    assert.deepEqual(errores, []);
+  } finally { await cerrar(); }
+});
