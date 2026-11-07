@@ -1,5 +1,5 @@
 import {monthlyPanel,monthlyReport,printDocument} from './monthly-report.mjs';
-import {guidedQuestions,answerGuidedQuestion,applyRealCollection} from './guided-review.mjs';
+import {guidedQuestions,answerGuidedQuestion,applyRealCollection,applyTicketDifference,ticketDifferenceKey} from './guided-review.mjs';
 import {mergeRemoteReviews} from './review-sync.mjs';
 import {automaticTurnMatch,declaredPaymentMethods} from './payment-reconciliation.mjs';
 import {reconcileTeam,pendingTeamExpenses,teamDeclarationTotals,replaceTeamInbox,visibleTeamDeclarations} from './team-domain.mjs';
@@ -142,7 +142,7 @@ function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuenta
   const r=cruzarCobros(mpOk?x.mp.cobros.filter(c=>c.canal==='QR'||c.canal==='Point'):[],dniOk?x.cuentaDni.cobros:[],pt,t.openTime,t.closeTime);
   if(!r||(!r.sinTicket.length&&!r.sinEntrar.length&&!r.diferencias.length))continue;
   const filas=r.sinTicket.map(c=>[esc(c.hora),money(c.importe),c.registrado?`Entró por ${esc(c.medio)}; el ticket ${esc(c.registrado.ticket)} dice ${esc(c.registrado.medio)}`:`<span class="bad">Entró por ${esc(c.medio)} y no tiene ticket</span>`])
-   .concat(r.diferencias.map(c=>[esc(c.hora),money(c.importe),`Entró por ${esc(c.medio)} para el ticket ${esc(c.ticket)} de ${money(c.importeTicket)}: cobró ${money(Math.abs(c.dif))} de ${c.dif<0?'menos':'más'}`]))
+   .concat(r.diferencias.map(c=>[esc(c.hora),money(c.importe),`Entró por ${esc(c.medio)} para el ticket ${esc(c.ticket)} de ${money(c.importeTicket)}: cobró ${money(Math.abs(c.dif))} de ${c.dif<0?'menos':'más'}`+((state.ticketDifferences||[]).some(z=>z.key===ticketDifferenceKey(d,t,c.ticket,c.medio))?` · <b>anotado en observaciones de ${esc(assign(state,t,'close').name)}: ${c.dif<0?'faltante':'sobrante'} de ${money(Math.abs(c.dif))} en su saldo</b>`:'')]))
    .concat(r.sinEntrar.map(c=>[esc(c.hora||'—'),money(c.importe),`<span class="bad">Ticket ${esc(c.ticket)} (${esc(c.metodo)}): figura cobrado y no entró</span>`]));
   const resumen=[r.totalSinTicket?'entraron '+money(r.totalSinTicket)+' sin ticket':'',r.totalOtroMedio?money(r.totalOtroMedio)+' con otro medio en el ticket':'',r.totalSinEntrar?money(r.totalSinEntrar)+' cobrados en el sistema que no entraron':'',r.diferencias.length?money(Math.abs(r.totalDiferencia))+' de diferencia en '+r.diferencias.length+(r.diferencias.length>1?' cobros':' cobro')+' ('+(r.totalDiferencia<0?'cobró de menos':'cobró de más')+')':''].filter(Boolean).join(' · ');
   out.push(`<h3>${esc(assign(state,t,'close').name)} · caja ${esc(t.box)} · ${esc(t.openTime)} a ${esc(t.closeTime)}</h3><p><small>${resumen}</small></p>${filas.map(f=>`<div style="padding:8px 0;border-top:1px solid #e6e8eb;white-space:normal"><b>${f[0]} · ${f[1]}</b><br><small>${f[2]}</small></div>`).join('')}`);
@@ -150,7 +150,7 @@ function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuenta
  return out.length?`<h2>Cobros contra tickets</h2>${out.join('')}`:'';}
 async function cargarExternos(d){const box=$('externos');if(!box||!d)return;let x=EXTERNOS[d];
  if(!x||Date.now()-(x.__t||0)>120000){try{x=await echu('pagos_externos',undefined,{fecha:d});x.__t=Date.now();EXTERNOS[d]=x;}catch(e){if(!x)return;}}
- const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x))pistasPagos();}
+ const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x)&&!autoDiferenciasTickets(d,x))pistasPagos();}
 // v111: "¿Cuánto recibió X por Mercado Pago / Cuenta DNI?" se contesta solo con lo que entró en el horario del turno.
 // Si coincide con el informe PDF, la cajera cargó mal (queda como error de carga, con lo que declaró); si coincide con lo declarado, estaba bien.
 const REAL_TURNO={};let AUTO_EN_CURSO=false;
@@ -175,12 +175,12 @@ function autoCorregirCupones(d,x){if(AUTO_EN_CURSO)return false;
  const pend=new Set(guidedQuestions(state,d).filter(q=>q.kind==='payment').map(q=>turnKey(q)));
  let s=state,cambio=false;
  for(const t of allTurns(state,d).filter(t=>t.box==='0001')){
-  if(pend.has(turnKey(t))||correctionValue(t,'digital',true)!==t.digital)continue;
+  if(pend.has(turnKey(t))||correctionValue(t,'digital',true)!==t.digital&&correccionDigitalPropia(t))continue;
   const a=review.allocations.find(a=>turnKey(a)===turnKey(t));if(!a)continue;
   const mp=cobrosEnTurno(x.mp.cobros,t.openTime,t.closeTime,['QR','Point']),dni=cobrosEnTurno(x.cuentaDni.cobros,t.openTime,t.closeTime,null);if(!mp||!dni)continue;
   const incl=(s.failedPayments||[]).filter(f=>f.date===d&&turnKey(f)===turnKey(t)&&f.includedInCoupons).reduce((n,f)=>n+f.amount,0);
   // v124: se compara solo MP + Cuenta DNI (lo que se puede verificar); "otros" y pedidos online quedan como se declararon.
-  const resto=(a.other||0)+(a.pendingOrders||0)+incl,pdfMD=t.digital-resto,cajera=a.mercadoPago+a.cuentaDni,real=mp.total+dni.total;
+  const resto=(a.other||0)+(a.pendingOrders||0)+incl,pdfMD=t.digital-resto,cajera=a.mercadoPago+a.cuentaDni-(s.ticketDifferences||[]).filter(z=>z.date===d&&z.branch===t.branch&&z.box===t.box&&z.batch===t.batch).reduce((n,z)=>n+(z.ajuste||0),0),real=mp.total+dni.total;
   const r=correccionCupones(pdfMD,cajera,real);if(!r)continue;
   const after=r.monto+resto;if(after===t.digital)continue;
   const nota=LOAD_ERROR+': en el turno de '+t.openTime+' a '+t.closeTime+' entraron '+money(real)+' (Mercado Pago '+money(mp.total)+' en '+mp.cantidad+' cobros + Cuenta DNI '+money(dni.total)+' en '+dni.cantidad+' cobros).'+
@@ -198,6 +198,30 @@ function autoCorregirCupones(d,x){if(AUTO_EN_CURSO)return false;
   }catch(e){}
  }
  if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Cupones corregidos con lo que entró de verdad');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
+// v127: las correcciones de cupones que pone la diferencia de un cobro contra su ticket no cuentan como corrección a mano.
+const DIF_COBRO='Diferencia de cobro: ';
+function correccionDigitalPropia(t){return (state.closingCorrections||[]).some(c=>c.date===t.date&&c.branch===t.branch&&c.box===t.box&&c.batch===t.batch&&c.field==='digital'&&!String(c.note||'').startsWith(DIF_COBRO));}
+// v127: si un cobro entró con diferencia contra su ticket (ticket de $ 10.107, entró $ 10.100), la diferencia va al saldo de la
+// cajera del turno (de menos = faltante) y queda en sus observaciones. Una sola vez por ticket.
+function autoDiferenciasTickets(d,x){if(AUTO_EN_CURSO)return false;
+ const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuentaDni&&x.cuentaDni.cobros);if(!mpOk&&!dniOk)return false;
+ const review=state.couponReviews.find(r=>r.date===d);if(!review||!review.allocations)return false;
+ const pend=new Set(guidedQuestions(state,d).filter(q=>q.kind==='payment').map(q=>turnKey(q)));
+ let pagos;try{pagos=paymentRows(state,d);}catch(e){return false;}
+ const mpLista=mpOk?x.mp.cobros.filter(c=>c.canal==='QR'||c.canal==='Point'):[],dniLista=dniOk?x.cuentaDni.cobros:[];
+ let s=state,cambio=false;
+ for(const t of allTurns(state,d).filter(t=>t.box==='0001')){
+  if(pend.has(turnKey(t))||!review.allocations.some(a=>turnKey(a)===turnKey(t)))continue;
+  const pt=pagos.filter(p=>p.box===t.box&&p.batch===t.batch&&(dniOk||medioDeTicket(p.method)!=='Cuenta DNI')&&(mpOk||medioDeTicket(p.method)!=='Mercado Pago'));
+  const r=cruzarCobros(mpLista,dniLista,pt,t.openTime,t.closeTime);if(!r||!r.diferencias.length)continue;
+  for(const c of r.diferencias){
+   if((s.ticketDifferences||[]).some(z=>z.key===ticketDifferenceKey(d,t,c.ticket,c.medio)))continue;
+   const en=c.medio==='Cuenta DNI'?cobrosEnTurno(dniLista,t.openTime,t.closeTime,null):cobrosEnTurno(mpLista,t.openTime,t.closeTime,null);if(!en)continue;
+   const note=DIF_COBRO+'cobró '+money(Math.abs(c.dif))+' de '+(c.dif<0?'menos':'más')+' en el ticket '+c.ticket+': el ticket era de '+money(c.importeTicket)+' y entró '+money(c.importe)+' por '+c.medio+' a las '+c.hora+'. Va en su saldo como '+(c.dif<0?'faltante':'sobrante')+'.';
+   try{s=applyTicketDifference(s,{date:d,turn:t,medio:c.medio,dif:c.dif,real:en.total,ticket:c.ticket,hora:c.hora,importe:c.importe,importeTicket:c.importeTicket,note});cambio=true;}catch(e){}
+  }
+ }
+ if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Diferencia de cobro anotada a la cajera');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
 function pistasPagos(){document.querySelectorAll('[data-guided-key]').forEach(el=>{const r=REAL_TURNO[el.dataset.guidedKey],act=el.querySelector('.actions');if(!r||!act||el.querySelector('[data-real]'))return;
  const b=document.createElement('button');b.type='button';b.className='button';b.dataset.real='1';b.textContent='Entró de verdad: '+money(r.total)+' ('+r.cantidad+' cobros)';
  b.onclick=()=>{const inp=el.querySelector('[data-guided-amount]');if(inp){inp.value=(r.total/100).toFixed(2).replace('.',',');inp.focus();}const m=el.querySelector('[data-motivo]');if(m)m.value='error';};act.appendChild(b);});}

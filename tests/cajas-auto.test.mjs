@@ -139,3 +139,51 @@ test('v125: cobros contra tickets: muestra lo que entró sin ticket, lo cobrado 
     assert.deepEqual(errores, []);
   } finally { await cerrar(); }
 });
+
+test('v127: cobro con diferencia contra su ticket: va como faltante en el saldo de la cajera y queda en sus observaciones (una sola vez)', async () => {
+  const {closingBalance, allTurns, dayObservations} = await import('../cajas/domain.mjs');
+  const v = (method, amount, ticket, time) => ({date, branch: '01', method, box: '0001', batch: '2468', ticket, amount, cashier: 'B', time});
+  const ventas = [v('M PAGO OFFLINE', 23467400, 'Tk B 0001-1', '16:01'), v('BANELCO', 3823200, 'Tk B 0001-4', '17:01')];
+  const mpCobros = [{hora: '16:00:00', importe: 234674, canal: 'QR', comision: 0}];
+  const dni = {cantidad: 1, total: 38225, comisiones: 0, rechazados: 0, cobros: [{hora: '17:02:00', importe: 38225}]};
+  const {page, echu, errores, cerrar} = await abrirCajas({cantidad: 1, total: 234674, comisiones: 0, porCanal: {QR: {cantidad: 1, total: 234674}}, cobros: mpCobros}, {sinDesglose: true, dni, ventas});
+  try {
+    await page.waitForFunction(() => /anotado en observaciones/.test((document.querySelector('#externos') || {}).textContent || ''), null, {timeout: 15000});
+    await page.waitForTimeout(1200);
+    const t = await page.locator('#externos').textContent();
+    assert.match(t, /Entró por Cuenta DNI para el ticket Tk B 0001-4 de \$\s?38\.232,00: cobró \$\s?7,00 de menos · anotado en observaciones de Fernanda: faltante de \$\s?7,00 en su saldo/);
+    const g = guardados(echu), st = normalizeState(g[g.length - 1].state);
+    assert.equal(st.ticketDifferences.length, 1, 'se anota una sola vez');
+    assert.equal(g.filter(x => (x.state.ticketDifferences || []).length).length >= 1, true);
+    const a = st.couponReviews[0].allocations.find(x => x.batch === '2468');
+    assert.equal(a.cuentaDni, 3822500, 'la declaración de Cuenta DNI pasa a lo que entró');
+    const turno = allTurns(st, date).find(x => x.batch === '2468');
+    // Vendido $ 272.905,85; entró $ 272.899 (MP $ 234.674 + Cuenta DNI $ 38.225): con lo declarado daba +$ 0,15, ahora −$ 6,85.
+    assert.equal(closingBalance(st, turno).net, -685, 'los $ 7 van negativos en el saldo de la cajera');
+    const obs = dayObservations(st, date).filter(o => o.kind === 'ticket');
+    assert.equal(obs.length, 1); assert.equal(obs[0].cashier, 'Fernanda'); assert.equal(obs[0].amount, -700);
+    assert.match(obs[0].text, /^Diferencia de cobro: cobró \$\s?7,00 de menos en el ticket Tk B 0001-4: el ticket era de \$\s?38\.232,00 y entró \$\s?38\.225,00 por Cuenta DNI a las 17:02\. Va en su saldo como faltante\./);
+    assert.equal((st.closingCorrections || []).filter(c => c.batch === '2468').length, 1, 'ya estaba descontado (vale lo que entró): no se descuenta dos veces');
+    assert.deepEqual(errores, []);
+  } finally { await cerrar(); }
+});
+
+test('v127: si la declaración todavía tiene el importe del ticket, se baja a lo que entró y la diferencia queda en el saldo', async () => {
+  const {closingBalance, allTurns, couponSignature, couponStatus} = await import('../cajas/domain.mjs');
+  const {applyTicketDifference} = await import('../cajas/guided-review.mjs');
+  const s = estado(true); const r = s.couponReviews[0];
+  // Turno de la tarde con los cupones bien cargados (lo de la cajera): el día queda corroborado.
+  s.closingCorrections.push({id: 'x', date, branch: '01', box: '0001', batch: '2468', field: 'digital', sourceValue: 27762504, before: 27762504, after: 27290600, note: 'a mano', changedAt: '2026-10-17T00:00:00Z', cashierId: 'fernanda', cashier: 'Fernanda'});
+  r.signature = couponSignature(s, date); r.verified = true;
+  const t = allTurns(s, date).find(x => x.batch === '2468'), antes = closingBalance(s, t).net;
+  assert.equal(couponStatus(s, date).complete, true);
+  const opc = {date, turn: t, medio: 'Cuenta DNI', dif: -700, real: 3822500, ticket: 'Tk B 0001-4', hora: '17:02', importe: 3822500, importeTicket: 3823200, note: 'Diferencia de cobro: prueba'};
+  const s2 = applyTicketDifference(s, opc), t2 = allTurns(s2, date).find(x => x.batch === '2468');
+  assert.equal(s2.couponReviews[0].allocations.find(x => x.batch === '2468').cuentaDni, 3822500);
+  assert.equal(t2.digital, 27289900, 'los cupones bajan lo mismo');
+  assert.equal(closingBalance(s2, t2).net - antes, -700, 'faltante de $ 7 para la cajera');
+  assert.equal(couponStatus(s2, date).complete, true, 'el día sigue corroborado');
+  assert.equal(s2.ticketDifferences[0].ajuste, -700);
+  const s3 = applyTicketDifference(s2, opc);
+  assert.equal(s3.ticketDifferences.length, 1, 'una sola vez'); assert.equal(s3.closingCorrections.length, s2.closingCorrections.length);
+});

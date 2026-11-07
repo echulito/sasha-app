@@ -48,3 +48,28 @@ export function applyRealCollection(original,date,turn,mercadoPago,cuentaDni,not
  r.signature=couponSignature(s,date);const st=couponStatus(s,date);r.verified=!paymentQuestions(s,date).length&&st.allocationComplete&&withinTolerance(st.remaining);
  return s;
 }
+
+// v127: un cobro que entró con diferencia contra su ticket (ej.: ticket de $ 10.107, entró $ 10.100). La diferencia va al saldo
+// de la cajera del turno (de menos = faltante, de más = sobrante) y queda en sus observaciones. Se anota una sola vez por ticket.
+// real = lo que entró por ese medio en el turno: la declaración nunca baja de eso (ni sube de eso), así no se descuenta dos veces.
+export const ticketDifferenceKey=(date,turn,ticket,medio)=>[date,turnKey(turn),ticket,medio].join('|');
+export function applyTicketDifference(original,{date,turn,medio,dif,real,ticket,hora,importe,importeTicket,note}){
+ const field=medio==='Cuenta DNI'?'cuentaDni':medio==='Mercado Pago'?'mercadoPago':null;
+ if(!field||!Number.isSafeInteger(dif)||!dif)throw Error('Diferencia no válida.');
+ const s=structuredClone(original),key=ticketDifferenceKey(date,turn,ticket,medio);s.ticketDifferences??=[];
+ if(s.ticketDifferences.some(x=>x.key===key))return s;
+ const r=s.couponReviews.find(r=>r.date===date),a=r&&r.allocations&&r.allocations.find(a=>turnKey(a)===turnKey(turn));
+ if(!a)throw Error('Ese turno no tiene declaración.');
+ const t=allTurns(s,date).find(t=>turnKey(t)===turnKey(turn));if(!t)throw Error('Los datos cambiaron.');
+ const antes=a[field]||0,despues=dif<0?(antes>real?Math.max(real,antes+dif):antes):(antes<real?Math.min(real,antes+dif):antes);
+ if(despues!==antes){
+  a[field]=despues;
+  const after=Math.max(0,t.digital+(despues-antes));
+  if(after!==t.digital)addClosingCorrection(s,{date,branch:t.branch,box:t.box,batch:t.batch,field:'digital',after,note});
+  for(const k of ['mercadoPago','cuentaDni','other'])r[k]=r.allocations.reduce((n,x)=>n+(x[k]||0),0);
+  const wasVerified=r.verified;r.signature=couponSignature(s,date);const st=couponStatus(s,date);r.verified=!!wasVerified&&st.allocationComplete&&withinTolerance(st.remaining);
+ }
+ const who=assign(s,t,'close');
+ s.ticketDifferences.push({key,date,branch:t.branch,box:t.box,batch:t.batch,cashierId:who.id||'',cashier:who.name||'',medio,ticket,hora:hora||'',importe,importeTicket,dif,ajuste:despues-antes,note,createdAt:new Date().toISOString()});
+ return s;
+}

@@ -33,6 +33,7 @@ function table(headers,rows){return '<table><thead><tr>'+headers.map(h=>'<th>'+e
 // Sasha v96 (modelo A): arriba un resumen corto (6 números, "En pocas palabras", cómo se cobró) y después el desglose
 // con una línea de explicación en cada parte. Pensado para imprimir en A4 vertical.
 const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const pesosExactos=n=>(n<0?'-':'+')+'$ '+(Math.abs(n)/100).toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
 const pesos=n=>n===null||n===undefined?'—':(n<0?'-':'')+'$ '+Math.round(Math.abs(n)/100).toLocaleString('es-AR');
 const signo=n=>n===null||n===undefined?'—':(n>0?'+':'')+pesos(n);
 const millones=n=>'$ '+(Math.abs(n)/1e8).toFixed(1).replace('.',',')+' M';
@@ -81,8 +82,8 @@ export function reportBody(r,general){const t=r.totals,esCaj=!!r.cashierId,[y,mm
   h+=seccion('Errores de carga · '+r.loadErrors.length,'Lo que hubo que corregir porque se cargó mal en el sistema. Sirve para darle seguimiento.',
    (esCaj?'':tablaA(['Cajera','Errores de carga'],[...porCaj].map(([n,c])=>[n,String(c)])))+tablaA(['Día','Cajera','Caja / vuelco','Qué','Detalle'],r.loadErrors.map(e=>[date(e.date).slice(0,5),e.cashier,e.box+' / '+e.batch,e.what,e.note.replace(/^.*?Error de carga de la cajera:?\s*/,'')||'—'])));}
  // Sasha v103: pedidos online facturados por la Caja 3 (van solo por la Caja 1).
- if(r.observations&&r.observations.length)h+=seccion('Observaciones del día','Errores de facturación que quedan registrados aunque el saldo de la caja ya esté corregido.',
-  tablaA(['Día','Cajera','Caja / vuelco','Importe','Observación'],r.observations.map(o=>[date(o.date).slice(0,5),o.cashier,o.box+' / '+o.batch,pesos(o.amount),'Pedido online facturado por la Caja 3: van solo por la Caja 1.'+(/declaró en la Caja 1/.test(o.text)?' Lo declaró en la Caja 1 y el saldo quedó bien.':'')])));
+ if(r.observations&&r.observations.length)h+=seccion('Observaciones del día','Lo que queda registrado aunque el saldo de la caja ya esté corregido: pedidos facturados por la caja equivocada y cobros que entraron con diferencia contra su ticket (la diferencia ya está en el saldo de la cajera).',
+  tablaA(['Día','Cajera','Caja / vuelco','Importe','Observación'],r.observations.map(o=>[date(o.date).slice(0,5),o.cashier,o.box+' / '+o.batch,o.kind==='ticket'?pesosExactos(o.amount):pesos(o.amount),o.kind==='ticket'?o.text:'Pedido online facturado por la Caja 3: van solo por la Caja 1.'+(/declaró en la Caja 1/.test(o.text)?' Lo declaró en la Caja 1 y el saldo quedó bien.':'')])));
  const obs=r.daily.filter(d=>d.issues.length);
  if(obs.length)h+=seccion('Observaciones pendientes','Lo que quedó para revisar en cada día.',obs.map(d=>'<p class="obs"><b>'+date(d.date).slice(0,5)+':</b> '+d.issues.map(esc).join(' · ')+'</p>').join(''));
  return h;
