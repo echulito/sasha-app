@@ -267,3 +267,29 @@ test('v134: ticket cargado con otro medio (Efectivo y entró por Mercado Pago en
     assert.deepEqual(errores, []);
   } finally { await cerrar(); }
 });
+
+test('v135: ticket que existe y se cobró pero no está en el cierre: se cuenta como venta del turno (no sobrante) y queda en observaciones', async () => {
+  const {closingBalance, allTurns, dayObservations} = await import('../cajas/domain.mjs');
+  const v = (method, amount, ticket, time) => ({date, branch: '01', method, box: '0001', batch: '2468', ticket, amount, cashier: 'B', time});
+  const ventas = [v('M PAGO OFFLINE', 23467400, 'Tk B 0001-1', '16:01'), v('BANELCO', 3823200, 'Tk B 0001-4', '17:01')];
+  const tk = (n, amount, time) => ({date, branch: '01', box: '0001', ticket: '0001-' + n, time, amount, gross: amount, discount: 0, units: 1, items: []});
+  const mutar = st => {
+    const a = st.couponReviews[0].allocations.find(x => x.batch === '2468'); a.mercadoPago = 23967400; st.couponReviews[0].mercadoPago += 500000;
+    st.reports.find(r => r.rows[0].batch === '2468').rows[0].digital = 27790600;
+    st.reports.push({type: 'tickets', date, branch: '01', rows: [tk(1, 23467400, '16:01'), tk(4, 3823200, '17:01'), tk(9, 500000, '18:00')]});
+  };
+  const mpCobros = [{hora: '16:00:00', importe: 234674, canal: 'QR', comision: 0}, {hora: '18:01:00', importe: 5000, canal: 'QR', comision: 0}];
+  const dni = {cantidad: 1, total: 38232, comisiones: 0, rechazados: 0, cobros: [{hora: '17:00:00', importe: 38232}]};
+  const {page, echu, errores, cerrar} = await abrirCajas({cantidad: 2, total: 239674, comisiones: 0, porCanal: {QR: {cantidad: 2, total: 239674}}, cobros: mpCobros}, {sinDesglose: true, dni, ventas, mutar});
+  try {
+    await page.waitForFunction(() => /se cuenta como venta del turno \(no es sobrante\)\. · anotado en observaciones/.test((document.querySelector('#externos') || {}).textContent || ''), null, {timeout: 15000});
+    const g = guardados(echu), st = normalizeState(g[g.length - 1].state);
+    assert.equal(st.salesOutsideClose.length, 1);
+    const t = allTurns(st, date).find(x => x.batch === '2468');
+    assert.equal(closingBalance(st, t).net, 15, 'sin el ticket fuera del cierre sobraban $ 5.000; ahora cierra');
+    const o = dayObservations(st, date).filter(x => x.kind === 'fuera');
+    assert.equal(o.length, 1); assert.equal(o[0].amount, 500000);
+    assert.match(o[0].text, /^Ticket cobrado que no está en el cierre: el ticket 0001-9 \(\$\s?5\.000,00, 18:00\) está en el detalle de tickets y entró por Mercado Pago \(\$\s?5\.000,00 a las 18:01\), pero no está en el cierre ni en el detalle de cobros del sistema\. Se cuenta como venta del turno\.$/);
+    assert.deepEqual(errores, []);
+  } finally { await cerrar(); }
+});

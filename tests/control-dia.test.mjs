@@ -15,15 +15,15 @@ function st(extraPago, ventas2468 = 2000000){closes[1].sales = ventas2468; close
 test('ticket sin cobro y fuera del cierre: no se cuenta en la caja y no frena el día', () => {
   const a = controlStatus(st(false), date);
   assert.deepEqual(a.issues.filter(i => /tickets|cobros/i.test(i)), []);
-  assert.ok(a.warnings.some(w => w === 'El ticket 0001-00000002 (15:49, $ 7.200,00) figura en el detalle de tickets pero no está en el cierre ni en el detalle de cobros del sistema: no se cuenta en la caja. Si entró plata por él, aparece en «Cobros contra tickets».'));
+  assert.ok(a.warnings.some(w => w === 'El ticket 0001-00000002 (15:49, $ 7.200,00) figura en el detalle de tickets pero no está en el cierre ni en el detalle de cobros del sistema: si entró plata por él, se cuenta como venta del turno (ver «Cobros contra tickets»).'));
 });
 test('si el cierre sí incluye ese ticket (falta el cobro), sigue siendo algo para revisar', () => {
   const a = controlStatus(st(false, 2720000), date);
   assert.ok(a.issues.includes('Los tickets y cobros no coinciden por comprobante'));
-  assert.ok(!a.warnings.some(w => /no se cuenta en la caja/.test(w)));
+  assert.ok(!a.warnings.some(w => /se cuenta como venta del turno/.test(w)));
 });
 test('si todo coincide no hay aviso', () => {
   const a = controlStatus(st(true, 2720000), date);
   assert.deepEqual(a.issues.filter(i => /tickets|cobros/i.test(i)), []);
-  assert.ok(!a.warnings.some(w => /no se cuenta en la caja/.test(w)));
+  assert.ok(!a.warnings.some(w => /se cuenta como venta del turno/.test(w)));
 });
