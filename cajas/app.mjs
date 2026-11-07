@@ -1,5 +1,5 @@
 import {monthlyPanel,monthlyReport,printDocument} from './monthly-report.mjs';
-import {guidedQuestions,answerGuidedQuestion,applyRealCollection,applyTicketDifference,ticketDifferenceKey} from './guided-review.mjs';
+import {guidedQuestions,answerGuidedQuestion,applyRealCollection,applyTicketDifference,ticketDifferenceKey,applyOtherWithoutBacking,otherCheckKey,OTROS_SIN_AVAL} from './guided-review.mjs';
 import {mergeRemoteReviews} from './review-sync.mjs';
 import {automaticTurnMatch,declaredPaymentMethods} from './payment-reconciliation.mjs';
 import {reconcileTeam,pendingTeamExpenses,teamDeclarationTotals,replaceTeamInbox,visibleTeamDeclarations} from './team-domain.mjs';
@@ -132,7 +132,7 @@ function declaradoExterno(d){const t=teamDeclarationTotals(state,d);if(t.declara
 function externosHtml(d,x){const c=compararExternos(declaradoExterno(d),x);
  const extra=f=>f.nombre==='Mercado Pago'?'QR y Point · '+f.extra.cobros+' cobros'+(f.extra.otros.length?' · además: '+f.extra.otros.map(o=>esc(o.canal)+' '+money(o.total)).join(' · '):'')+(f.extra.pedidosOnline?' · pedidos online declarados '+money(f.extra.pedidosOnline):''):f.extra.cobros+' cobros según Redlink'+(f.extra.rechazados?' · <span class="bad">'+f.extra.rechazados+(f.extra.rechazados>1?' rechazados':' rechazado')+(f.extra.rechazadosLista&&f.extra.rechazadosLista.length?': '+f.extra.rechazadosLista.map(r=>money(Math.round((Number(r.importe)||0)*100))+' a las '+esc(String(r.hora||'').slice(0,5))).join(', '):'')+' (no entraron)</span>':'');
  const filas=c.filas.map(f=>[`<b>${f.nombre}</b><br><small>${extra(f)}</small>`,money(f.declarado),money(f.entro),`<span class="${f.ok?'status-ok':'bad'}">${f.ok?'✓ coincide':(f.dif>0?'entró de más ':'faltan ')+money(Math.abs(f.dif))}</span>`]);
- return `<h2>Lo que entró de verdad</h2>${filas.length?table(['','Declarado','Entró','Resultado'],filas):''}${cruceHtml(d,x)}${c.comisiones.total?`<p><small>Comisiones del día: ${money(c.comisiones.total)} (Mercado Pago ${money(c.comisiones.mp)} · Cuenta DNI ${money(c.comisiones.cuentaDni)})</small></p>`:''}${c.notas.map(n=>`<p><small>${esc(n)}</small></p>`).join('')}`;}
+ return `<h2>Lo que entró de verdad</h2>${filas.length?table(['','Declarado','Entró','Resultado'],filas):''}${cruceHtml(d,x)}${(state.otherChecks||[]).filter(o=>o.date===d).map(o=>`<p><small><b>${esc(o.cashier)} · caja ${esc(o.box)}:</b> ${esc(o.note.replace(/^.*?Error de carga de la cajera:\s*/,''))}</small></p>`).join('')}${c.comisiones.total?`<p><small>Comisiones del día: ${money(c.comisiones.total)} (Mercado Pago ${money(c.comisiones.mp)} · Cuenta DNI ${money(c.comisiones.cuentaDni)})</small></p>`:''}${c.notas.map(n=>`<p><small>${esc(n)}</small></p>`).join('')}`;}
 // v125: cada cobro real contra los tickets del turno (caja 0001): qué entró sin ticket y qué figura cobrado y no entró.
 function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuentaDni&&x.cuentaDni.cobros);if(!mpOk&&!dniOk)return '';
  let pagos;try{pagos=paymentRows(state,d);}catch(e){return '';}
@@ -150,7 +150,7 @@ function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuenta
  return out.length?`<h2>Cobros contra tickets</h2>${out.join('')}`:'';}
 async function cargarExternos(d){const box=$('externos');if(!box||!d)return;let x=EXTERNOS[d];
  if(!x||Date.now()-(x.__t||0)>120000){try{x=await echu('pagos_externos',undefined,{fecha:d});x.__t=Date.now();EXTERNOS[d]=x;}catch(e){if(!x)return;}}
- const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x)&&!autoDiferenciasTickets(d,x))pistasPagos();}
+ const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoOtrosSinAval(d)&&!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x)&&!autoDiferenciasTickets(d,x))pistasPagos();}
 // v111: "¿Cuánto recibió X por Mercado Pago / Cuenta DNI?" se contesta solo con lo que entró en el horario del turno.
 // Si coincide con el informe PDF, la cajera cargó mal (queda como error de carga, con lo que declaró); si coincide con lo declarado, estaba bien.
 const REAL_TURNO={};let AUTO_EN_CURSO=false;
@@ -200,7 +200,7 @@ function autoCorregirCupones(d,x){if(AUTO_EN_CURSO)return false;
  if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Cupones corregidos con lo que entró de verdad');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
 // v127: las correcciones de cupones que pone la diferencia de un cobro contra su ticket no cuentan como corrección a mano.
 const DIF_COBRO='Diferencia de cobro: ';
-function correccionDigitalPropia(t){return (state.closingCorrections||[]).some(c=>c.date===t.date&&c.branch===t.branch&&c.box===t.box&&c.batch===t.batch&&c.field==='digital'&&!String(c.note||'').startsWith(DIF_COBRO));}
+function correccionDigitalPropia(t){return (state.closingCorrections||[]).some(c=>c.date===t.date&&c.branch===t.branch&&c.box===t.box&&c.batch===t.batch&&c.field==='digital'&&!String(c.note||'').startsWith(DIF_COBRO)&&!String(c.note||'').startsWith(OTROS_SIN_AVAL));}
 // v127: si un cobro entró con diferencia contra su ticket (ticket de $ 10.107, entró $ 10.100), la diferencia va al saldo de la
 // cajera del turno (de menos = faltante) y queda en sus observaciones. Una sola vez por ticket.
 function autoDiferenciasTickets(d,x){if(AUTO_EN_CURSO)return false;
@@ -222,6 +222,21 @@ function autoDiferenciasTickets(d,x){if(AUTO_EN_CURSO)return false;
   }
  }
  if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('Diferencia de cobro anotada a la cajera');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
+// v128: "Otros" no tiene con qué validarse (Mercado Pago y Cuenta DNI sí): no se cuenta como cobro y queda como error de carga.
+// Si coincide con un gasto del día (pagado con otra caja), se dice cuál.
+function autoOtrosSinAval(d){if(AUTO_EN_CURSO)return false;
+ const review=state.couponReviews.find(r=>r.date===d);if(!review||!review.allocations)return false;
+ let s=state,cambio=false;const gastos=storeExpenses(state,d);
+ for(const t of allTurns(state,d)){
+  const a=review.allocations.find(a=>turnKey(a)===turnKey(t));if(!a||!(a.other>0))continue;
+  if((s.otherChecks||[]).some(z=>z.key===otherCheckKey(d,t)))continue;
+  const quien=assign(state,t,'close'),cerca=gastos.filter(g=>Math.abs(g.amount-a.other)<=100);
+  const g=cerca.find(g=>g.cashier===quien.name)||cerca[0];
+  const note=LOAD_ERROR+': declaró '+money(a.other)+' en "Otros" en la caja '+t.box+' y no hay con qué validarlo (no entró por Mercado Pago ni por Cuenta DNI).'+
+   (g?' Es el gasto de '+money(g.amount)+' que salió de la caja '+g.box+' (vuelco '+g.batch+'); en el PDF de esa caja está bien.':'')+' No se cuenta como cobro.';
+  try{s=applyOtherWithoutBacking(s,{date:d,turn:t,note});cambio=true;}catch(e){}
+ }
+ if(!cambio)return false;AUTO_EN_CURSO=true;try{state=s;save('"Otros" sin aval: no se cuenta como cobro');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
 function pistasPagos(){document.querySelectorAll('[data-guided-key]').forEach(el=>{const r=REAL_TURNO[el.dataset.guidedKey],act=el.querySelector('.actions');if(!r||!act||el.querySelector('[data-real]'))return;
  const b=document.createElement('button');b.type='button';b.className='button';b.dataset.real='1';b.textContent='Entró de verdad: '+money(r.total)+' ('+r.cantidad+' cobros)';
  b.onclick=()=>{const inp=el.querySelector('[data-guided-amount]');if(inp){inp.value=(r.total/100).toFixed(2).replace('.',',');inp.focus();}const m=el.querySelector('[data-motivo]');if(m)m.value='error';};act.appendChild(b);});}

@@ -73,3 +73,26 @@ export function applyTicketDifference(original,{date,turn,medio,dif,real,ticket,
  s.ticketDifferences.push({key,date,branch:t.branch,box:t.box,batch:t.batch,cashierId:who.id||'',cashier:who.name||'',medio,ticket,hora:hora||'',importe,importeTicket,dif,ajuste:despues-antes,note,createdAt:new Date().toISOString()});
  return s;
 }
+
+// v128: lo declarado tiene que tener un aval. Mercado Pago y Cuenta DNI se validan con lo que entró; "Otros" no tiene con qué
+// validarse, así que no se cuenta como cobro. Si coincide con un gasto del día (por ejemplo, el gasto se pagó con la caja 3 y
+// la cajera lo declaró como "Otros" en la caja 1), se dice cuál es. Queda como error de carga de la cajera. Una sola vez por turno.
+export const OTROS_SIN_AVAL='Otros sin aval: ';
+export const otherCheckKey=(date,turn)=>[date,turnKey(turn)].join('|');
+export function applyOtherWithoutBacking(original,{date,turn,note}){
+ const s=structuredClone(original),key=otherCheckKey(date,turn);s.otherChecks??=[];
+ if(s.otherChecks.some(x=>x.key===key))return s;
+ const r=s.couponReviews.find(r=>r.date===date),a=r&&r.allocations&&r.allocations.find(a=>turnKey(a)===turnKey(turn));
+ if(!a||!(a.other>0))throw Error('Ese turno no tiene "Otros" declarados.');
+ const t=allTurns(s,date).find(t=>turnKey(t)===turnKey(turn));if(!t)throw Error('Los datos cambiaron.');
+ const otro=a.other,included=(s.failedPayments||[]).filter(f=>f.date===date&&turnKey(f)===turnKey(t)&&f.includedInCoupons).reduce((n,f)=>n+f.amount,0);
+ const total=a.mercadoPago+a.cuentaDni+otro+(a.pendingOrders||0)+included;
+ a.other=0;
+ // Si los cupones del cierre incluían ese importe, se sacan también (si no, ya estaban sin él).
+ if(Math.abs(t.digital-total)<=100&&t.digital-otro>=0)addClosingCorrection(s,{date,branch:t.branch,box:t.box,batch:t.batch,field:'digital',after:t.digital-otro,note:OTROS_SIN_AVAL+note});
+ for(const k of ['mercadoPago','cuentaDni','other'])r[k]=r.allocations.reduce((n,x)=>n+(x[k]||0),0);
+ const wasVerified=r.verified;r.signature=couponSignature(s,date);const st=couponStatus(s,date);r.verified=!!wasVerified&&st.allocationComplete&&withinTolerance(st.remaining);
+ const who=assign(s,t,'close');
+ s.otherChecks.push({key,date,branch:t.branch,box:t.box,batch:t.batch,cashierId:who.id||'',cashier:who.name||'',amount:otro,ajuste:-otro,note,createdAt:new Date().toISOString()});
+ return s;
+}

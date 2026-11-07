@@ -19,7 +19,8 @@ function estado(sinDesglose, mp2468 = 23467400, ventas = null) {
 }
 async function abrirCajas(mp, opc = {}) {
   const antes = {e: DATOS.cajas_estado, p: DATOS.pagos_externos};
-  DATOS.cajas_estado = {state: estado(opc.sinDesglose, opc.mp2468, opc.ventas), revision: 1, sheetUrl: ''};
+  const st0 = estado(opc.sinDesglose, opc.mp2468, opc.ventas); if (opc.mutar) opc.mutar(st0);
+  DATOS.cajas_estado = {state: st0, revision: 1, sheetUrl: ''};
   DATOS.pagos_externos = {fecha: date, mp, cuentaDni: opc.dni || {cantidad: 0, total: 0, comisiones: 0, rechazados: 0, cobros: []}};
   const b = await chromium.launch(), web = await servir();
   const ctx = await b.newContext({viewport: {width: 390, height: 844}, serviceWorkers: 'block', locale: 'es-AR', timezoneId: 'America/Argentina/Buenos_Aires'});
@@ -186,4 +187,42 @@ test('v127: si la declaración todavía tiene el importe del ticket, se baja a l
   assert.equal(s2.ticketDifferences[0].ajuste, -700);
   const s3 = applyTicketDifference(s2, opc);
   assert.equal(s3.ticketDifferences.length, 1, 'una sola vez'); assert.equal(s3.closingCorrections.length, s2.closingCorrections.length);
+});
+
+const conOtros = st => { // la cajera B declaró $ 5.500 en "Otros" en la caja 1; ese gasto salió de la caja 3 (su PDF lo tiene).
+  st.couponReviews[0].allocations.find(a => a.batch === '2468').other = 550000;
+  st.couponReviews[0].other = 550000;
+  st.reports.find(r => r.rows[0].batch === '2336').rows[0].expenses = [{description: 'GASTO VARIOS', amount: 550000}];
+};
+test('v128: "Otros" sin aval no se cuenta como cobro; si es un gasto de otra caja, lo dice y queda como error de carga', async () => {
+  const dni = {cantidad: 1, total: 38232, comisiones: 0, rechazados: 0, cobros: [{hora: '17:00:00', importe: 38232}]};
+  const {page, echu, errores, cerrar} = await abrirCajas({cantidad: 1, total: 234674, comisiones: 0, porCanal: {QR: {cantidad: 1, total: 234674}}, cobros: [{hora: '16:00:00', importe: 234674, canal: 'QR', comision: 0}]}, {sinDesglose: true, dni, mutar: conOtros});
+  try {
+    await page.waitForFunction(() => /Otros/.test((document.querySelector('#externos') || {}).textContent || ''), null, {timeout: 15000});
+    await page.waitForTimeout(900);
+    const g = guardados(echu), st = normalizeState(g[g.length - 1].state);
+    assert.equal(st.couponReviews[0].allocations.find(a => a.batch === '2468').other, 0, 'no se cuenta como cobro');
+    assert.equal(st.otherChecks.length, 1);
+    const e = loadErrors(st, {}).filter(x => x.what === 'Otros');
+    assert.equal(e.length, 1);
+    assert.match(e[0].note, /^Error de carga de la cajera: declaró \$\s?5\.500,00 en "Otros" en la caja 0001 y no hay con qué validarlo \(no entró por Mercado Pago ni por Cuenta DNI\)\. Es el gasto de \$\s?5\.500,00 que salió de la caja 0003 \(vuelco 2336\); en el PDF de esa caja está bien\. No se cuenta como cobro\./);
+    assert.match(await page.locator('#externos').textContent(), /caja 0001: declaró \$\s?5\.500,00 en "Otros"/);
+    assert.deepEqual(errores, []);
+  } finally { await cerrar(); }
+});
+test('v128: al sacar "Otros" sin aval, el saldo de la cajera baja ese importe y los cupones siguen corroborados', async () => {
+  const {closingBalance, allTurns, couponSignature, couponStatus, loadErrors: le} = await import('../cajas/domain.mjs');
+  const {applyOtherWithoutBacking} = await import('../cajas/guided-review.mjs');
+  const s = estado(true); conOtros(s); const r = s.couponReviews[0];
+  // Los cupones del cierre ya incluían los $ 5.500 (MP + DNI + Otros): el día queda corroborado.
+  s.closingCorrections.push({id: 'x', date, branch: '01', box: '0001', batch: '2468', field: 'digital', sourceValue: 27762504, before: 27762504, after: 27840600, note: 'auto', changedAt: '2026-10-17T00:00:00Z', cashierId: 'fernanda', cashier: 'Fernanda'});
+  r.signature = couponSignature(s, date); r.verified = true;
+  const t = allTurns(s, date).find(x => x.batch === '2468'), antes = closingBalance(s, t).net;
+  assert.equal(couponStatus(s, date).complete, true);
+  const s2 = applyOtherWithoutBacking(s, {date, turn: t, note: 'Error de carga de la cajera: prueba'}), t2 = allTurns(s2, date).find(x => x.batch === '2468');
+  assert.equal(t2.digital, 27290600, 'los cupones bajan lo mismo');
+  assert.equal(closingBalance(s2, t2).net - antes, -550000);
+  assert.equal(couponStatus(s2, date).complete, true);
+  assert.equal(le(s2, {}).filter(x => x.what === 'Otros').length, 1);
+  assert.equal(applyOtherWithoutBacking(s2, {date, turn: t, note: 'x'}).otherChecks.length, 1, 'una sola vez');
 });
