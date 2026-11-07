@@ -87,6 +87,13 @@ export function crearECHU(modo = 'normal') {
     let res;
     const acc = String(p.accion || '');
     if (acc === 'login') res = p.pin === PIN ? {ok: true, token: TOKEN, modo: 'completo'} : {ok: false, error: 'PIN', mensaje: 'PIN incorrecto.'};
+    // link de cajeras (entran con su usuario; la sesión va en "sesion")
+    else if (/^cajera_/.test(acc)) {
+      if (acc === 'cajera_login') res = {ok: true, datos: {token: 'c'.repeat(48)}};
+      else if (p.sesion !== 'c'.repeat(48)) res = {ok: false, status: 401, mensaje: 'Ingresá con tu usuario'};
+      else if (typeof DATOS[acc] === 'function') { try { res = {ok: true, datos: DATOS[acc](p)}; } catch (e) { res = {ok: false, mensaje: e.message}; } }
+      else res = {ok: true, datos: DATOS[acc] || {}};
+    }
     else if (p.token !== TOKEN) res = {ok: false, error: 'PIN', mensaje: 'Volvé a poner el PIN.'};
     else if (typeof DATOS[acc] === 'function') { try { res = {ok: true, datos: DATOS[acc](p)}; } catch (e) { res = {ok: false, error: 'ERROR', mensaje: e.message}; } }
     else res = {ok: true, datos: acc in DATOS ? DATOS[acc] : {}};
