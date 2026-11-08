@@ -43,7 +43,10 @@ function formPedido(id, producto) {
 }
 function pintarResultados(r) {
   const L = r.productos || [];
+  // v143: con código interno y stock actual
+  const stock = p => p.stock == null ? '' : ' · ' + (p.stock > 0 ? 'Stock ' + new Intl.NumberFormat('es-AR').format(p.stock) : '<b class="sin">Sin stock</b>');
   $('resultados').innerHTML = (L.length ? L.map(p => '<div class="prod" data-cod="' + esc(p.codigo) + '"><div class="fila"><b>' + esc(p.producto) + '</b><span class="precio">' + pesos(p.precio) + '</span></div>' +
+      '<div class="cod">Cód. ' + esc(p.codigo) + stock(p) + '</div>' +
       '<div class="fila"><span class="' + (CHIP[p.estado] || 'chip gris') + '">' + esc(p.estadoTexto) + '</span>' + (p.estado === 'pedido' ? '' : '<button class="mini" data-pedir>Pedir</button>') + '</div></div>').join('')
     : '<p class="vacio">No encontré nada con eso.</p>') + (r.mas ? '<small>Hay más resultados: escribí algo más preciso.</small>' : '') +
     '<button class="link" data-libre>¿No lo encontrás? Pedilo igual</button><div id="libre"></div>';
