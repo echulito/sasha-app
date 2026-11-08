@@ -83,15 +83,16 @@ function lista(L, tipo) {
   return L.map(c => '<div class="cobro' + (c.ok ? '' : ' malo') + '"><span class="hora">' + esc(String(c.hora || '').slice(0, 5)) + '</span><b>' + pesos(c.importe) + '</b><span class="' + (c.ok ? 'chip verde' : 'chip rojo') + '">' + esc(c.estado) + '</span>' +
     '<small>Op. ' + esc(c.operacion) + (tipo === 'mp' ? (c.canal ? ' · ' + esc(c.canal) : '') + (c.devuelto > 0 ? ' · devuelto ' + pesos(c.devuelto) : '') : (c.pagador ? ' · ' + esc(c.pagador) : '')) + '</small></div>').join('');
 }
-const resumen = L => { const ok = (L || []).filter(c => c.ok); return ok.length + (ok.length === 1 ? ' cobro' : ' cobros') + ' · ' + pesos(ok.reduce((a, c) => a + c.importe, 0)); };
 async function cobros() {
   clearInterval(reloj);
   if (!$('fechaCobros').value) { $('fechaCobros').value = hoyAR(); $('fechaCobros').max = hoyAR(); $('fechaCobros').min = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10); }
   $('cobrosMsg').textContent = 'Cargando…';
   try {
     const r = await api('cajera_cobros', {fecha: $('fechaCobros').value});
-    $('mpRes').textContent = r.mp ? resumen(r.mp) : ''; $('mpLista').innerHTML = (r.mpAviso ? '<p class="vacio">' + esc(r.mpAviso) + '</p>' : '') + lista(r.mp, 'mp');
-    $('dniRes').textContent = r.dni ? resumen(r.dni) : ''; $('dniLista').innerHTML = (r.dniAviso ? '<small>' + esc(r.dniAviso) + '</small>' : '') + lista(r.dni, 'dni');
+    // v142: solo los cobros del local (QR y Point): ni ventas online ni otros movimientos; y sin totales.
+    const mp = r.mp ? r.mp.filter(c => c.canal === 'QR' || c.canal === 'Point') : r.mp;
+    $('mpLista').innerHTML = (r.mpAviso ? '<p class="vacio">' + esc(r.mpAviso) + '</p>' : '') + lista(mp, 'mp');
+    $('dniLista').innerHTML = (r.dniAviso ? '<small>' + esc(r.dniAviso) + '</small>' : '') + lista(r.dni, 'dni');
     $('cobrosMsg').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'});
   } catch (e) { $('cobrosMsg').textContent = e.message; }
   if (tab === 'cobros' && $('fechaCobros').value === hoyAR()) reloj = setInterval(() => { if (tab === 'cobros' && !document.hidden) cobros(); }, 60000);
