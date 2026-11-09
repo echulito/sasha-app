@@ -641,6 +641,13 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   if (process.env.CAPTURA_CAJ) await page.screenshot({path: process.env.CAPTURA_CAJ + '-buscar.png', fullPage: true});
   const q = echu.pedidos.find(x => /cajera_pedir/.test(x.cuerpo || '')); const d = JSON.parse(JSON.parse(q.cuerpo).datos);
   assert.deepEqual([d.codigo, d.cantidad, d.pidio], ['101', 6, 'Vanesa']);
+  // v145: el aviso cambia solo, sin buscar de nuevo: el dueño lo descarta -> vuelve "No está pedido" con Pedir; lo marca Pedido -> "✓ Pedido"
+  DATOS.cajera_estados = {estados: {'101': {estado: 'no', estadoTexto: 'No está pedido'}, '100': {estado: 'pedido', estadoTexto: '✓ Pedido'}}};
+  await page.locator('.prod[data-cod="101"] [data-pedir]').waitFor({timeout: 12000});
+  assert.match(await page.locator('.prod[data-cod="101"]').innerText(), /No está pedido\s*Pedir/);
+  DATOS.cajera_estados = {estados: {'101': {estado: 'pedido', estadoTexto: '✓ Pedido'}}};
+  await page.locator('.prod[data-cod="101"] .chip.verde').waitFor({timeout: 12000});
+  assert.equal(await page.locator('.prod[data-cod="101"] [data-pedir]').count(), 0);
   // Cobros
   await page.click('#tabs [data-tab="cobros"]');
   await page.locator('#mpLista .cobro').first().waitFor();
@@ -652,6 +659,6 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   if (process.env.CAPTURA_CAJ) await page.screenshot({path: process.env.CAPTURA_CAJ + '-cobros.png', fullPage: true});
   await page.click('#tabs [data-tab="declarar"]'); assert.ok(await page.locator('#closeForm').isVisible());
   assert.deepEqual(errores, []);
-  for (const k of ['cajera_perfil', 'cajera_buscar', 'cajera_personas', 'cajera_pedir', 'cajera_cobros']) delete DATOS[k];
+  for (const k of ['cajera_perfil', 'cajera_buscar', 'cajera_personas', 'cajera_pedir', 'cajera_cobros', 'cajera_estados']) delete DATOS[k];
   await ctx.close();
 });

@@ -81,6 +81,22 @@ $('resultados').addEventListener('click', async e => {
   }
 });
 
+// v145: el aviso de cada producto en pantalla cambia solo (cuando en la planilla se marca Pedido o Descartado, o lo pide otra cajera).
+async function refrescarEstados() {
+  if (tab !== 'buscar' || document.hidden) return;
+  const cards = [...document.querySelectorAll('#resultados .prod[data-cod]')]; if (!cards.length) return;
+  let r; try { r = await api('cajera_estados', {codigos: JSON.stringify(cards.map(c => c.dataset.cod))}); } catch { return; }
+  const E = (r && r.estados) || {};
+  for (const card of cards) {
+    const e = E[card.dataset.cod] || E[String(card.dataset.cod).toUpperCase()], chip = card.querySelector('[data-chip]'); if (!e || !chip) continue;
+    if (chip.textContent !== e.estadoTexto && !(e.estado === 'pedido_cajera' && /^✓ Pedido por cajeras/.test(chip.textContent))) { chip.className = CHIP[e.estado] || 'chip gris'; chip.textContent = e.estadoTexto; }
+    const boton = card.querySelector('[data-pedir]'), form = card.querySelector('[data-form]');
+    if (e.estado !== 'no') { if (boton) boton.remove(); if (form) form.remove(); }
+    else if (!boton && !form) chip.insertAdjacentHTML('afterend', '<button class="mini" data-pedir>Pedir</button>');
+  }
+}
+setInterval(refrescarEstados, 8000);
+
 // ---------- Cobros ----------
 let reloj = 0;
 function lista(L, tipo) {
