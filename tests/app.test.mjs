@@ -648,6 +648,19 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   DATOS.cajera_estados = {estados: {'101': {estado: 'pedido', estadoTexto: '✓ Pedido'}}};
   await page.locator('.prod[data-cod="101"] .chip.verde').waitFor({timeout: 12000});
   assert.equal(await page.locator('.prod[data-cod="101"] [data-pedir]').count(), 0);
+  // v147: con el catálogo bajado, la búsqueda se hace en el celular (sin pedirle a ECHU) y sale al instante, también por rubro
+  DATOS.cajera_catalogo = {cat: [['104', 'AXE APOLLO X 150', 4749, '7790000000005', 'axe apollo x 150 7790000000005 desodorantes', 7], ['105', 'REXONA MEN X 90', 3999, '7790000000006', 'rexona men x 90 7790000000006 desodorantes', 0]],
+    camino: ['105'], pend: {}};
+  await page.evaluate(() => new Promise(r => setTimeout(r, 400)));
+  await page.click('#tabs [data-tab="buscar"]');
+  await page.waitForFunction(() => document.querySelector('#q') && true); await page.waitForTimeout(900);
+  const antes = echu.pedidos.filter(x => /cajera_buscar/.test(x.cuerpo || '')).length;
+  await page.fill('#q', 'desodorante'); await page.locator('.prod[data-cod="104"]').waitFor({timeout: 3000});
+  const tl = await page.locator('#resultados').innerText();
+  assert.match(tl, /AXE APOLLO X 150\s*\$ 4\.749\s*Cód\. 104 · Stock 7\s*No está pedido\s*Pedir/); assert.match(tl, /REXONA MEN X 90\s*\$ 3\.999\s*Cód\. 105 · Sin stock\s*✓ Pedido/);
+  assert.equal(echu.pedidos.filter(x => /cajera_buscar/.test(x.cuerpo || '')).length, antes, 'no le pidió la búsqueda a ECHU');
+  await page.fill('#q', '7790000000006'); await page.waitForTimeout(400);
+  assert.equal(await page.locator('.prod').count(), 1);
   // Cobros
   await page.click('#tabs [data-tab="cobros"]');
   await page.locator('#mpLista .cobro').first().waitFor();
@@ -659,6 +672,6 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   if (process.env.CAPTURA_CAJ) await page.screenshot({path: process.env.CAPTURA_CAJ + '-cobros.png', fullPage: true});
   await page.click('#tabs [data-tab="declarar"]'); assert.ok(await page.locator('#closeForm').isVisible());
   assert.deepEqual(errores, []);
-  for (const k of ['cajera_perfil', 'cajera_buscar', 'cajera_personas', 'cajera_pedir', 'cajera_cobros', 'cajera_estados']) delete DATOS[k];
+  for (const k of ['cajera_perfil', 'cajera_buscar', 'cajera_personas', 'cajera_pedir', 'cajera_cobros', 'cajera_estados', 'cajera_catalogo']) delete DATOS[k];
   await ctx.close();
 });

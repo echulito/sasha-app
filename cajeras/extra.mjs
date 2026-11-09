@@ -23,12 +23,12 @@ function elegir(t) {
   tab = t; document.body.dataset.tab = t;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   $('tabBuscar').hidden = t !== 'buscar'; $('tabCobros').hidden = t !== 'cobros';
-  if (t === 'buscar') setTimeout(() => $('q').focus(), 50);
+  if (t === 'buscar') { setTimeout(() => $('q').focus(), 50); bajarCatalogo(); }
   if (t === 'cobros') cobros();
 }
 $('tabs').onclick = e => { const b = e.target.closest('button[data-tab]'); if (b) elegir(b.dataset.tab); };
 // Las solapas aparecen cuando la cajera entró (el botón "Cerrar sesión" queda a la vista).
-const mirar = () => { const adentro = !$('logout').hidden; $('tabs').hidden = !adentro; if (!adentro && tab !== 'declarar') elegir('declarar'); };
+const mirar = () => { const adentro = !$('logout').hidden; $('tabs').hidden = !adentro; if (adentro) setTimeout(() => bajarCatalogo(), 300); if (!adentro && tab !== 'declarar') elegir('declarar'); };
 new MutationObserver(mirar).observe($('logout'), {attributes: true, attributeFilter: ['hidden']}); mirar();
 
 // ---------- Buscar ----------
@@ -51,13 +51,40 @@ function pintarResultados(r) {
     : '<p class="vacio">No encontré nada con eso.</p>') + (r.mas ? '<small>Hay más resultados: escribí algo más preciso.</small>' : '') +
     '<button class="link" data-libre>¿No lo encontrás? Pedilo igual</button><div id="libre"></div>';
 }
+// v147: el catálogo se baja una vez (y se renueva cada 5 minutos) y la búsqueda se hace en el celular: sale al instante.
+let CAT = null, CAMINO = new Set(), PEND = {}, catCuando = 0, bajando = false;
+const norm = t => String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const normCod = t => String(t == null ? '' : t).trim().replace(/\s+/g, '');
+async function bajarCatalogo() {
+  if (bajando || (CAT && Date.now() - catCuando < 300000)) return;
+  bajando = true;
+  try { const r = await api('cajera_catalogo'); if (r && Array.isArray(r.cat) && r.cat.length) { CAT = r.cat; CAMINO = new Set((r.camino || []).map(normCod)); PEND = r.pend || {}; catCuando = Date.now();
+      if (tab === 'buscar' && $('q').value.trim().length >= 2 && !document.querySelector('#resultados [data-form]')) buscar($('q').value); } }
+  catch { /* ECHU viejo o sin conexión: se busca en ECHU como antes */ }
+  finally { bajando = false; }
+}
+function estadoLocal(cod) {
+  const k = normCod(cod), p = PEND[k] || PEND[cod], comprado = CAMINO.has(k) || (p && p.estado === 'pedido');
+  return {estado: comprado ? 'pedido' : p ? 'pedido_cajera' : 'no', estadoTexto: comprado ? '✓ Pedido' : p ? '✓ Pedido por cajeras (' + p.quien + ', ' + p.fecha + ')' : 'No está pedido'};
+}
+function buscarLocal(q) {
+  const n = norm(q), palabras = n.split(' ').filter(Boolean), qd = n.replace(/\s/g, ''), exactos = [], res = [];
+  for (const r of CAT) {
+    if (norm(r[0]) === qd || (r[3] && r[3] === qd)) exactos.push(r);
+    else if (palabras.every(w => r[4].indexOf(w) >= 0)) res.push(r);
+  }
+  res.sort((a, b) => a[1].localeCompare(b[1]));
+  return {productos: exactos.concat(res).slice(0, 40).map(r => Object.assign({codigo: r[0], producto: r[1], precio: r[2], stock: r[5]}, estadoLocal(r[0]))), mas: exactos.length + res.length > 40};
+}
 async function buscar(q) {
   q = q.trim(); if (q.length < 2) { $('resultados').innerHTML = ''; return; }
+  if (CAT) { ultima = q; pintarResultados(buscarLocal(q)); $('buscando').textContent = ''; refrescarEstados(); bajarCatalogo(); return; }
+  bajarCatalogo();
   ultima = q; $('buscando').textContent = 'Buscando…';
   try { const r = await api('cajera_buscar', {q}); if (q !== ultima) return; pintarResultados(r); $('buscando').textContent = ''; }
   catch (e) { if (q === ultima) $('buscando').textContent = e.message; }
 }
-$('q').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(() => buscar($('q').value), 450); });
+$('q').addEventListener('input', () => { clearTimeout(espera); espera = setTimeout(() => buscar($('q').value), CAT ? 80 : 450); });
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(espera); buscar($('q').value); } });
 $('resultados').addEventListener('click', async e => {
   const card = e.target.closest('.prod');
@@ -74,6 +101,7 @@ $('resultados').addEventListener('click', async e => {
       const r = await api('cajera_pedir', {datos: JSON.stringify({codigo: f.dataset.form, producto: texto, cantidad: cant, pidio})});
       // v144: el producto no desaparece: queda marcado "Pedido por cajeras".
       const card = f.closest('.prod'), chip = card && card.querySelector('[data-chip]');
+      if (card && card.dataset.cod) PEND[normCod(card.dataset.cod)] = {estado: 'pendiente', quien: r.pidio, fecha: 'recién'};
       if (chip) { chip.className = CHIP.pedido_cajera; chip.textContent = '✓ Pedido por cajeras (' + r.pidio + ', ' + r.cantidad + ' u.)'; f.remove(); }
       else (card || f).remove();
       $('enviado').textContent = '✓ Pedido enviado: ' + r.cantidad + ' × ' + r.producto + ' (lo pidió ' + r.pidio + ').';
@@ -93,6 +121,7 @@ async function refrescarYa() {
   const E = (r && r.estados) || {};
   for (const card of cards) {
     const e = E[card.dataset.cod] || E[String(card.dataset.cod).toUpperCase()], chip = card.querySelector('[data-chip]'); if (!e || !chip) continue;
+    const kc = normCod(card.dataset.cod); if (e.estado === 'no') { delete PEND[kc]; CAMINO.delete(kc); } else if (e.estado === 'pedido') PEND[kc] = {estado: 'pedido'}; else if (!PEND[kc] || PEND[kc].estado !== 'pendiente') { const m = /\((.*), (.*)\)/.exec(e.estadoTexto) || []; PEND[kc] = {estado: 'pendiente', quien: m[1] || '', fecha: m[2] || ''}; }
     if (chip.textContent !== e.estadoTexto && !(e.estado === 'pedido_cajera' && /^✓ Pedido por cajeras/.test(chip.textContent))) { chip.className = CHIP[e.estado] || 'chip gris'; chip.textContent = e.estadoTexto; }
     const boton = card.querySelector('[data-pedir]'), form = card.querySelector('[data-form]');
     if (e.estado !== 'no') { if (boton) boton.remove(); if (form) form.remove(); }
