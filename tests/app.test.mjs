@@ -609,11 +609,11 @@ test('Contabilidad v140: se puede adjuntar la factura electrónica en PDF (se le
   await ctx.close();
 });
 
-test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo muestra nombre, si está pedido y precio; pedir lo manda y desaparece', async () => {
+test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo muestra nombre, si está pedido y precio; pedir lo manda y queda marcado', async () => {
   const hoy = new Intl.DateTimeFormat('en-CA', {timeZone: 'America/Argentina/Buenos_Aires', year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date());
   DATOS.cajera_perfil = {person: {id: 'fernanda', name: 'Fernanda', shift: 'tarde', start: '15:30', end: '19:30'}, today: hoy, shiftOptions: ['mañana', 'tarde', 'cover'], present: true, closed: false};
   DATOS.cajera_buscar = p => ({productos: [{codigo: '101', producto: 'SHAMPOO DOVE X 200', precio: 2999, stock: 0, estado: 'no', estadoTexto: 'No está pedido'},
-    {codigo: '100', producto: 'SHAMPOO DOVE RITUAL X 400', precio: 4999, stock: 3, estado: 'pedido', estadoTexto: 'Pedido al proveedor (en camino)'}].filter(x => x.producto.toLowerCase().includes(String(p.q).toLowerCase()))});
+    {codigo: '100', producto: 'SHAMPOO DOVE RITUAL X 400', precio: 4999, stock: 3, estado: 'pedido', estadoTexto: '✓ Pedido'}].filter(x => x.producto.toLowerCase().includes(String(p.q).toLowerCase()))});
   DATOS.cajera_personas = {personas: ['Adrian', 'Fernanda', 'Vanesa'], yo: 'Fernanda'};
   DATOS.cajera_pedir = p => { const d = JSON.parse(p.datos); return {ok: true, producto: 'SHAMPOO DOVE X 200', cantidad: d.cantidad, pidio: d.pidio}; };
   DATOS.cajera_cobros = {fecha: hoy, mp: [{hora: '19:36:00', importe: 889496.9, estado: 'Aprobado', ok: true, operacion: '187', canal: 'Online / otros'}, {hora: '17:00:00', importe: 500, estado: 'Rechazado', ok: false, operacion: '112', canal: 'QR'}, {hora: '16:49:40', importe: 1506, estado: 'Aprobado', ok: true, operacion: '111', canal: 'QR'}],
@@ -627,14 +627,16 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   assert.ok(!(await page.locator('#closeForm').isVisible()), 'la declaración se oculta');
   await page.fill('#q', 'dove'); await page.locator('.prod').first().waitFor();
   const t = await page.locator('#resultados').innerText();
-  assert.match(t, /SHAMPOO DOVE RITUAL X 400\s*\$ 4\.999\s*Cód\. 100 · Stock 3\s*Pedido al proveedor \(en camino\)/); assert.match(t, /SHAMPOO DOVE X 200\s*\$ 2\.999\s*Cód\. 101 · Sin stock\s*No está pedido\s*Pedir/);
+  assert.match(t, /SHAMPOO DOVE RITUAL X 400\s*\$ 4\.999\s*Cód\. 100 · Stock 3\s*✓ Pedido\n/); assert.match(t, /SHAMPOO DOVE X 200\s*\$ 2\.999\s*Cód\. 101 · Sin stock\s*No está pedido\s*Pedir/);
   await page.click('.prod[data-cod="101"] [data-pedir]');
   assert.equal(await page.inputValue('.prod[data-cod="101"] [data-pidio]'), 'Fernanda', 'viene elegida la que entró');
   await page.selectOption('.prod[data-cod="101"] [data-pidio]', 'Vanesa'); await page.fill('.prod[data-cod="101"] [data-cant]', '6');
   if (process.env.CAPTURA_CAJ) await page.screenshot({path: process.env.CAPTURA_CAJ + '-pedir.png', fullPage: true});
   await page.click('.prod[data-cod="101"] [data-enviar]');
   await page.locator('#enviado:not(:empty)').waitFor();
-  assert.equal(await page.locator('.prod[data-cod="101"]').count(), 0, 'desaparece');
+  // v144: no desaparece: queda marcado "Pedido por cajeras" y sin el botón Pedir
+  assert.match(await page.locator('.prod[data-cod="101"]').innerText(), /✓ Pedido por cajeras \(Vanesa, 6 u\.\)/);
+  assert.equal(await page.locator('.prod[data-cod="101"] [data-pedir], .prod[data-cod="101"] [data-form]').count(), 0);
   assert.match(await page.locator('#enviado').innerText(), /Pedido enviado: 6 × SHAMPOO DOVE X 200 \(lo pidió Vanesa\)/);
   if (process.env.CAPTURA_CAJ) await page.screenshot({path: process.env.CAPTURA_CAJ + '-buscar.png', fullPage: true});
   const q = echu.pedidos.find(x => /cajera_pedir/.test(x.cuerpo || '')); const d = JSON.parse(JSON.parse(q.cuerpo).datos);

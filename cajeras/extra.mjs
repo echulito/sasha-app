@@ -34,7 +34,7 @@ new MutationObserver(mirar).observe($('logout'), {attributes: true, attributeFil
 // ---------- Buscar ----------
 let personas = null, yo = '', espera = 0, ultima = '';
 async function cargarPersonas() { if (personas) return; try { const r = await api('cajera_personas'); personas = r.personas || []; yo = r.yo || ''; } catch { personas = []; } }
-const CHIP = {pedido: 'chip azul', pedido_cajera: 'chip amar', no: 'chip gris'};
+const CHIP = {pedido: 'chip verde', pedido_cajera: 'chip azul', no: 'chip gris'};
 function formPedido(id, producto) {
   const ops = (personas || []).map(p => '<option' + (p === yo ? ' selected' : '') + '>' + esc(p) + '</option>').join('');
   return '<div class="pedir" data-form="' + esc(id) + '">' + (producto === null ? '<label>¿Qué producto falta?<input data-texto maxlength="120" placeholder="Ej.: Tintura 919 7.42"></label>' : '') +
@@ -47,7 +47,7 @@ function pintarResultados(r) {
   const stock = p => p.stock == null ? '' : ' · ' + (p.stock > 0 ? 'Stock ' + new Intl.NumberFormat('es-AR').format(p.stock) : '<b class="sin">Sin stock</b>');
   $('resultados').innerHTML = (L.length ? L.map(p => '<div class="prod" data-cod="' + esc(p.codigo) + '"><div class="fila"><b>' + esc(p.producto) + '</b><span class="precio">' + pesos(p.precio) + '</span></div>' +
       '<div class="cod">Cód. ' + esc(p.codigo) + stock(p) + '</div>' +
-      '<div class="fila"><span class="' + (CHIP[p.estado] || 'chip gris') + '">' + esc(p.estadoTexto) + '</span>' + (p.estado === 'pedido' ? '' : '<button class="mini" data-pedir>Pedir</button>') + '</div></div>').join('')
+      '<div class="fila"><span class="' + (CHIP[p.estado] || 'chip gris') + '" data-chip>' + esc(p.estadoTexto) + '</span>' + (p.estado === 'no' ? '<button class="mini" data-pedir>Pedir</button>' : '') + '</div></div>').join('')
     : '<p class="vacio">No encontré nada con eso.</p>') + (r.mas ? '<small>Hay más resultados: escribí algo más preciso.</small>' : '') +
     '<button class="link" data-libre>¿No lo encontrás? Pedilo igual</button><div id="libre"></div>';
 }
@@ -72,7 +72,10 @@ $('resultados').addEventListener('click', async e => {
     e.target.disabled = true; msg.textContent = 'Enviando…';
     try {
       const r = await api('cajera_pedir', {datos: JSON.stringify({codigo: f.dataset.form, producto: texto, cantidad: cant, pidio})});
-      (f.closest('.prod') || f).remove();
+      // v144: el producto no desaparece: queda marcado "Pedido por cajeras".
+      const card = f.closest('.prod'), chip = card && card.querySelector('[data-chip]');
+      if (chip) { chip.className = CHIP.pedido_cajera; chip.textContent = '✓ Pedido por cajeras (' + r.pidio + ', ' + r.cantidad + ' u.)'; f.remove(); }
+      else (card || f).remove();
       $('enviado').textContent = '✓ Pedido enviado: ' + r.cantidad + ' × ' + r.producto + ' (lo pidió ' + r.pidio + ').';
     } catch (err) { e.target.disabled = false; msg.textContent = err.message; }
   }
