@@ -649,7 +649,8 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   await page.locator('.prod[data-cod="101"] .chip.verde').waitFor({timeout: 12000});
   assert.equal(await page.locator('.prod[data-cod="101"] [data-pedir]').count(), 0);
   // v147: con el catálogo bajado, la búsqueda se hace en el celular (sin pedirle a ECHU) y sale al instante, también por rubro
-  DATOS.cajera_catalogo = {cat: [['104', 'AXE APOLLO X 150', 4749, '7790000000005', 'axe apollo x 150 7790000000005 desodorantes', 7], ['105', 'REXONA MEN X 90', 3999, '7790000000006', 'rexona men x 90 7790000000006 desodorantes', 0]],
+  DATOS.cajera_catalogo = {cat: [['104', 'AXE APOLLO X 150', 4749, '7790000000005', 'axe apollo x 150 7790000000005 desodorantes', 7], ['105', 'REXONA MEN X 90', 3999, '7790000000006', 'rexona men x 90 7790000000006 desodorantes', 0],
+    ['099', 'AAA DEO VIEJO X 100', 1500, '7790000000009', 'aaa deo viejo x 100 7790000000009 desodorantes', 2, 1]],
     camino: ['105'], pend: {}};
   await page.evaluate(() => new Promise(r => setTimeout(r, 400)));
   await page.click('#tabs [data-tab="buscar"]');
@@ -658,6 +659,8 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   await page.fill('#q', 'desodorante'); await page.locator('.prod[data-cod="104"]').waitFor({timeout: 3000});
   const tl = await page.locator('#resultados').innerText();
   assert.match(tl, /AXE APOLLO X 150\s*\$ 4\.749\s*Cód\. 104 · Stock 7\s*No está pedido\s*Pedir/); assert.match(tl, /REXONA MEN X 90\s*\$ 3\.999\s*Cód\. 105 · Sin stock\s*✓ Pedido/);
+  // v151: los discontinuados aparecen, marcados y al final
+  assert.match(tl, /REXONA MEN[\s\S]*AAA DEO VIEJO X 100\s*\$ 1\.500\s*Cód\. 099 · Stock 2 · Discontinuado/);
   assert.equal(echu.pedidos.filter(x => /cajera_buscar/.test(x.cuerpo || '')).length, antes, 'no le pidió la búsqueda a ECHU');
   await page.fill('#q', '7790000000006'); await page.waitForTimeout(400);
   assert.equal(await page.locator('.prod').count(), 1);

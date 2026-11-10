@@ -46,7 +46,7 @@ function pintarResultados(r) {
   // v143: con código interno y stock actual
   const stock = p => p.stock == null ? '' : ' · ' + (p.stock > 0 ? 'Stock ' + new Intl.NumberFormat('es-AR').format(p.stock) : '<b class="sin">Sin stock</b>');
   $('resultados').innerHTML = (L.length ? L.map(p => '<div class="prod" data-cod="' + esc(p.codigo) + '"><div class="fila"><b>' + esc(p.producto) + '</b><span class="precio">' + pesos(p.precio) + '</span></div>' +
-      '<div class="cod">Cód. ' + esc(p.codigo) + stock(p) + '</div>' +
+      '<div class="cod">Cód. ' + esc(p.codigo) + stock(p) + (p.disc ? ' · Discontinuado' : '') + '</div>' +
       '<div class="fila"><span class="' + (CHIP[p.estado] || 'chip gris') + '" data-chip>' + esc(p.estadoTexto) + '</span>' + (p.estado === 'no' ? '<button class="mini" data-pedir>Pedir</button>' : '') + '</div></div>').join('')
     : '<p class="vacio">No encontré nada con eso.</p>') + (r.mas ? '<small>Hay más resultados: escribí algo más preciso.</small>' : '') +
     '<button class="link" data-libre>¿No lo encontrás? Pedilo igual</button><div id="libre"></div>';
@@ -73,8 +73,9 @@ function buscarLocal(q) {
     if (norm(r[0]) === qd || (r[3] && r[3] === qd)) exactos.push(r);
     else if (palabras.every(w => r[4].indexOf(w) >= 0)) res.push(r);
   }
-  res.sort((a, b) => a[1].localeCompare(b[1]));
-  return {productos: exactos.concat(res).slice(0, 40).map(r => Object.assign({codigo: r[0], producto: r[1], precio: r[2], stock: r[5]}, estadoLocal(r[0]))), mas: exactos.length + res.length > 40};
+  // v151: los discontinuados también aparecen (marcados), después de los que están en lista.
+  res.sort((a, b) => ((a[6] ? 1 : 0) - (b[6] ? 1 : 0)) || a[1].localeCompare(b[1]));
+  return {productos: exactos.concat(res).slice(0, 40).map(r => Object.assign({codigo: r[0], producto: r[1], precio: r[2], stock: r[5], disc: r[6] ? 1 : 0}, estadoLocal(r[0]))), mas: exactos.length + res.length > 40};
 }
 async function buscar(q) {
   q = q.trim(); if (q.length < 2) { $('resultados').innerHTML = ''; return; }
