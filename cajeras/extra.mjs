@@ -65,7 +65,7 @@ async function bajarCatalogo() {
 }
 function estadoLocal(cod) {
   const k = normCod(cod), p = PEND[k] || PEND[cod], comprado = CAMINO.has(k) || (p && p.estado === 'pedido');
-  return {estado: comprado ? 'pedido' : p ? 'pedido_cajera' : 'no', estadoTexto: comprado ? '✓ Pedido' : p ? '✓ Pedido por cajeras (' + p.quien + ', ' + p.fecha + ')' : 'No está pedido'};
+  return {estado: comprado ? 'pedido' : p ? 'pedido_cajera' : 'no', estadoTexto: comprado ? '✓ Pedido' + (p && p.quien ? ' (lo pidió ' + p.quien + ', ' + p.fecha + ')' : '') : p ? '✓ Pedido por cajeras (' + p.quien + ', ' + p.fecha + ')' : 'No está pedido'};
 }
 function buscarLocal(q) {
   const n = norm(q), palabras = n.split(' ').filter(Boolean), qd = n.replace(/\s/g, ''), exactos = [], res = [];
@@ -121,7 +121,7 @@ async function refrescarYa() {
   const E = (r && r.estados) || {};
   for (const card of cards) {
     const e = E[card.dataset.cod] || E[String(card.dataset.cod).toUpperCase()], chip = card.querySelector('[data-chip]'); if (!e || !chip) continue;
-    const kc = normCod(card.dataset.cod); if (e.estado === 'no') { delete PEND[kc]; CAMINO.delete(kc); } else if (e.estado === 'pedido') PEND[kc] = {estado: 'pedido'}; else if (!PEND[kc] || PEND[kc].estado !== 'pendiente') { const m = /\((.*), (.*)\)/.exec(e.estadoTexto) || []; PEND[kc] = {estado: 'pendiente', quien: m[1] || '', fecha: m[2] || ''}; }
+    const kc = normCod(card.dataset.cod); if (e.estado === 'no') { delete PEND[kc]; CAMINO.delete(kc); } else if (e.estado === 'pedido') { const m = /\(lo pidió (.*), (.*)\)/.exec(e.estadoTexto) || []; PEND[kc] = {estado: 'pedido', quien: m[1] || '', fecha: m[2] || ''}; } else if (!PEND[kc] || PEND[kc].estado !== 'pendiente') { const m = /\((.*), (.*)\)/.exec(e.estadoTexto) || []; PEND[kc] = {estado: 'pendiente', quien: m[1] || '', fecha: m[2] || ''}; }
     if (chip.textContent !== e.estadoTexto && !(e.estado === 'pedido_cajera' && /^✓ Pedido por cajeras/.test(chip.textContent))) { chip.className = CHIP[e.estado] || 'chip gris'; chip.textContent = e.estadoTexto; }
     const boton = card.querySelector('[data-pedir]'), form = card.querySelector('[data-form]');
     if (e.estado !== 'no') { if (boton) boton.remove(); if (form) form.remove(); }
