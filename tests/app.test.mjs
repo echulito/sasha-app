@@ -617,7 +617,7 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   DATOS.cajera_personas = {personas: ['Adrian', 'Fernanda', 'Vanesa'], yo: 'Fernanda'};
   DATOS.cajera_pedir = p => { const d = JSON.parse(p.datos); return {ok: true, producto: 'SHAMPOO DOVE X 200', cantidad: d.cantidad, pidio: d.pidio}; };
   DATOS.cajera_cobros = {fecha: hoy, mp: [{hora: '19:36:00', importe: 889496.9, estado: 'Aprobado', ok: true, operacion: '187', canal: 'Online / otros'}, {hora: '17:00:00', importe: 500, estado: 'Rechazado', ok: false, operacion: '112', canal: 'QR'}, {hora: '16:49:40', importe: 1506, estado: 'Aprobado', ok: true, operacion: '111', canal: 'QR'}],
-    dni: [{hora: '18:06:50', importe: 10100, estado: 'Aprobado', ok: true, operacion: '510919548', pagador: 'Persona Prueba'}], dniAviso: 'Los de Cuenta DNI aparecen cuando llega el mail de Redlink (puede tardar unos minutos).'};
+    dni: [{hora: '18:06:50', importe: 10100, estado: 'Aprobado', ok: true, operacion: '510919548', pagador: 'Persona Prueba', autorizacion: 'ABC123'}], dniAviso: 'Los de Cuenta DNI aparecen cuando llega el mail de Redlink (puede tardar unos minutos).'};
   const {ctx, page, errores, echu} = await abrir({ruta: 'cajeras/?api=' + encodeURIComponent(URL_ECHU)});
   await page.fill('#username', 'fernanda'); await page.click('#loginForm button');
   await page.locator('#tabs:not([hidden])').waitFor();
@@ -670,7 +670,7 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   // v142: sin totales y sin cobros online / otros
   assert.equal(await page.locator('#mpRes').count(), 0); assert.doesNotMatch(await page.locator('#tabCobros').innerText(), /889\.496|Online/);
   const c = await page.locator('#tabCobros').innerText();
-  assert.match(c, /16:49\s*\$ 1\.506\s*Aprobado\s*Op\. 111 · QR/); assert.match(c, /17:00\s*\$ 500\s*Rechazado/); assert.match(c, /18:06\s*\$ 10\.100\s*Aprobado\s*Op\. 510919548 · Persona Prueba/);
+  assert.match(c, /16:49\s*\$ 1\.506\s*Aprobado\s*Op\. 111 · QR/); assert.match(c, /17:00\s*\$ 500\s*Rechazado/); assert.match(c, /18:06\s*\$ 10\.100\s*Aprobado\s*Op\. 510919548 · Persona Prueba\s*Autorización ABC123/);
   assert.doesNotMatch(c, /comisi|neto/i);
   if (process.env.CAPTURA_CAJ) await page.screenshot({path: process.env.CAPTURA_CAJ + '-cobros.png', fullPage: true});
   await page.click('#tabs [data-tab="declarar"]'); assert.ok(await page.locator('#closeForm').isVisible());

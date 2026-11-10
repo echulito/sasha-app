@@ -139,7 +139,8 @@ function lista(L, tipo) {
   if (!L) return '';
   if (!L.length) return '<p class="vacio">Todavía no hay cobros.</p>';
   return L.map(c => '<div class="cobro' + (c.ok ? '' : ' malo') + '"><span class="hora">' + esc(String(c.hora || '').slice(0, 5)) + '</span><b>' + pesos(c.importe) + '</b><span class="' + (c.ok ? 'chip verde' : 'chip rojo') + '">' + esc(c.estado) + '</span>' +
-    '<small>Op. ' + esc(c.operacion) + (tipo === 'mp' ? (c.canal ? ' · ' + esc(c.canal) : '') + (c.devuelto > 0 ? ' · devuelto ' + pesos(c.devuelto) : '') : (c.pagador ? ' · ' + esc(c.pagador) : '')) + '</small></div>').join('');
+    '<small>Op. ' + esc(c.operacion) + (tipo === 'mp' ? (c.canal ? ' · ' + esc(c.canal) : '') + (c.devuelto > 0 ? ' · devuelto ' + pesos(c.devuelto) : '') : (c.pagador ? ' · ' + esc(c.pagador) : '')) + '</small>' +
+    (tipo === 'dni' && c.autorizacion ? '<small class="aut">Autorización <b>' + esc(c.autorizacion) + '</b></small>' : '') + '</div>').join('');
 }
 async function cobros() {
   clearInterval(reloj);
