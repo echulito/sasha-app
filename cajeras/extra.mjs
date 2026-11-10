@@ -128,7 +128,8 @@ async function refrescarYa() {
     else if (!boton && !form) chip.insertAdjacentHTML('afterend', '<button class="mini" data-pedir>Pedir</button>');
   }
 }
-setInterval(refrescarEstados, 3000);
+// v148: una consulta atrás de la otra (1 segundo de descanso): el cambio se ve apenas ECHU lo tiene.
+(async function ciclo() { for (;;) { await refrescarEstados(); await new Promise(r => setTimeout(r, 1000)); } })();
 document.addEventListener("visibilitychange", refrescarEstados);
 
 // ---------- Cobros ----------
