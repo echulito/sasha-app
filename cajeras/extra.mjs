@@ -23,7 +23,7 @@ function elegir(t) {
   tab = t; document.body.dataset.tab = t;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
   $('tabBuscar').hidden = t !== 'buscar'; $('tabCobros').hidden = t !== 'cobros';
-  if (t === 'buscar') { setTimeout(() => $('q').focus(), 50); bajarCatalogo(); }
+  if (t === 'buscar') { setTimeout(() => $('q').focus(), 50); bajarCatalogo(); setTimeout(() => pintarPedidos(true), 0); }
   if (t === 'cobros') cobros();
 }
 $('tabs').onclick = e => { const b = e.target.closest('button[data-tab]'); if (b) elegir(b.dataset.tab); };
@@ -59,7 +59,7 @@ async function bajarCatalogo() {
   if (bajando || (CAT && Date.now() - catCuando < 300000)) return;
   bajando = true;
   try { const r = await api('cajera_catalogo'); if (r && Array.isArray(r.cat) && r.cat.length) { CAT = r.cat; CAMINO = new Set((r.camino || []).map(normCod)); PEND = r.pend || {}; catCuando = Date.now();
-      if (tab === 'buscar' && $('q').value.trim().length >= 2 && !document.querySelector('#resultados [data-form]')) buscar($('q').value); } }
+      if (tab === 'buscar' && $('q').value.trim().length >= 2 && !document.querySelector('#resultados [data-form]')) buscar($('q').value); else pintarPedidos(); } }
   catch { /* ECHU viejo o sin conexión: se busca en ECHU como antes */ }
   finally { bajando = false; }
 }
@@ -77,8 +77,23 @@ function buscarLocal(q) {
   res.sort((a, b) => ((a[6] ? 1 : 0) - (b[6] ? 1 : 0)) || a[1].localeCompare(b[1]));
   return {productos: exactos.concat(res).slice(0, 40).map(r => Object.assign({codigo: r[0], producto: r[1], precio: r[2], stock: r[5], disc: r[6] ? 1 : 0}, estadoLocal(r[0]))), mas: exactos.length + res.length > 40};
 }
+// v154: sin buscar nada se ve la lista de pedidos: lo que ya se pidió al proveedor y lo que pidieron las cajeras y falta comprar.
+let listaPintada = '';
+function pintarPedidos(forzar) {
+  if (tab !== 'buscar' || $('q').value.trim().length >= 2) return;
+  const nombre = k => { if (k.indexOf('T:') === 0) return k.slice(2).toUpperCase(); const r = CAT && CAT.find(x => normCod(x[0]) === k); return r ? r[1] : 'Cód. ' + k; };
+  const items = Object.keys(PEND).map(k => Object.assign({k, nombre: PEND[k].producto || nombre(k)}, PEND[k])).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  const firma = JSON.stringify(items); if (!forzar && firma === listaPintada && $('resultados').dataset.modo === 'lista') return;
+  listaPintada = firma; $('resultados').dataset.modo = 'lista';
+  const card = p => '<div class="prod"><div class="fila"><b>' + esc(p.nombre) + '</b>' + (p.cant ? '<span class="cant">' + esc(p.cant) + ' u.</span>' : '') + '</div>' +
+    '<div class="cod">' + (p.k.indexOf('T:') === 0 ? 'Sin código' : 'Cód. ' + esc(p.k)) + ' · lo pidió ' + esc(p.quien || '') + (p.fecha ? ' · ' + esc(p.fecha) : '') + '</div></div>';
+  const grupo = (titulo, L, vacio) => '<h3 class="grupo">' + titulo + ' (' + L.length + ')</h3>' + (L.length ? L.map(card).join('') : '<p class="vacio">' + vacio + '</p>');
+  $('resultados').innerHTML = grupo('✓ Ya pedidos al proveedor', items.filter(p => p.estado === 'pedido'), 'Todavía no hay ninguno marcado como pedido.') +
+    grupo('Pedidos por cajeras · falta comprarlos', items.filter(p => p.estado !== 'pedido'), 'No hay pedidos esperando.');
+}
 async function buscar(q) {
-  q = q.trim(); if (q.length < 2) { $('resultados').innerHTML = ''; return; }
+  q = q.trim(); if (q.length < 2) { pintarPedidos(true); return; }
+  $('resultados').dataset.modo = '';
   if (CAT) { ultima = q; pintarResultados(buscarLocal(q)); $('buscando').textContent = ''; refrescarEstados(); bajarCatalogo(); return; }
   bajarCatalogo();
   ultima = q; $('buscando').textContent = 'Buscando…';
@@ -102,7 +117,8 @@ $('resultados').addEventListener('click', async e => {
       const r = await api('cajera_pedir', {datos: JSON.stringify({codigo: f.dataset.form, producto: texto, cantidad: cant, pidio})});
       // v144: el producto no desaparece: queda marcado "Pedido por cajeras".
       const card = f.closest('.prod'), chip = card && card.querySelector('[data-chip]');
-      if (card && card.dataset.cod) PEND[normCod(card.dataset.cod)] = {estado: 'pendiente', quien: r.pidio, fecha: 'recién'};
+      if (card && card.dataset.cod) PEND[normCod(card.dataset.cod)] = {estado: 'pendiente', quien: r.pidio, fecha: 'recién', producto: r.producto, cant: r.cantidad};
+      else PEND['T:' + norm(r.producto)] = {estado: 'pendiente', quien: r.pidio, fecha: 'recién', producto: r.producto, cant: r.cantidad};
       if (chip) { chip.className = CHIP.pedido_cajera; chip.textContent = '✓ Pedido por cajeras (' + r.pidio + ', ' + r.cantidad + ' u.)'; f.remove(); }
       else (card || f).remove();
       $('enviado').textContent = '✓ Pedido enviado: ' + r.cantidad + ' × ' + r.producto + ' (lo pidió ' + r.pidio + ').';
@@ -117,6 +133,13 @@ async function refrescarEstados() {
   refrescando = true; try { await refrescarYa(); } finally { refrescando = false; }
 }
 async function refrescarYa() {
+  // v154: con la lista de pedidos en pantalla, se trae la lista entera (cambia sola cuando en la planilla se tilda Pedido o Descartar).
+  if ($('resultados').dataset.modo === 'lista') {
+    let r; try { r = await api('cajera_estados', {codigos: '[]', lista: 1}); } catch { return; }
+    if (r && r.pend) { PEND = r.pend; pintarPedidos(); }
+    await new Promise(x => setTimeout(x, 2000));
+    return;
+  }
   const cards = [...document.querySelectorAll('#resultados .prod[data-cod]')]; if (!cards.length) return;
   let r; try { r = await api('cajera_estados', {codigos: JSON.stringify(cards.map(c => c.dataset.cod))}); } catch { return; }
   const E = (r && r.estados) || {};
@@ -135,11 +158,23 @@ document.addEventListener("visibilitychange", refrescarEstados);
 
 // ---------- Cobros ----------
 let reloj = 0;
+const hh = c => String((c && c.hora) || c || '').trim().split(':').map(x => x.padStart(2, '0')).join(':');
+// v154: cada cajera ve solo los cobros de su turno (mañana: hasta que empieza la tarde; tarde: desde que empieza; cubriendo: todo el día).
+const perfiles = new Map();
+async function ventanaTurno(fecha) {
+  let p = perfiles.get(fecha);
+  if (!p) { try { p = await api('cajera_perfil', {fecha}); perfiles.set(fecha, p); } catch { return null; } }
+  const yo = (p && p.person) || {}, sel = $('shift') && fecha === hoyAR() && $('shift').value ? $('shift').value : yo.shift;
+  if (!sel || sel === 'cover' || (p.shiftOptions || []).length === 1) return null;
+  const S = p.shifts || {}, tarde = S.tarde || (yo.shift === 'tarde' ? yo : null), man = S['mañana'] || (yo.shift === 'mañana' ? yo : null);
+  if (sel === 'tarde') return tarde && tarde.start ? {desde: hh(tarde.start), hasta: '99', texto: 'Turno tarde: cobros desde las ' + hh(tarde.start).slice(0, 5)} : null;
+  const fin = tarde && tarde.start ? tarde.start : man && man.end ? man.end : '';
+  return fin ? {desde: '00', hasta: hh(fin), texto: 'Turno mañana: cobros hasta las ' + hh(fin).slice(0, 5)} : null;
+}
 function lista(L, tipo) {
   if (!L) return '';
   if (!L.length) return '<p class="vacio">Todavía no hay cobros.</p>';
   // v153: siempre del último cobro al primero (Cuenta DNI igual que Mercado Pago).
-  const hh = c => String(c.hora || '').trim().split(':').map(x => x.padStart(2, '0')).join(':');
   L = L.slice().sort((a, b) => (hh(a) < hh(b) ? 1 : hh(a) > hh(b) ? -1 : 0));
   return L.map(c => '<div class="cobro' + (c.ok ? '' : ' malo') + '"><span class="hora">' + esc(hh(c).slice(0, 5)) + '</span><b>' + pesos(c.importe) + '</b><span class="' + (c.ok ? 'chip verde' : 'chip rojo') + '">' + esc(c.estado) + '</span>' +
     '<small>Op. ' + esc(c.operacion) + (tipo === 'mp' ? (c.canal ? ' · ' + esc(c.canal) : '') + (c.devuelto > 0 ? ' · devuelto ' + pesos(c.devuelto) : '') : (c.pagador ? ' · ' + esc(c.pagador) : '')) + '</small>' +
@@ -150,12 +185,15 @@ async function cobros() {
   if (!$('fechaCobros').value) { $('fechaCobros').value = hoyAR(); $('fechaCobros').max = hoyAR(); $('fechaCobros').min = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10); }
   $('cobrosMsg').textContent = 'Cargando…';
   try {
-    const r = await api('cajera_cobros', {fecha: $('fechaCobros').value});
+    const [r, v] = await Promise.all([api('cajera_cobros', {fecha: $('fechaCobros').value}), ventanaTurno($('fechaCobros').value)]);
+    const mio = L => (L && v ? L.filter(c => hh(c) >= v.desde && hh(c) < v.hasta) : L);
     // v142: solo los cobros del local (QR y Point): ni ventas online ni otros movimientos; y sin totales.
-    const mp = r.mp ? r.mp.filter(c => c.canal === 'QR' || c.canal === 'Point') : r.mp;
+    const mp = mio(r.mp ? r.mp.filter(c => c.canal === 'QR' || c.canal === 'Point') : r.mp);
+    // v154: sin la explicación de que los cobros llegan por mail.
+    const dniAviso = r.dniAviso && !/mail de Redlink/i.test(r.dniAviso) ? r.dniAviso : '';
     $('mpLista').innerHTML = (r.mpAviso ? '<p class="vacio">' + esc(r.mpAviso) + '</p>' : '') + lista(mp, 'mp');
-    $('dniLista').innerHTML = (r.dniAviso ? '<small>' + esc(r.dniAviso) + '</small>' : '') + lista(r.dni, 'dni');
-    $('cobrosMsg').textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'});
+    $('dniLista').innerHTML = (dniAviso ? '<small>' + esc(dniAviso) + '</small>' : '') + lista(mio(r.dni), 'dni');
+    $('cobrosMsg').textContent = (v ? v.texto + ' · ' : '') + 'Actualizado ' + new Date().toLocaleTimeString('es-AR', {hour: '2-digit', minute: '2-digit'});
   } catch (e) { $('cobrosMsg').textContent = e.message; }
   if (tab === 'cobros' && $('fechaCobros').value === hoyAR()) reloj = setInterval(() => { if (tab === 'cobros' && !document.hidden) cobros(); }, 60000);
 }

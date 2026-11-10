@@ -651,10 +651,18 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   // v147: con el catálogo bajado, la búsqueda se hace en el celular (sin pedirle a ECHU) y sale al instante, también por rubro
   DATOS.cajera_catalogo = {cat: [['104', 'AXE APOLLO X 150', 4749, '7790000000005', 'axe apollo x 150 7790000000005 desodorantes', 7], ['105', 'REXONA MEN X 90', 3999, '7790000000006', 'rexona men x 90 7790000000006 desodorantes', 0],
     ['099', 'AAA DEO VIEJO X 100', 1500, '7790000000009', 'aaa deo viejo x 100 7790000000009 desodorantes', 2, 1]],
-    camino: ['105'], pend: {}};
+    camino: ['105'], pend: {'099': {quien: 'Vanesa', fecha: '10/11', estado: 'pedido', producto: 'AAA DEO VIEJO X 100', cant: '6'}, 'T:tintura 919': {quien: 'Adrian', fecha: '09/11', estado: 'pendiente', producto: 'Tintura 919', cant: '2'}}};
+  DATOS.cajera_estados = p => (p.lista ? {estados: {}, pend: DATOS.cajera_catalogo.pend} : {estados: {}});
   await page.evaluate(() => new Promise(r => setTimeout(r, 400)));
   await page.click('#tabs [data-tab="buscar"]');
   await page.waitForFunction(() => document.querySelector('#q') && true); await page.waitForTimeout(900);
+  // v154: sin buscar nada, la lista de pedidos (lo ya pedido y lo que falta comprar)
+  await page.fill('#q', ''); await page.locator('#resultados .grupo').first().waitFor({timeout: 8000});
+  await page.waitForFunction(() => /AAA DEO VIEJO/.test(document.querySelector('#resultados').innerText), null, {timeout: 8000});
+  const tp = await page.locator('#resultados').innerText();
+  assert.match(tp, /Ya pedidos al proveedor \(1\)\s*AAA DEO VIEJO X 100\s*6 u\.\s*Cód\. 099 · lo pidió Vanesa · 10\/11/);
+  assert.match(tp, /falta comprarlos \(1\)\s*Tintura 919\s*2 u\.\s*Sin código · lo pidió Adrian · 09\/11/);
+  assert.doesNotMatch(tp, /\$/, 'la lista no muestra precios ni costos');
   const antes = echu.pedidos.filter(x => /cajera_buscar/.test(x.cuerpo || '')).length;
   await page.fill('#q', 'desodorante'); await page.locator('.prod[data-cod="104"]').waitFor({timeout: 3000});
   const tl = await page.locator('#resultados').innerText();
@@ -672,7 +680,9 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   const c = await page.locator('#tabCobros').innerText();
   assert.match(c, /16:49\s*\$ 1\.506\s*Aprobado\s*Op\. 111 · QR/); assert.match(c, /17:00\s*\$ 500\s*Rechazado/); assert.match(c, /18:06\s*\$ 10\.100\s*Aprobado\s*Op\. 510919548 · Persona Prueba\s*Autorización ABC123/);
   // v153: Cuenta DNI del último al primero, como Mercado Pago
-  assert.deepEqual(await page.locator('#dniLista .cobro .hora').allInnerTexts(), ['19:20', '18:06', '09:15']);
+  // v154: entró en el turno tarde (desde 15:30): no ve el cobro de las 9:15; y sin la explicación del mail
+  assert.deepEqual(await page.locator('#dniLista .cobro .hora').allInnerTexts(), ['19:20', '18:06']);
+  assert.match(c, /Turno tarde: cobros desde las 15:30/); assert.doesNotMatch(c, /mail de Redlink/);
   assert.doesNotMatch(c, /comisi|neto/i);
   if (process.env.CAPTURA_CAJ) await page.screenshot({path: process.env.CAPTURA_CAJ + '-cobros.png', fullPage: true});
   await page.click('#tabs [data-tab="declarar"]'); assert.ok(await page.locator('#closeForm').isVisible());
