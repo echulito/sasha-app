@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=149;
+var APP_V=150;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1194,16 +1194,26 @@ function verProducto(c){
         (cb.miembros||[]).map(function(x){return '<div class="row"><span><a href="#" onclick="verProducto(\''+esc(x.codigo)+'\');return false">'+esc(x.codigo)+'</a>'+(x.codigo===cb.codigo?' <span class="chip c" style="font-size:10px;padding:1px 6px">CABECERA</span>':'')+'</span><span style="text-align:right">'+esc(x.producto)+'</span></div>'}).join('')+
         '</details></div>';
     }
-    h+='<div class="card"><h2>Proveedor</h2>'+
-      '<div class="row"><span>Proveedor</span><span>'+esc(p.proveedor||'-')+'</span></div>'+
-      '<div class="row"><span>Código de proveedor</span><span>'+esc(p.codigoProveedorVer||p.codigoProveedor||'-')+'</span></div>'+
-      // v49: unidades por bulto (de su proveedor primero; si su lista no lo dice, de las otras listas).
-      // v99: precio POR UNIDAD en cada lista (uno por proveedor, sin repetir); el bulto queda como dato.
-      (function(){var vistos={},bs=(p.bultos||[]).filter(function(x){return x.costo>0&&x.proveedor}).slice().sort(function(a,b){return (b.actual?1:0)-(a.actual?1:0)||a.costo-b.costo})
-          .filter(function(x){var k=String(x.proveedor).toUpperCase();if(vistos[k])return false;vistos[k]=1;return true}).slice(0,5);
-        if(!bs.length)return '<div class="row"><span>En las listas</span><span class="note" style="margin:0">no figura en las listas cargadas</span></div>';
-        return bs.map(function(x){return '<div class="row"><span>'+esc(x.proveedor)+(x.actual?' <span class="rk">(el de hoy)</span>':'')+'</span><span><b>'+pesos2(x.costo)+'</b> c/u'+(x.unidades>1?' <span class="rk">· bulto '+x.unidades+' u.</span>':'')+'</span></div>'}).join('')})()+
-      (p.mejorCosto?'<div class="eval bien">Más barato en '+esc(p.mejorDonde)+': '+pesos(p.mejorCosto)+' ('+pct(1-p.mejorCosto/p.costo,0)+' menos). Con ese costo el margen sería '+pct(p.precio?(p.precio-p.mejorCosto)/p.precio:null)+'.</div>':'<div class="note">No hay un costo más barato en otra lista vigente.</div>')+
+    // v150: más claro: proveedor actual y su costo por un lado; el precio en cada lista (con su fecha) y el mejor costo por otro.
+    h+='<div class="card"><h2>Proveedor y costo</h2>'+
+      '<div class="row"><span>Proveedor actual</span><span><b>'+esc(p.proveedor||'-')+'</b></span></div>'+
+      '<div class="row"><span>Código en '+esc(p.proveedor||'el proveedor')+'</span><span>'+esc(p.codigoProveedorVer||p.codigoProveedor||'-')+'</span></div>'+
+      '<div class="row"><span>Costo actual <span class="rk">(el que usa ECHU)</span></span><span><b>'+(p.costo?pesos2(p.costo):'sin costo')+'</b> c/u</span></div>'+
+      (function(){var vistos={},bs=(p.bultos||[]).filter(function(x){return x.costo>0&&x.proveedor}).slice().sort(function(a,b){return (b.actual?1:0)-(a.actual?1:0)||(a.vencida?1:0)-(b.vencida?1:0)||a.costo-b.costo})
+          .filter(function(x){var k=String(x.proveedor).toUpperCase();if(vistos[k])return false;vistos[k]=1;return true}).slice(0,6);
+        var hh='<div class="lbl" style="margin-top:12px">Precio por unidad en las listas cargadas</div>';
+        if(!bs.length)return hh+'<div class="note" style="margin-top:4px">No figura en ninguna lista cargada.</div>';
+        hh+=bs.map(function(x){return '<div class="row"><span>'+esc(x.proveedor)+(x.actual?' <span class="chip c" style="font-size:10px;padding:1px 6px">ACTUAL</span>':'')+
+            '<br><span class="rk">cód. '+esc(x.codigo||'-')+(x.fecha?' · lista del '+esc(x.fecha):'')+(x.vencida?' · <span class="warn">vencida</span>':'')+(x.unidades>1?' · bulto '+x.unidades+' u.':'')+'</span></span>'+
+            '<span><b>'+pesos2(x.costo)+'</b> c/u</span></div>'}).join('');
+        // el mejor costo: la lista vigente más barata que no sea la del proveedor actual
+        var otros=bs.filter(function(x){return !x.actual}),vig=otros.filter(function(x){return !x.vencida})[0],ven=otros.filter(function(x){return x.vencida})[0],ref=p.costo||0;
+        var mejor=vig&&(!ref||vig.costo<ref-0.5)?vig:null;
+        if(p.mejorCosto&&(!mejor||p.mejorCosto<mejor.costo-0.5))mejor={proveedor:p.mejorDonde,costo:p.mejorCosto,codigo:''};
+        if(mejor)hh+='<div class="eval bien"><b>Mejor costo: '+pesos2(mejor.costo)+' en '+esc(mejor.proveedor)+'</b>'+(mejor.codigo?' (cód. '+esc(mejor.codigo)+')':'')+(ref?' · '+pct(1-mejor.costo/ref,0)+' menos que el actual':'')+'. Con ese costo el margen sería '+pct(p.precio?(p.precio-mejor.costo)/p.precio:null)+'.</div>';
+        else if(ven&&ref&&ven.costo<ref-0.5)hh+='<div class="eval ok">En '+esc(ven.proveedor)+' figura más barato ('+pesos2(ven.costo)+'), pero esa lista está vencida'+(ven.fecha?' (es del '+esc(ven.fecha)+')':'')+': cargá la nueva para confirmarlo.</div>';
+        else hh+='<div class="note">El costo actual es el mejor de las listas vigentes.</div>';
+        return hh})()+
       (f.recomendacion?'<div class="note"><b>'+esc(f.recomendacion)+'</b></div>':'')+
       '<div class="btns"><button class="btn" id="bsim">Simular una compra de este producto</button></div>'+
       '<div class="btns solo-completo"><button class="btn sec" id="bsinest"></button></div><div class="note solo-completo" id="sinestmsg"></div></div>';
@@ -2928,7 +2938,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=149');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=150');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;

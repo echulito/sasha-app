@@ -675,3 +675,20 @@ test('link de cajeras v141: solapas Declarar / Buscar / Cobros; el buscador solo
   for (const k of ['cajera_perfil', 'cajera_buscar', 'cajera_personas', 'cajera_pedir', 'cajera_cobros', 'cajera_estados', 'cajera_catalogo']) delete DATOS[k];
   await ctx.close();
 });
+
+test('Ficha v150: "Proveedor y costo" separa el proveedor actual de los precios en cada lista y dice el mejor costo', async () => {
+  DATOS.producto = {codigo: '900', producto: 'PAÑAL PRUEBA', proveedor: 'COMPRA BEAUTY (DAI NIPPON)', codigoProveedor: '791', precio: 5999, costo: 4749.42, costoSistema: 4749.42, margen: 0.2, stock: 2,
+    ventaDiaria: 0.8, ventaMensual: 24, evaluacion: {nivel: 'ok', texto: 'ACEPTABLE'}, ficha: {}, ventas: {ultimas: []}, mejorCosto: 0,
+    bultos: [{proveedor: 'UPA PAÑALERA', codigo: 'U-5', costo: 4749.42, unidades: 1, actual: false, fecha: '07/09', vencida: true},
+      {proveedor: 'DAI NIPPON', codigo: '791', costo: 2630, unidades: 6, actual: false, fecha: '10/11', vencida: false}]};
+  const {ctx, page, errores} = await abrir();
+  await page.evaluate(() => verProducto('900'));
+  await page.locator('#bsim').waitFor();
+  const t = await page.locator('.card', {hasText: 'Proveedor y costo'}).innerText();
+  assert.match(t, /Proveedor actual\s*COMPRA BEAUTY \(DAI NIPPON\)\s*Código en COMPRA BEAUTY \(DAI NIPPON\)\s*791\s*Costo actual \(el que usa ECHU\)\s*\$ 4\.749,42 c\/u/);
+  assert.match(t, /DAI NIPPON\s*cód\. 791 · lista del 10\/11 · bulto 6 u\.\s*\$ 2\.630,00 c\/u[\s\S]*UPA PAÑALERA\s*cód\. U-5 · lista del 07\/09 · vencida/);
+  assert.match(t, /Mejor costo: \$ 2\.630,00 en DAI NIPPON \(cód\. 791\) · 45% menos que el actual/);
+  assert.deepEqual(errores, []);
+  delete DATOS.producto;
+  await ctx.close();
+});
