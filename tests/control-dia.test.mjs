@@ -27,3 +27,14 @@ test('si todo coincide no hay aviso', () => {
   assert.deepEqual(a.issues.filter(i => /tickets|cobros/i.test(i)), []);
   assert.ok(!a.warnings.some(w => /se cuenta como venta del turno/.test(w)));
 });
+// v155: desde el 11/11/2026 todos los gastos necesitan foto o factura (antes los de caja 3 eran opcionales).
+import {expenseReceiptRequired, storeExpenses} from '../cajas/domain.mjs';
+test('gasto de caja 3 sin comprobante: no frena un día viejo, sí desde el 11/11/2026; el de caja 1 siempre', () => {
+  assert.equal(expenseReceiptRequired({box: '0003', date: '2026-11-10'}), false);
+  assert.equal(expenseReceiptRequired({box: '0003', date: '2026-11-11'}), true);
+  assert.equal(expenseReceiptRequired({box: '0001', date: '2026-10-16'}), true);
+  const s = st(true, 2720000);
+  s.reports.find(r => r.type === 'turnClose' && r.rows[0].box === '0003').rows[0].expenses = [{index: 0, description: 'GASTO VARIOS', amount: 550000}];
+  assert.equal(storeExpenses(s, date).length, 1);
+  assert.ok(!controlStatus(s, date).issues.some(i => /Falta comprobante del gasto/.test(i)), 'día anterior al cambio: sigue opcional en caja 3');
+});
