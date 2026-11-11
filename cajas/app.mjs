@@ -155,7 +155,7 @@ function cruceHtml(d,x){const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuenta
  return out.length?`<h2>Cobros contra tickets</h2>${out.join('')}`:'';}
 async function cargarExternos(d){const box=$('externos');if(!box||!d)return;let x=EXTERNOS[d];
  if(!x||Date.now()-(x.__t||0)>120000){try{x=await echu('pagos_externos',undefined,{fecha:d});x.__t=Date.now();EXTERNOS[d]=x;}catch(e){if(!x)return;}}
- const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoOtrosSinAval(d)&&!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x)&&!autoDiferenciasTickets(d,x)&&!autoSobreDeclarado(d,x)&&!autoMediosMalCargados(d,x)&&!autoVentasFueraDelCierre(d,x))pistasPagos();}
+ const b=$('externos');if(!b||$('date')?.value!==d)return;b.innerHTML=externosHtml(d,x);b.hidden=false;if(!autoOtrosSinAval(d)&&!autoResponderPagos(d,x)&&!autoCorregirCupones(d,x)&&!autoDiferenciasTickets(d,x)&&!autoSobreDeclarado(d,x)&&!autoMediosMalCargados(d,x)&&!autoVentasFueraDelCierre(d,x)&&!autoCorroborarCupones(d,x))pistasPagos();}
 // v111: "¿Cuánto recibió X por Mercado Pago / Cuenta DNI?" se contesta solo con lo que entró en el horario del turno.
 // Si coincide con el informe PDF, la cajera cargó mal (queda como error de carga, con lo que declaró); si coincide con lo declarado, estaba bien.
 const REAL_TURNO={};let AUTO_EN_CURSO=false;
@@ -269,6 +269,13 @@ const anotadoMedio=(d,t,ticket)=>(state.paymentMethodErrors||[]).some(z=>z.key==
 const anotadoFuera=(d,t,ticket)=>(state.salesOutsideClose||[]).some(z=>z.key===[d,turnKey(t),ticket].join('|'))?` · <b>anotado en observaciones de ${esc(assign(state,t,'close').name)}</b>`:'';
 // v135: ticket que está en el detalle de tickets pero no en el cierre ni en los cobros del sistema, y cuya plata entró (un cobro o dos):
 // es una venta del turno. Se suma a la venta del turno (no queda como sobrante) y queda en observaciones. Una sola vez por ticket.
+// v156: "¿Corroboraste las acreditaciones de los turnos?" se contesta sola: a esa altura lo cargado ya coincide con los cupones del día
+// y los cobros ya se cruzaron con lo que entró de verdad. Queda solo tocar "Confirmar el día".
+function autoCorroborarCupones(d,x){if(AUTO_EN_CURSO)return false;
+ if(!(x&&((x.mp&&x.mp.cobros)||(x.cuentaDni&&x.cuentaDni.cobros))))return false;
+ const q=guidedQuestions(state,d).find(q=>q.kind==='coupons');if(!q)return false;
+ let s;try{s=answerGuidedQuestion(state,q.key);}catch(e){return false;}
+ AUTO_EN_CURSO=true;try{state=s;save('Cupones corroborados automáticamente');}finally{AUTO_EN_CURSO=false;}drawDay();return true;}
 function autoVentasFueraDelCierre(d,x){if(AUTO_EN_CURSO)return false;
  const mpOk=!!(x&&x.mp&&x.mp.cobros),dniOk=!!(x&&x.cuentaDni&&x.cuentaDni.cobros);if(!mpOk&&!dniOk)return false;
  let pagos;try{pagos=paymentRows(state,d);}catch(e){return false;}
