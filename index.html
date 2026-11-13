@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=157;
+var APP_V=158;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -340,7 +340,7 @@ body.consulta #bnav .solo-completo{display:none}
     <div class="card" id="sprop" style="margin-top:12px">
       <h2>Órdenes de compra</h2>
       <div class="note solo-consulta" style="margin-top:0">Tus órdenes de compra guardadas, con su número. Las podés bajar en PDF, editar o borrar.</div>
-      <div class="note solo-completo" style="margin-top:0">Las órdenes guardadas que todavía no pediste, con su número. Cuando la pidas, tocá <b>✔ La pedí</b> (o tildá “¿Se pidió?” en la planilla): pasa a <b>Seguimientos</b>. Si antes de pedirla cambia la lista de ese proveedor y el producto sube (o ya no está), la orden se anula sola.</div>
+      <div class="note solo-completo" style="margin-top:0">Las órdenes guardadas que todavía no pediste, con su número. Cuando la pidas, tocá <b>✔ La pedí</b> (o tildá “¿Se pidió?” en la planilla): pasa a <b>Seguimientos</b>. Si antes de pedirla cambia la lista de ese proveedor y el costo del producto cambia (sube o baja) o ya no está, la orden se anula sola.</div>
       <input id="pbus" type="search" placeholder="Buscar orden: N° (ej. 7), fecha (21/10), producto, código…" autocomplete="off" style="margin:8px 0 4px">
       <div id="pbusinfo" class="note" style="margin:0 0 4px"></div>
       <button class="btn sec" id="tprop" style="width:100%;margin:4px 0">Mostrar órdenes</button>
@@ -2960,7 +2960,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=157');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=158');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
