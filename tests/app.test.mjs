@@ -707,3 +707,29 @@ test('Ficha v150: "Proveedor y costo" separa el proveedor actual de los precios 
   delete DATOS.producto;
   await ctx.close();
 });
+
+// v157: al simular una compra, la oferta puede ser 2x1, 3x2 o 2da unidad al X% (equivale a un descuento por unidad llevando la promo).
+test('simular compra: ofertas por cantidad (2x1, 3x2, 2da unidad al 80%)', async () => {
+  const {ctx, page, errores} = await abrir();
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+  const r = await page.evaluate(() => {
+    const d = {c: 3000, pv: 0, q: 0, mn: 0.3, obj: 0.4, pMin: 0}, out = {};
+    document.getElementById('epre').value = '5000';
+    for (const t of ['2x1', '3x2', '2da', 'desc']) {
+      document.getElementById('etipo').value = t; document.getElementById('e2da').value = '80'; document.getElementById('epct').value = '20'; verTipoOferta();
+      const e = calcOpcion(2, d, 10, 30, 0);
+      out[t] = {lista: e.lista, P: e.P, promo: e.promo, lleva: e.lleva, desc: Math.round(e.desc * 1000) / 10, html: htmlOpcion(e),
+        pct: !document.getElementById('epctbox').classList.contains('oculto'), seg: !document.getElementById('e2dabox').classList.contains('oculto')};
+    }
+    return out;
+  });
+  assert.deepEqual([r['2x1'].lista, r['2x1'].P, r['2x1'].promo, r['2x1'].lleva, r['2x1'].desc], [10000, 5000, '2x1', 2, 50]);
+  assert.deepEqual([r['3x2'].lista, r['3x2'].P, r['3x2'].promo, r['3x2'].lleva], [7500, 5000, '3x2', 3]);
+  assert.deepEqual([r['2da'].lista, r['2da'].P, r['2da'].promo, r['2da'].desc, r['2da'].seg], [8330, 4998, '2da unidad al 80%', 40, true]);
+  assert.deepEqual([r.desc.lista, r.desc.P, r.desc.promo, r.desc.pct], [6250, 5000, '', true]);
+  assert.match(r['2x1'].html, /Llevando 2 paga \$ 10\.000 · queda \$ 5\.000 cada una/);
+  assert.match(r['2x1'].html, /Oferta<\/span><span>2x1/);
+  assert.match(r.desc.html, /Bonificación/);
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});

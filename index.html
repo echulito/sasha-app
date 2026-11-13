@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=156;
+var APP_V=157;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -320,9 +320,12 @@ body.consulta #bnav .solo-completo{display:none}
       </div>
       <div class="opc" id="op2">
         <div class="opc-h"><b>Opción 2 · Con oferta (llamador)</b><span class="tick" id="tk2"></span></div>
+        <label>Tipo de oferta</label>
+        <select id="etipo"><option value="desc">Descuento (%)</option><option value="2da">2da unidad con descuento</option><option value="2x1">2x1</option><option value="3x2">3x2</option></select>
         <div class="two">
-          <div><label>Precio que cobrás ($)</label><input id="epre" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0"></div>
-          <div><label>Descuento que se ve (%)</label><input id="epct" type="number" inputmode="decimal" min="1" max="80" value="20"></div>
+          <div><label id="eprelbl">Precio que cobrás ($)</label><input id="epre" type="text" inputmode="decimal" autocomplete="off" placeholder="$ 0"></div>
+          <div id="epctbox"><label>Descuento que se ve (%)</label><input id="epct" type="number" inputmode="decimal" min="1" max="80" value="20"></div>
+          <div id="e2dabox" class="oculto"><label>Descuento en la 2da unidad (%)</label><input id="e2da" type="number" inputmode="decimal" min="1" max="100" value="80"></div>
         </div>
         <label>Ventas extra por la oferta (%)</label>
         <input id="eaum" type="number" inputmode="decimal" min="0" value="30">
@@ -1299,7 +1302,7 @@ function elegirSim(p){
   sugerirPrecioPorCosto(true);
   // v57: si el producto (o la cabecera) ya tiene una oferta cargada, por defecto se simula con esa oferta (se puede elegir sin).
   var ov=p&&!precioFijoCab()?ofertaVigente():null;
-  if(ov&&!EST.pManual){ponerPesos('sprecio',ov.P);ponerPesos('e1pre',ov.L);ponerPesos('epre',ov.P);$('epct').value=Math.round(ov.desc*100);EST.lista2=ov.L;EST.t1=EST.t2=true;EST.ofDef=true;elegirOpcion(2)}
+  if(ov&&!EST.pManual){ponerPesos('sprecio',ov.P);ponerPesos('e1pre',ov.L);ponerPesos('epre',ov.P);$('epct').value=Math.round(ov.desc*100);$('etipo').value='desc';verTipoOferta();EST.lista2=ov.L;EST.t1=EST.t2=true;EST.ofDef=true;elegirOpcion(2)}
   recalcular();
 }
 ['scosto','scant','sprecio'].forEach(function(id){$(id).addEventListener('input',function(){if(id==='sprecio')EST.pManual=true;if(id==='scosto'||id==='sprecio')sugerirPrecioPorCosto(true);recalcular(id)})});
@@ -1355,7 +1358,7 @@ function aplicarBloqueoCab(){
       // De la gama con oferta: opción 1 = sin la oferta (precio de lista); opción 2 = con la oferta de la gama.
       if(num('e1pre')!==of.L)ponerPesos('e1pre',of.L);
       if(num('epre')!==of.P)ponerPesos('epre',of.P);
-      $('epct').value=Math.round(of.desc*100);
+      $('epct').value=Math.round(of.desc*100);$('etipo').value='desc';verTipoOferta();
       EST.t1=EST.t2=true;EST.lista2=of.L;
       if(!EST.ofDef){EST.ofDef=true;elegirOpcion(2)}
     }else{
@@ -1492,17 +1495,32 @@ function elegirOpcion(o){
 $('op1').addEventListener('click',function(){if(EST.op!==1)elegirOpcion(1)});
 $('op2').addEventListener('click',function(){if(EST.op!==2&&!(precioFijoCab()&&!ofertaVigente()))elegirOpcion(2)});
 elegirOpcion(1);
+// v157: ofertas por cantidad. Equivalen a un descuento por unidad cuando el cliente lleva la promo completa:
+// 2x1 = 50%, 3x2 = 33,3%, 2da unidad al X% = X/2. "Precio que cobrás" es lo que queda cada unidad llevando la promo.
+function promoSim(){
+  var t=$('etipo').value, x=Math.min(100,Math.max(1,+$('e2da').value||0));
+  if(t==='2x1')return {tipo:t,desc:0.5,txt:'2x1',lleva:2};
+  if(t==='3x2')return {tipo:t,desc:1/3,txt:'3x2',lleva:3};
+  if(t==='2da')return {tipo:t,desc:x/200,txt:'2da unidad al '+x+'%',lleva:2};
+  return null;
+}
+function verTipoOferta(){
+  var pr=promoSim();
+  $('epctbox').classList.toggle('oculto',!!pr);$('e2dabox').classList.toggle('oculto',!pr||pr.tipo!=='2da');
+  $('eprelbl').textContent=pr?'Queda cada unidad llevando la promo ($)':'Precio que cobrás ($)';
+}
 function calcOpcion(o,d,vm,dias,objU){
-  var P=num(o===1?'e1pre':'epre')||0;
-  var desc=o===2?Math.min(80,Math.max(0,+$('epct').value||0))/100:0;
+  var P=num(o===1?'e1pre':'epre')||0, pr=o===2?promoSim():null;
+  var desc=o===2?(pr?pr.desc:Math.min(80,Math.max(0,+$('epct').value||0))/100):0;
   var lista=o===2&&desc>0?r10(P/(1-desc)):P;
   // "Usar oferta": el precio tachado es exactamente tu precio de hoy.
-  if(o===2&&EST.lista2&&EST.lista2>P){lista=EST.lista2;desc=1-P/lista}
+  if(o===2&&!pr&&EST.lista2&&EST.lista2>P){lista=EST.lista2;desc=1-P/lista}
+  if(pr){P=Math.round(lista*(1-desc));}
   var aum=o===2?Math.max(0,+$('eaum').value||0)/100:0;
   var m=P>0?(P-d.c)/P:0, gan=P*(1-d.pv)-d.c;
   var proy=vm/30*dias*(1+aum);
   var vendibles=d.q?Math.min(d.q,proy):proy;
-  return {op:o,P:P,lista:lista,desc:desc,m:m,gan:gan,dias:dias,aum:aum,vm:vm,proy:proy,objU:objU,ganProy:vendibles*gan,d:d};
+  return {op:o,P:P,lista:lista,desc:desc,m:m,gan:gan,dias:dias,aum:aum,vm:vm,proy:proy,objU:objU,ganProy:vendibles*gan,d:d,promo:pr?pr.txt:'',lleva:pr?pr.lleva:0};
 }
 function htmlOpcion(e){
   var d=e.d, of=e.op===2&&e.desc>0;
@@ -1510,8 +1528,10 @@ function htmlOpcion(e){
   var nivel=e.m<d.pv?'mal':(e.m<d.mn?'bajo':(e.m<d.obj?'ok':'bien'));
   var h='<div style="margin:10px 0 4px;padding:10px;border-radius:10px;background:#fff8e1;text-align:center">'+
     '<div class="note" style="margin:0">Así se ve en el local</div>'+
-    (of?'<div><s style="color:var(--gris)">'+pesos(e.lista)+'</s> &nbsp; <b style="font-size:22px;color:var(--rojo)">'+pesos(e.P)+'</b> &nbsp; <span class="chip r">−'+pct(e.desc,0)+'</span></div>'
+    (of&&e.promo?'<div><b style="font-size:22px">'+pesos(e.lista)+'</b> &nbsp; <span class="chip r">'+esc(e.promo)+'</span></div><div class="note" style="margin:4px 0 0">Llevando '+e.lleva+' paga '+pesos(e.P*e.lleva)+' · queda '+pesos(e.P)+' cada una. Si lleva una sola, paga '+pesos(e.lista)+'.</div>'
+       :of?'<div><s style="color:var(--gris)">'+pesos(e.lista)+'</s> &nbsp; <b style="font-size:22px;color:var(--rojo)">'+pesos(e.P)+'</b> &nbsp; <span class="chip r">−'+pct(e.desc,0)+'</span></div>'
        :'<div><b style="font-size:22px">'+pesos(e.P)+'</b></div>')+'</div>';
+  if(of&&e.promo)h+='<div class="note" style="margin:0 0 6px">El margen y la ganancia están calculados como si todos llevaran la promo completa (el peor caso para vos).</div>';
   h+='<div class="row"><span>Margen</span><span class="'+(nivel==='bien'||nivel==='ok'?'pos':'neg')+'"><b>'+pct(e.m)+'</b></span></div>'+
     '<div class="row"><span>Ganancia por unidad (después de comisiones)</span><span class="'+(e.gan>=0?'pos':'neg')+'">'+pesos(e.gan)+'</span></div>';
   if(e.vm>0){
@@ -1527,12 +1547,12 @@ function htmlOpcion(e){
     var cp=of||(SPROD.precio&&Math.abs(e.P-SPROD.precio)>1), csis=SPROD.costoSistema||SPROD.costo||0, sube=csis>0&&d.c>csis+0.005;
     return h+'<div style="margin-top:8px;padding:8px 10px;border:1px dashed var(--azul2);border-radius:10px"><b>Para cargar en el sistema (en la cabecera)</b>'+
       (sube?'<div class="row"><span>Costo nuevo · toda la gama</span><span><b>'+pesos2(d.c)+'</b> (hoy '+pesos2(csis)+')</span></div>':'')+
-      (cp?(of?'<div class="row"><span>Precio de venta (lista) · toda la gama</span><span>'+pesos(e.lista)+'</span></div><div class="row"><span>Bonificación</span><span>'+pct(e.desc,0)+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(e.P)+'</b></span></div>'
+      (cp?(of?'<div class="row"><span>Precio de venta (lista) · toda la gama</span><span>'+pesos(e.lista)+'</span></div><div class="row"><span>'+(e.promo?'Oferta':'Bonificación')+'</span><span>'+(e.promo?esc(e.promo):pct(e.desc,0))+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(e.P)+'</b></span></div>'
         :'<div class="row"><span>Precio de venta nuevo · toda la gama</span><span><b>'+pesos(e.P)+'</b></span></div>'):'<div class="note">El precio no cambia.</div>')+
       (sube?'<div class="note">El costo subió: se cambia en la cabecera para no perder margen.</div>':(d.c>0&&csis>0&&d.c<csis-0.005?'<div class="note">El costo no se cambia: la compra salió más barata y es solo de este producto (el resto de la gama tiene stock a su costo).</div>':''))+'</div>';
   }
   h+='<div style="margin-top:8px;padding:8px 10px;border:1px dashed var(--azul2);border-radius:10px"><b>Para cargar en el sistema</b>'+
-    (of?'<div class="row"><span>Precio de venta (lista)</span><span>'+pesos(e.lista)+'</span></div><div class="row"><span>Bonificación</span><span>'+pct(e.desc,0)+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(e.P)+'</b></span></div>'
+    (of?'<div class="row"><span>Precio de venta (lista)</span><span>'+pesos(e.lista)+'</span></div><div class="row"><span>'+(e.promo?'Oferta':'Bonificación')+'</span><span>'+(e.promo?esc(e.promo):pct(e.desc,0))+'</span></div><div class="row"><span>Se cobra</span><span><b>'+pesos(e.P)+'</b></span></div>'
        :'<div class="row"><span>Precio de venta</span><span><b>'+pesos(e.P)+'</b></span></div>')+'</div>';
   return h;
 }
@@ -1560,6 +1580,7 @@ function calcEstrategia(){
   $('e2res').innerHTML=precioFijoCab()&&!ofertaVigente()?'<div class="note">No disponible: el precio es de cabecera y no se puede hacer oferta con este producto solo.</div>':htmlOpcion(e2);
   EST.r={1:e1,2:e2};EST.ult=EST.r[EST.op];
 }
+['etipo','e2da'].forEach(function(id){$(id).addEventListener(id==='etipo'?'change':'input',function(){EST.lista2=0;EST.t2=true;verTipoOferta();calcEstrategia();if(typeof guardarEstadoPronto==='function')guardarEstadoPronto()})});
 [['e1pre','t1'],['epre','t2'],['eobj','tObj'],['edias',''],['epct',''],['eaum','']].forEach(function(x){
   $(x[0]).addEventListener('input',function(){if(x[1])EST[x[1]]=true;if(x[0]==='epre'||x[0]==='epct')EST.lista2=0;calcEstrategia()});
 });
@@ -1571,7 +1592,7 @@ function irAEstrategia(o){
 // Botones de "Contra tu costo de hoy": arman la estrategia y te llevan a verla.
 function usarOferta(p){
   if(!SPROD||!SPROD.precio||precioFijoCab())return;
-  ponerPesos('epre',p);EST.t2=true;EST.lista2=Math.round(SPROD.precio);
+  ponerPesos('epre',p);EST.t2=true;$('etipo').value='desc';verTipoOferta();EST.lista2=Math.round(SPROD.precio);
   $('epct').value=Math.max(1,Math.round((1-p/SPROD.precio)*100));
   calcEstrategia();elegirOpcion(2);irAEstrategia(2);guardarEstadoPronto();
 }
@@ -1608,7 +1629,7 @@ function estadoActual(){
   var t=document.querySelector('nav button.on');
   return {t:Date.now(),tab:t?t.dataset.tab:'inicio',q:$('q').value,det:DETCOD||'',sprod:SPROD,
     scosto:$('scosto').value,scant:$('scant').value,sprecio:$('sprecio').value,prov:{modo:PROV.modo,sel:PROV.sel,fuera:$('sprovf').value,cod:$('sprovcod').value},
-    e:{op:EST.op,editId:EST.editId||'',orden:EST.orden||'',lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,tObj:EST.tObj,vm:EST.vm,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,edias:$('edias').value,eobj:$('eobj').value},
+    e:{op:EST.op,editId:EST.editId||'',orden:EST.orden||'',lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,tObj:EST.tObj,vm:EST.vm,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,edias:$('edias').value,eobj:$('eobj').value,etipo:$('etipo').value,e2da:$('e2da').value},
     rtab:RTAB,y:window.scrollY};
 }
 function guardarEstado(){if(NO_GUARDAR||$('app').classList.contains('oculto'))return;try{var s=JSON.stringify(estadoActual());sessionStorage.setItem(ESTADO_K,s);localStorage.setItem(ESTADO_K,s)}catch(e){}}
@@ -1630,7 +1651,8 @@ function restaurarEstado(){
   pintarProveedores();
   $('scosto').value=s.scosto||'';$('scant').value=s.scant||'';$('sprecio').value=s.sprecio||'';
   var e=s.e||{};
-  ['e1pre','epre','epct','eaum','edias','eobj'].forEach(function(id){if(e[id]!==undefined)$(id).value=e[id]});
+  ['e1pre','epre','epct','eaum','edias','eobj','e2da'].forEach(function(id){if(e[id]!==undefined)$(id).value=e[id]});
+  $('etipo').value=e.etipo||'desc';verTipoOferta();
   EST.t1=!!e.t1;EST.t2=!!e.t2;EST.lista2=e.lista2||0;EST.editId=e.editId||'';EST.orden=e.orden||'';pintarEdicion();EST.tObj=!!e.tObj;EST.vm=e.vm||0;
   elegirOpcion(e.op===2?2:1);
   if(s.rtab)RTAB=s.rtab;
@@ -1767,7 +1789,7 @@ $('sprovcod').addEventListener('input',guardarEstadoPronto);
 /* ---------------- PDF DE LA PROPUESTA (se arma desde una "foto" de la simulación: sirve para volver a bajarlo) ---------------- */
 function fotoPDF(e){
   var d=e.d, P=SPROD||{}, bp=bultoPrincipal(), pv=proveedorElegido();
-  return {orden:EST.orden||'',op:e.op,of:e.op===2&&e.desc>0,lista:e.lista,desc:e.desc,P:e.P,m:e.m,gan:e.gan,dias:e.dias,aum:e.aum,vm:e.vm,proy:e.proy,objU:e.objU,ganProy:e.ganProy,
+  return {orden:EST.orden||'',op:e.op,of:e.op===2&&e.desc>0,promo:e.promo||'',lleva:e.lleva||0,lista:e.lista,desc:e.desc,P:e.P,m:e.m,gan:e.gan,dias:e.dias,aum:e.aum,vm:e.vm,proy:e.proy,objU:e.objU,ganProy:e.ganProy,
     c:d.c,q:d.q||0,mn:d.mn,fecha:hoyTxt(),hora:(function(x){return ('0'+x.getHours()).slice(-2)+':'+('0'+x.getMinutes()).slice(-2)})(new Date()),hasta:hoyTxt(e.dias),prov:pv,bulto:bp?{proveedor:bp.proveedor,unidades:bp.unidades}:null,
     prod:{codigo:P.codigo||'',producto:P.producto||'',proveedor:baseHoy(P).proveedor,codigoProveedor:baseHoy(P).codigoProveedor,costo:baseHoy(P).costo,precio:baseHoy(P).precio,stock:P.stock||0,ventaMensual:P.ventaMensual||0,
       cab:P.cabecera?{codigo:P.cabecera.codigo||'',producto:P.cabecera.producto||'',esCabecera:!!P.cabecera.esCabecera,cantidad:P.cabecera.cantidad||0}:null}};
@@ -1832,7 +1854,7 @@ function armarPDFDesde(f,id){
           (cambiaPrecio?'El precio de venta se cambia acá y cambia el de toda la gama. ':'El precio de venta no cambia. ')+
           (subeC?'El costo subió: se cambia en la cabecera (toda la gama) para no perder margen.':(P.costo>0&&f.c<P.costo-0.005?'El costo no se cambia: la compra salió más barata y es solo de este producto (el resto de la gama tiene stock a su costo). Mientras dure este stock, ECHU calcula la ganancia con el costo de la compra.':'')));
         if(subeC)D.fila('Costo nuevo · toda la gama',$c(f.c)+' (hoy '+$c(P.costo)+')');
-        if(f.of){D.fila('Precio de venta (lista) · toda la gama',$f(f.lista));D.fila('Bonificación',Math.round(f.desc*100)+'%');D.fila('Se cobra',$f(f.P));if(f.hasta)D.fila('Vigencia de la oferta',f.fecha+' al '+f.hasta);}
+        if(f.of){D.fila('Precio de venta (lista) · toda la gama',$f(f.lista));if(f.promo){D.fila('Oferta',f.promo);D.fila('Queda cada unidad llevando '+f.lleva,$f(f.P));}else{D.fila('Bonificación',Math.round(f.desc*100)+'%');D.fila('Se cobra',$f(f.P));}if(f.hasta)D.fila('Vigencia de la oferta',f.fecha+' al '+f.hasta);}
         else D.fila(cambiaPrecio?'Precio de venta nuevo · toda la gama':'Precio de venta (no cambia)',$f(f.P)+(cambiaPrecio&&P.precio?' (hoy '+$f(P.precio)+')':''));
         D.fila('Margen con el costo de la compra',pc(f.m),f.m<f.mn);D.fila('Ganancia por unidad (después de comisiones)',$f(f.gan),f.gan<0);
       }else if(CB){
@@ -1846,7 +1868,7 @@ function armarPDFDesde(f,id){
       D.seccion('Para cargar en el sistema');
       if(f.prov&&f.prov.nombre){D.fila('Proveedor',f.prov.nombre.slice(0,40)+(f.prov.codigo?' · código '+f.prov.codigo:''));
         D.fila('Costo nuevo por unidad',$c(f.c)+(P.costo&&Math.abs(P.costo-f.c)>0.005?' (hoy '+$c(P.costo)+(P.proveedor&&P.proveedor!==f.prov.nombre?' en '+P.proveedor.slice(0,25):'')+')':''));}
-      if(f.of){D.fila('Precio de venta (lista)',$f(f.lista));D.fila('Bonificación',Math.round(f.desc*100)+'%');D.fila('Se cobra',$f(f.P));if(f.hasta)D.fila('Vigencia de la oferta',f.fecha+' al '+f.hasta);}
+      if(f.of){D.fila('Precio de venta (lista)',$f(f.lista));if(f.promo){D.fila('Oferta',f.promo);D.fila('Queda cada unidad llevando '+f.lleva,$f(f.P));}else{D.fila('Bonificación',Math.round(f.desc*100)+'%');D.fila('Se cobra',$f(f.P));}if(f.hasta)D.fila('Vigencia de la oferta',f.fecha+' al '+f.hasta);}
       else D.fila('Precio de venta',$f(f.P));
       D.fila('Margen',pc(f.m),f.m<f.mn);D.fila('Ganancia por unidad (después de comisiones)',$f(f.gan),f.gan<0);
       }
@@ -1899,10 +1921,10 @@ function datosSimulacion(e){
     costoSistema:baseHoy(P).costo,precioHoy:baseHoy(P).precio,
     sistemaActual:{costo:P.costoSistema||P.costo||0,precio:P.precio||0,proveedor:P.proveedor||'',codigoProveedor:P.codigoProveedor||''},
     costo:d.c,cantidad:d.q||0,precioSinOferta:e.lista,precioConOferta:e.P,
-    ofertaPct:op2?Math.round(e.desc*100):0,margen:Math.round(e.m*1000)/10,gananciaUnidad:Math.round(e.gan),objetivo:e.objU,dias:e.dias,
+    ofertaPct:op2?Math.round(e.desc*1000)/10:0,promo:op2?(e.promo||''):'',margen:Math.round(e.m*1000)/10,gananciaUnidad:Math.round(e.gan),objetivo:e.objU,dias:e.dias,
     ventaMensual:Math.round(e.vm*10)/10,aumento:Math.round(e.aum*100),proyeccion:Math.round(e.proy*10)/10,gananciaProyectada:Math.round(e.ganProy),
     pdf:fotoPDF(e),
-    ed:{sprecio:$('sprecio').value,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2}};
+    ed:{sprecio:$('sprecio').value,e1pre:$('e1pre').value,epre:$('epre').value,epct:$('epct').value,eaum:$('eaum').value,lista2:EST.lista2||0,t1:EST.t1,t2:EST.t2,etipo:$('etipo').value,e2da:$('e2da').value}};
 }
 // Una vez guardada, lo que guardes o bajes de nuevo actualiza la MISMA fila (no se duplica).
 // v45: mientras se guarda, los botones quedan bloqueados (tocar varias veces no duplica la orden).
@@ -1966,7 +1988,7 @@ function editarPropuesta(i){
     $('sprovcod').value=x.codigoProveedor||(x.datos&&x.datos.codigoProveedor)||(x.fueraDeLista?'':codigoEnProveedor(x.proveedor));
     if(ed.sprecio)$('sprecio').value=ed.sprecio;
     if(ed.e1pre){$('e1pre').value=ed.e1pre;EST.t1=!!ed.t1}
-    if(op===2){ponerPesos('epre',x.precioConOferta);EST.t2=true;$('epct').value=ed.epct||Math.round((1-x.precioConOferta/x.precioSinOferta)*100);EST.lista2=ed.lista2||0;if(ed.eaum!==undefined)$('eaum').value=ed.eaum}
+    if(op===2){ponerPesos('epre',x.precioConOferta);EST.t2=true;$('epct').value=ed.epct||Math.round((1-x.precioConOferta/x.precioSinOferta)*100);$('etipo').value=ed.etipo||'desc';if(ed.e2da)$('e2da').value=ed.e2da;verTipoOferta();EST.lista2=ed.lista2||0;if(ed.eaum!==undefined)$('eaum').value=ed.eaum}
     else if(!ed.e1pre){ponerPesos('e1pre',x.precioConOferta);EST.t1=true}
     $('edias').value=x.dias||30;$('eobj').value=x.objetivo||'';EST.tObj=true;
     EST.editId=x.id;EST.orden=x.orden||'';sugerirPrecioPorCosto(true);elegirOpcion(op);recalcular();pintarEdicion();
@@ -2938,7 +2960,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=156');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=157');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
