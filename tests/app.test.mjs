@@ -754,9 +754,15 @@ test('agentes automáticos: Descargar STOCK crea una sola orden, muestra el paso
   assert.equal(await page.locator('#agstock').isDisabled(), true, 'con una orden en marcha no se puede pedir otra');
   assert.equal(creadas, 1);
   assert.doesNotMatch(await page.locator('#agpanel').innerText(), /actualizado correctamente/);
-  Object.assign(orden, {estado: 'ACTUALIZANDO_ECHU', detalle: 'ECHU está actualizando el stock', archivo: 'stock 13.11.26.xlsx'});
+  // el archivo llegó a Drive: no se actualiza en el momento, espera la hora fija
+  Object.assign(orden, {estado: 'ESPERANDO_HORARIO', detalle: 'El archivo ya está en Drive. ECHU lo actualiza solo a las 00:00 (o antes, si tocás Actualizar).', archivo: 'stock 13.11.26.xlsx'});
   await page.evaluate(() => agCargar());
-  await page.locator('#agorden', {hasText: 'Paso 5 de 5'}).waitFor();
+  await page.locator('#agorden', {hasText: 'Paso 5 de 6'}).waitFor();
+  assert.match(await page.locator('#agorden').innerText(), /espera la hora de actualización[\s\S]*a las 00:00/);
+  assert.doesNotMatch(await page.locator('#agpanel').innerText(), /actualizado correctamente/);
+  Object.assign(orden, {estado: 'ACTUALIZANDO_ECHU', detalle: 'ECHU está actualizando el stock'});
+  await page.evaluate(() => agCargar());
+  await page.locator('#agorden', {hasText: 'Paso 6 de 6'}).waitFor();
   Object.assign(orden, {estado: 'COMPLETADO', fin: '2026-11-13 19:52:00'}); base.activa = null; base.ultima = orden;
   await page.evaluate(() => agCargar());
   await page.locator('#agorden', {hasText: 'STOCK actualizado correctamente'}).waitFor();

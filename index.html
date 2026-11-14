@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=159;
+var APP_V=160;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -786,7 +786,7 @@ document.querySelectorAll('#mas [data-ir]').forEach(function(c){c.onclick=functi
 // La app deja una orden en ECHU; el programa de la computadora del local la toma, corre Civil Systems y va avisando el paso.
 var AG={t:0,abierto:false,d:null};
 var AG_TXT={PENDIENTE:'Orden pendiente: esperando a la computadora del local',EJECUTANDO:'Civil Systems está generando el archivo',ARCHIVO_GENERADO:'Archivo generado',
-  SINCRONIZANDO:'Subiendo archivo a Google Drive',ACTUALIZANDO_ECHU:'ECHU está actualizando el stock',COMPLETADO:'STOCK actualizado correctamente',ERROR:'Error',CANCELADA:'Cancelada'};
+  SINCRONIZANDO:'Subiendo archivo a Google Drive',ESPERANDO_HORARIO:'STOCK descargado: espera la hora de actualización',ACTUALIZANDO_ECHU:'ECHU está actualizando el stock',COMPLETADO:'STOCK actualizado correctamente',ERROR:'Error',CANCELADA:'Cancelada'};
 function agFecha(t){t=String(t||'');return t?t.slice(8,10)+'/'+t.slice(5,7)+' '+t.slice(11,16):''}
 function agAbrir(){
   AG.abierto=true;document.querySelectorAll('#mas > .card, #mas > .note').forEach(function(x){x.classList.add('oculto')});$('agpanel').classList.remove('oculto');window.scrollTo(0,0);agCargar();
@@ -805,8 +805,8 @@ function agPintar(d){
   $('agestado').innerHTML='Agente: '+chip+' · '+det+(u?'<br>Última descarga: <b>'+esc(u.archivo)+'</b> · '+agFecha(u.fin):'');
   $('agstock').disabled=!!o||!d.tieneClave;$('agstock').textContent=o?'Descarga en marcha…':'Descargar STOCK';
   var h='';
-  if(o){var pasos=['PENDIENTE','EJECUTANDO','ARCHIVO_GENERADO','SINCRONIZANDO','ACTUALIZANDO_ECHU'],i=pasos.indexOf(o.estado);
-    h='<div class="eval ok" style="margin-top:10px"><b>'+esc(AG_TXT[o.estado]||o.estado)+'</b>'+(o.detalle?'<br>'+esc(o.detalle):'')+'<br>Paso '+(i+1)+' de 5 · pedida '+agFecha(o.pedida)+'</div>'+
+  if(o){var pasos=['PENDIENTE','EJECUTANDO','ARCHIVO_GENERADO','SINCRONIZANDO','ESPERANDO_HORARIO','ACTUALIZANDO_ECHU'],i=pasos.indexOf(o.estado);
+    h='<div class="eval ok" style="margin-top:10px"><b>'+esc(AG_TXT[o.estado]||o.estado)+'</b>'+(o.detalle?'<br>'+esc(o.detalle):'')+'<br>Paso '+(i+1)+' de 6 · pedida '+agFecha(o.pedida)+'</div>'+
       (o.estado==='PENDIENTE'?'<div class="btns"><button class="btn sec" onclick="agCancelar(\''+esc(o.id)+'\')">Cancelar</button></div>':'');}
   else{var x=(d.historial||[])[0];if(x&&x.estado==='COMPLETADO')h='<div class="eval bien" style="margin-top:10px"><b>STOCK actualizado correctamente</b><br>'+esc(x.archivo)+' · '+agFecha(x.fin)+'</div>';
     else if(x&&x.estado==='ERROR')h='<div class="eval mal" style="margin-top:10px"><b>La última descarga falló</b><br>'+esc(x.error)+' · '+agFecha(x.fin)+'</div>';}
@@ -3024,7 +3024,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=159');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=160');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
 window.addEventListener('resize',cajAlto);
 function cCargar(per){
   if(esConsulta())return;
