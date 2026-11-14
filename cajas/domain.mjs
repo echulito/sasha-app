@@ -17,7 +17,7 @@ function compute_assign(s,r,kind='sale'){
  if(r.cashierId&&named(r.cashierId))return {id:r.cashierId,name:named(r.cashierId).name,basis:'Asignación confirmada'};
  if(s.attendance.some(x=>x.date===r.date)&&people.length===1)return {id:people[0].id,name:people[0].name,basis:'Única cajera presente'};
  if(kind==='sale'){
-  const closes=s.reports.filter(x=>x.type==='turnClose').flatMap(x=>x.rows).filter(c=>c.date===r.date&&c.branch===r.branch&&c.box===r.box);
+  const closes=cachedDerived('closesAt',(st,date,branch,box)=>st.reports.filter(x=>x.type==='turnClose').flatMap(x=>x.rows).filter(c=>c.date===date&&c.branch===branch&&c.box===box),s,[r.date,r.branch,r.box]);
   const ticketNumber=Number(r.ticket?.match(/-(\d+)$/)?.[1]);
   const identified=closes.filter(c=>r.batch?c.batch===r.batch:Number.isFinite(ticketNumber)&&ticketNumber>=Number(c.firstTicket)&&ticketNumber<=Number(c.lastTicket));
   // A minute shared by two shifts is not a conflict when the receipt identifies its closing.

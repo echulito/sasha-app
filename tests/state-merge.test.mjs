@@ -112,3 +112,38 @@ test('app abierta y otro dispositivo guarda mientras tanto: el próximo guardado
     assert.deepEqual(errores, []);
   } finally { await cerrar(); }
 });
+
+test('v163: Historial y Gestión se dibujan recién al abrirlas (dibujar todo en cada guardado congelaba el celular)', async () => {
+  const servidor = {state: base(), revision: 'r1', intentos: []};
+  const {page, errores, cerrar} = await abrir({servidor});
+  try {
+    await page.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('cajasBase')).revision === 'r1'; } catch { return false; } }, null, {timeout: 20000});
+    assert.equal(await page.evaluate(() => document.querySelector('#metrics').innerHTML + document.querySelector('#cashierList').innerHTML), '', 'las pestañas ocultas no se dibujan al abrir');
+    await page.click('[data-tab="history"]');
+    assert.notEqual(await page.evaluate(() => document.querySelector('#metrics').innerHTML), '');
+    await page.click('[data-tab="management"]');
+    assert.match(await page.locator('#cashierList').innerText(), /Vanesa/);
+    // un guardado estando en Gestión no vuelve a dibujar Historial; al volver, se actualiza
+    await page.evaluate(() => { document.querySelector('#excludedProductCode').value = '777'; document.querySelector('#excludedProductForm').requestSubmit(); });
+    await page.waitForFunction(() => localStorage.getItem('cajasPending') === null, null, {timeout: 20000});
+    assert.match(await page.evaluate(() => document.querySelector('#excludedProductList').textContent), /777/);
+    await page.click('[data-tab="day"]'); await page.click('[data-tab="history"]');
+    assert.deepEqual(errores, []);
+  } finally { await cerrar(); }
+});
+
+test('v163: si ECHU contesta sin datos (el envío no le llegó), lo dice claro y reintenta solo', async () => {
+  const servidor = {state: base(), revision: 'r1', intentos: []};
+  const {page, errores, cerrar} = await abrir({servidor});
+  try {
+    await page.waitForFunction(() => { try { return JSON.parse(localStorage.getItem('cajasBase')).revision === 'r1'; } catch { return false; } }, null, {timeout: 20000});
+    const real = DATOS.cajas_guardar; let veces = 0;
+    DATOS.cajas_guardar = p => (++veces === 1 ? undefined : real(p));
+    await page.evaluate(() => { document.querySelector('#excludedProductCode').value = '888'; document.querySelector('#excludedProductForm').requestSubmit(); });
+    await page.locator('#saveToast', {hasText: /ECHU no recibió el envío \(\d+\.\d MB\)/}).waitFor({timeout: 10000});
+    await page.waitForFunction(() => localStorage.getItem('cajasPending') === null, null, {timeout: 20000});
+    assert.equal(veces, 2);
+    assert.deepEqual(servidor.state.excludedProductCodes, ['888']);
+    assert.deepEqual(errores, []);
+  } finally { await cerrar(); }
+});
