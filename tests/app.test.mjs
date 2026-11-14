@@ -781,3 +781,22 @@ test('agentes automáticos: Descargar STOCK crea una sola orden, muestra el paso
   assert.deepEqual(errores, []);
   await ctx.close();
 });
+
+test('v162: con Cajas abierta hay un solo scroll (el de Cajas): la página de afuera no se mueve y al salir vuelve a moverse', async () => {
+  const {ctx, page} = await abrir();
+  await page.click('#bnav button[data-b="caja"]');
+  await page.waitForFunction(() => { const f = document.getElementById('cajframe'); return f && f.contentDocument && f.contentDocument.body && f.contentDocument.querySelector('#upload'); }, null, {timeout: 20000});
+  await page.evaluate(() => { const d = document.getElementById('cajframe').contentDocument, x = d.createElement('div'); x.style.height = '3000px'; d.body.appendChild(x); });
+  assert.equal(await page.evaluate(() => document.documentElement.classList.contains('cajfija')), true);
+  const box = await page.locator('#cajframe').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  for (let i = 0; i < 12; i++) { await page.mouse.wheel(0, 500); await page.waitForTimeout(80); }
+  const abajo = await page.evaluate(() => ({afuera: scrollY, adentro: document.getElementById('cajframe').contentWindow.scrollY}));
+  assert.equal(abajo.afuera, 0, 'la página de afuera no se corre al llegar al final');
+  assert.ok(abajo.adentro > 2000, 'Cajas llegó abajo');
+  for (let i = 0; i < 12; i++) { await page.mouse.wheel(0, -500); await page.waitForTimeout(80); }
+  assert.deepEqual(await page.evaluate(() => ({afuera: scrollY, adentro: document.getElementById('cajframe').contentWindow.scrollY})), {afuera: 0, adentro: 0}, 'se puede volver arriba');
+  await page.click('#bnav button[data-b="inicio"]'); await page.waitForTimeout(600);
+  assert.equal(await page.evaluate(() => document.documentElement.classList.contains('cajfija')), false, 'en el resto de la app la página se mueve normal');
+  await ctx.close();
+});

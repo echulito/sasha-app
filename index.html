@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=161;
+var APP_V=162;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -149,6 +149,8 @@ body.consulta{--azul:#F49820;--azul2:#D9790B;--celeste:#FEF0DC}
 /* v107: navegación de 5 botones abajo (modelo A) + Inicio */
 header nav{display:none}
 main{padding-bottom:calc(96px + env(safe-area-inset-bottom))}
+/* v162: con Cajas abierta la página de afuera no se mueve; el único scroll es el de Cajas (dos scroll, uno adentro del otro, se trababan en el celular) */
+html.cajfija,html.cajfija body{overflow:hidden;overscroll-behavior:none}
 #bnav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#fff;border-top:1px solid var(--linea);display:flex;padding-bottom:env(safe-area-inset-bottom)}
 #bnav button{flex:1;background:none;border:0;color:var(--gris);font-size:11px;padding:9px 2px 8px;cursor:pointer;font-family:inherit}
 #bnav button b{display:block;font-size:19px;font-weight:400;line-height:22px;margin-bottom:1px}
@@ -3023,9 +3025,11 @@ function admSec(s){
 }
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
-function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(420,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=161');try{window.scrollTo(0,0)}catch(e){}setTimeout(cajAlto,0)}
-window.addEventListener('resize',cajAlto);
+function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=162');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
+window.addEventListener('resize',function(){cajFija();cajAlto()});
+document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
 function cCargar(per){
   if(esConsulta())return;
   CT.per=per||CT.per||cPerHoy();
