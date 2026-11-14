@@ -95,7 +95,7 @@ export function crearECHU(modo = 'normal') {
       else res = {ok: true, datos: DATOS[acc] || {}};
     }
     else if (p.token !== TOKEN) res = {ok: false, error: 'PIN', mensaje: 'Volvé a poner el PIN.'};
-    else if (typeof DATOS[acc] === 'function') { try { res = {ok: true, datos: DATOS[acc](p)}; } catch (e) { res = {ok: false, error: 'ERROR', mensaje: e.message}; } }
+    else if (typeof DATOS[acc] === 'function') { try { res = {ok: true, datos: DATOS[acc](p)}; } catch (e) { res = {ok: false, error: 'ERROR', mensaje: e.message, status: e.status}; } }
     else res = {ok: true, datos: acc in DATOS ? DATOS[acc] : {}};
     if (res.ok && res.datos !== undefined && modo !== 'viejo') res.h = modo === 'corrupto' && acc === 'resumen' ? 'no-coincide' : huella(JSON.stringify(res.datos));
     const json = JSON.stringify(res);

@@ -522,7 +522,8 @@ test('pantallas iguales a las aprobadas (regresión visual)', {skip: !CON_CAPTUR
     for (const sel of IR[t]) { if (await page.locator(sel).isVisible()) await page.click(sel); }
     await page.waitForTimeout(600);
     await page.locator('#avisoSub').waitFor({state: 'hidden', timeout: 6000}); // el aviso lleva la hora: se espera a que se vaya
-    const png = await page.screenshot({fullPage: true, mask: [page.locator('#verapp')], animations: 'disabled'});
+    // el calendario marca el día de hoy: se tapa para que la captura no cambie con la fecha
+    const png = await page.screenshot({fullPage: true, mask: [page.locator('#verapp'), page.locator('.cal')], animations: 'disabled'});
     const ruta = CAPT + t + '.png';
     if (ACTUALIZAR || !fs.existsSync(ruta)) { fs.writeFileSync(ruta, png); continue; }
     const d = await diferencia(page, fs.readFileSync(ruta), png);
