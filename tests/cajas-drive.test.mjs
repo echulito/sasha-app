@@ -1,0 +1,44 @@
+// v167: los PDF que el agente dejó en Drive (CAJAS PDF / dd.mm.aa) se importan solos al abrir Cajeras (datos inventados).
+import test from 'node:test'; import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require = createRequire(import.meta.url);
+const {chromium} = require('playwright');
+const {PDFDocument, StandardFonts} = require('../pdf-lib.min.js');
+import {servir} from './servidor-estatico.mjs';
+import {crearECHU, URL_ECHU, TOKEN, DATOS} from './echu-falso.mjs';
+
+async function pdfDeLineas(lineas) {
+  const doc = await PDFDocument.create(), page = doc.addPage([800, 600]), font = await doc.embedFont(StandardFonts.Helvetica);
+  lineas.forEach((l, i) => page.drawText(l, {x: 30, y: 560 - i * 20, size: 10, font}));
+  return Buffer.from(await doc.save()).toString('base64');
+}
+
+test('al abrir Cajeras se importan solos los PDF nuevos de Drive; el que no se puede leer avisa y no se vuelve a ofrecer', async () => {
+  const planilla = await pdfDeLineas([
+    'Planilla de Caja', 'Fecha: 16/10/2026 Sucursal: 01', 'Concepto Caja 0001 Caja 0003 Total',
+    'INICIO Efectivo $ 1.000,00 0,00 1.000,00', 'TOTAL VENTA (Pesificado) 5.000,00 0,00 5.000,00',
+    'TOTAL SALIDAS Efectivo $ 0,00 0,00 0,00', 'DECLARADO Efectivo $ 3.000,00 0,00 3.000,00', 'DECLARADO Cupones 3.000,00 0,00 3.000,00']);
+  const otro = await pdfDeLineas(['Un PDF que no es de Civil']);
+  const hechos = [], antes = {e: DATOS.cajas_estado, n: DATOS.cajas_pdf_nuevos, b: DATOS.cajas_pdf_bajar, h: DATOS.cajas_pdf_hechos};
+  DATOS.cajas_estado = {state: {reports: [], manual: []}, revision: 1, sheetUrl: ''};
+  DATOS.cajas_pdf_nuevos = {archivos: [{id: 'PDF_PLANILLA_1', nombre: 'planilla de caja.pdf', fecha: '2026-10-16', tam: 9000}, {id: 'PDF_OTRO_0002', nombre: 'otro.pdf', fecha: '2026-10-16', tam: 9000}]};
+  DATOS.cajas_pdf_bajar = p => ({id: p.id, nombre: 'x.pdf', data: p.id === 'PDF_PLANILLA_1' ? planilla : otro});
+  DATOS.cajas_pdf_hechos = p => { hechos.push(...JSON.parse(p.datos)); return {hechos: 2}; };
+  const b = await chromium.launch(), web = await servir();
+  try {
+    const ctx = await b.newContext({viewport: {width: 390, height: 844}, serviceWorkers: 'block', locale: 'es-AR', timezoneId: 'America/Argentina/Buenos_Aires'});
+    const echu = crearECHU(); await ctx.route(URL_ECHU + '**', r => echu.manejar(r));
+    await ctx.addInitScript(([u, t]) => { localStorage.setItem('echu_url', u); localStorage.setItem('echu_token', t); }, [URL_ECHU, TOKEN]);
+    const page = await ctx.newPage(); const errores = []; page.on('pageerror', e => errores.push(e.message));
+    await page.goto(web.url + 'cajas/index.html');
+    await page.waitForFunction(() => /otro\.pdf/.test(document.getElementById('message')?.textContent || ''), null, {timeout: 20000});
+    const guardados = echu.pedidos.filter(p => /"accion":"cajas_guardar"/.test(p.cuerpo || '')).map(p => JSON.parse(JSON.parse(p.cuerpo).datos));
+    assert.ok(guardados.some(g => g.state.reports.some(r => r.type === 'close' && r.date === '2026-10-16' && r.filename === 'planilla de caja.pdf' && r.rows[0].sales === 500000)), 'la planilla quedó importada y guardada');
+    assert.deepEqual(hechos.sort(), ['PDF_OTRO_0002', 'PDF_PLANILLA_1'], 'los dos quedan tomados (el que no se pudo leer no se reintenta)');
+    assert.match(await page.locator('#message').innerText(), /otro\.pdf: /);
+    assert.deepEqual(errores, []);
+  } finally {
+    await b.close(); web.cerrar();
+    DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
+  }
+});

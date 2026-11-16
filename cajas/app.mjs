@@ -456,3 +456,21 @@ document.addEventListener('click',event=>{const button=event.target.closest('[da
 document.addEventListener('click',event=>{const button=event.target.closest('[data-remove-new-team-expense]');if(button)button.closest('[data-new-team-expense]').remove();});
 
 function openSection(id){const target=$(id);if(!target)return;const view=target.closest('.view');document.querySelector('[data-tab="'+view.id+'"]').click();for(let el=target;el&&el!==view;el=el.parentElement)if(el.tagName==='DETAILS')el.open=true;}
+
+// v167: los PDF que el agente de la computadora dejó en Drive (CAJAS PDF / dd.mm.aa) se importan solos al abrir,
+// con el mismo lector que "Importar PDF". Si ya había otro distinto para ese día no se reemplaza (eso queda a mano).
+let DRIVE_ULTIMO=0;
+export async function importarDrive(){if(!online||busy||Date.now()-DRIVE_ULTIMO<300000)return;DRIVE_ULTIMO=Date.now();let lista;try{lista=(await echu('cajas_pdf_nuevos')).archivos||[];}catch{return;}if(!lista.length)return;
+ busy=true;const hechos=[],avisos=[];let nuevos=0;msg('Trayendo '+lista.length+' PDF de Drive…',true);
+ try{for(const a of lista){try{const d=await echu('cajas_pdf_bajar',undefined,{id:a.id}),bin=atob(d.data),buf=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
+   const report=parseReport(await extractPdf(buf.buffer));report.filename=a.nombre;const idx=state.reports.findIndex(r=>reportKey(r)===reportKey(report));
+   if(idx<0){state.reports.push(report);state.completedDays=state.completedDays.filter(x=>x!==report.date);nuevos++;}
+   else if(JSON.stringify(state.reports[idx].rows)!==JSON.stringify(report.rows))avisos.push(a.nombre+': ya había otro para ese día y no se reemplazó (si este es el bueno, importalo a mano)');
+   hechos.push(a.id);
+  }catch(e){if(e.status===401||e.status===503)break;avisos.push(a.nombre+': '+e.message);hechos.push(a.id);}}
+ }finally{busy=false;}
+ if(nuevos)save(nuevos+(nuevos===1?' PDF importado':' PDF importados')+' de Drive');
+ if(hechos.length){try{await echu('cajas_pdf_hechos',hechos);}catch{}}
+ if(avisos.length)msg((nuevos?nuevos+' PDF importados de Drive · ':'')+avisos.join(' · '));else if(!nuevos)msg('Los PDF de Drive ya estaban cargados',true);}
+setTimeout(importarDrive,1200);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')importarDrive();});
