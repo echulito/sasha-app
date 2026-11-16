@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=164;
+var APP_V=165;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -848,9 +848,11 @@ function agLista(o){
 function agOrdenHtml(o,activa){
   var t=o.tipo==='REPORTES'?'Reportes del '+agDia(o.fecha):'STOCK';
   var cab=o.estado==='ERROR'?'<div class="eval mal" style="margin-top:10px"><b>'+esc(t)+': se detuvo</b><br>'+esc(o.error)+' · '+agFecha(o.fin)+'</div>'
+    :o.estado==='CANCELADA'?'<div class="eval mal" style="margin-top:10px"><b>'+esc(t)+': cancelada</b><br>'+esc(o.detalle||'Cancelada desde la app')+' · '+agFecha(o.fin)+'</div>'
     :o.estado==='COMPLETADO'?'<div class="eval bien" style="margin-top:10px"><b>'+esc(t)+': '+(o.tipo==='REPORTES'?'actualizado correctamente':'STOCK actualizado correctamente')+'</b><br>'+(o.tipo==='REPORTES'?'':esc(o.archivo)+' · ')+agFecha(o.fin)+'</div>'
     :'<div class="eval ok" style="margin-top:10px"><b>'+esc(t)+' · '+esc(AG_TXT[o.estado]||o.estado)+'</b>'+(o.detalle?'<br>'+esc(o.detalle):'')+'<br><small>Pedida '+agFecha(o.pedida)+(o.origen==='PROGRAMADA'?' · automática':'')+'</small></div>';
-  return cab+(o.tipo==='REPORTES'?agLista(o):'')+(activa&&o.estado==='PENDIENTE'?'<div class="btns"><button class="btn sec" onclick="agCancelar(\''+esc(o.id)+'\')">Cancelar</button></div>':'');
+  // v165: se puede cancelar en cualquier momento, menos mientras ECHU está actualizando.
+  return cab+(o.tipo==='REPORTES'&&o.estado!=='CANCELADA'?agLista(o):'')+(activa&&o.estado!=='ACTUALIZANDO_ECHU'?'<div class="btns"><button class="btn sec" id="agcancelar" onclick="agCancelar(\''+esc(o.id)+'\',\''+esc(o.estado)+'\')">Cancelar descarga</button></div>':'');
 }
 function agPintar(d){
   AG.d=d;var a=d.agente||{},o=d.activa,u=d.ultima;
@@ -864,7 +866,7 @@ function agPintar(d){
   $('agrep').disabled=!!o||!d.tieneClave;$('agrep').textContent=o?'Descarga en marcha…':'Descargar stock, productos y movimientos';
   var h='';
   if(o)h=agOrdenHtml(o,true);
-  else{var x=(d.historial||[])[0];if(x&&(x.estado==='COMPLETADO'||x.estado==='ERROR'))h=agOrdenHtml(x,false);}
+  else{var x=(d.historial||[])[0];if(x&&(x.estado==='COMPLETADO'||x.estado==='ERROR'||x.estado==='CANCELADA'))h=agOrdenHtml(x,false);}
   $('agorden').innerHTML=h;
   var p=d.prog||{};
   if(document.activeElement!==$('aghora'))$('aghora').value=p.hora||'23:00';
@@ -876,7 +878,11 @@ function agPintar(d){
     var t=x.tipo==='REPORTES'?'Reportes del '+agDia(x.fecha).slice(0,5):x.tipo;
     return '<div class="row"><span>'+agFecha(x.pedida)+' · '+esc(t)+(x.origen==='PROGRAMADA'?' · automática':'')+(x.tipo!=='REPORTES'&&x.archivo?'<br><small>'+esc(x.archivo)+'</small>':'')+(x.error?'<br><small class="neg">'+esc(x.error)+'</small>':'')+'</span><span class="chip '+c+'">'+esc(x.estado==='COMPLETADO'?'Completado':x.estado==='ERROR'?'Error':x.estado==='CANCELADA'?'Cancelada':'En marcha')+'</span></div>'}).join(''):'Todavía no hay descargas.';
 }
-function agCancelar(id){api('agente_cancelar',{id:id}).then(agPintar).catch(function(e){$('agorden').innerHTML='<div class="eval mal">'+esc(e.message)+'</div>'})}
+function agCancelar(id,estado){
+  if(estado!=='PENDIENTE'&&!confirm('¿Cancelar la descarga? La computadora termina el reporte que está haciendo y para (Civil queda en el Menú Principal).'))return;
+  var b=$('agcancelar');if(b){b.disabled=true;b.textContent='Cancelando…'}
+  api('agente_cancelar',{id:id}).then(agPintar).catch(function(e){if(b){b.disabled=false;b.textContent='Cancelar descarga'}$('agorden').insertAdjacentHTML('beforeend','<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>')});
+}
 $('agvolver').onclick=agCerrar;
 $('agrep').onclick=function(){
   var b=$('agrep');if(b.disabled)return;
@@ -3085,7 +3091,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=164');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=165');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);

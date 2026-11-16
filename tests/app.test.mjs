@@ -761,6 +761,7 @@ test('agentes automáticos v164: reportes de un día con la lista que se tilda e
   await page.locator('#agorden', {hasText: 'Reportes del 14/11/2026'}).waitFor();
   assert.deepEqual(pedidas, ['REPORTES 2026-11-14']);
   assert.equal(await page.locator('#agrep').isDisabled(), true, 'con una descarga en marcha no se puede pedir otra');
+  assert.equal(await page.locator('#agcancelar').isVisible(), true, 'se puede cancelar desde que se pide');
   const lista = async () => (await page.locator('#agorden .agl').innerText()).replace(/\s+/g, ' ');
   const tildados = () => page.locator('#agorden .agp.ok').count();
   assert.equal(await tildados(), 0);
@@ -770,6 +771,7 @@ test('agentes automáticos v164: reportes de un día con la lista que se tilda e
     stock: {e: 'COPIADO', d: 'stock 14.11.26.xlsx', h: '14:05:30', drive: '14:05:52'}, productos: {e: 'EN_CURSO', d: '', h: '14:05:40'}, movimientos: {e: 'PENDIENTE', d: 'movimientos 14.11.26.xlsx'}}});
   await page.evaluate(() => agCargar());
   await page.locator('#agorden', {hasText: 'STOCK en su carpeta de Drive'}).waitFor();
+  assert.equal(await page.locator('#agcancelar').isVisible(), true, 'también con la descarga en marcha');
   assert.equal(await tildados(), 3, 'pantalla, Civil y STOCK tildados');
   assert.match(await lista(), /Civil está generando PRODUCTOS/);
   assert.equal(await page.locator('#agorden .agp.curso').count(), 1);
@@ -781,6 +783,11 @@ test('agentes automáticos v164: reportes de un día con la lista que se tilda e
   assert.equal(await tildados(), 5);
   assert.match(await lista(), /MOVIMIENTOS: no hubo movimientos ese día/);
   assert.doesNotMatch(await page.locator('#agorden').innerText(), /actualizado correctamente/);
+  // mientras ECHU actualiza no se puede cancelar
+  orden.estado = 'ACTUALIZANDO_ECHU';
+  await page.evaluate(() => agCargar());
+  await page.locator('#agorden', {hasText: 'ECHU está actualizando'}).waitFor();
+  assert.equal(await page.locator('#agcancelar').count(), 0);
   Object.assign(orden, {estado: 'COMPLETADO', fin: '2026-11-17 00:21:00'}); orden.pasos.echu = {e: 'OK', h: '00:21:05'}; base.activa = null; base.ultima = orden;
   await page.evaluate(() => agCargar());
   await page.locator('#agorden', {hasText: 'actualizado correctamente'}).waitFor();
@@ -792,6 +799,21 @@ test('agentes automáticos v164: reportes de un día con la lista que se tilda e
   await page.evaluate(() => agCargar());
   await page.locator('#agorden', {hasText: 'se detuvo'}).waitFor();
   assert.equal(await page.locator('#agorden .agp.mal').count(), 2, 'PRODUCTOS y ECHU en rojo');
+  // cancelar una descarga en marcha: pide confirmación y la orden queda cancelada
+  let canceladas = [];
+  DATOS.agente_cancelar = p => { canceladas.push(p.id); orden.estado = 'CANCELADA'; orden.detalle = 'Cancelada desde la app: la computadora para en el próximo paso seguro (Civil queda en el Menú Principal)'; base.activa = null; return base; };
+  Object.assign(orden, {estado: 'EJECUTANDO', error: '', fin: '2026-11-16 14:08:00'}); base.activa = orden;
+  await page.evaluate(() => agCargar());
+  await page.locator('#agcancelar').waitFor();
+  page.once('dialog', d => d.dismiss());
+  await page.click('#agcancelar');
+  assert.deepEqual(canceladas, [], 'si no se confirma, no se cancela');
+  page.once('dialog', d => d.accept());
+  await page.click('#agcancelar');
+  await page.locator('#agorden', {hasText: 'cancelada'}).waitFor();
+  assert.deepEqual(canceladas, ['A1']);
+  assert.match(await page.locator('#agorden').innerText(), /para en el próximo paso seguro/);
+  assert.equal(await page.locator('#agrep').isDisabled(), false, 'se puede pedir otra');
   // horarios: se cambian los dos y se guardan
   await page.fill('#aghora', '22:15'); await page.fill('#aghoraact', '01:30'); await page.click('#agguardar');
   await page.locator('#agprogmsg', {hasText: 'todos los días a las 22:15'}).waitFor();
