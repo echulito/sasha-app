@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=167;
+var APP_V=168;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -249,7 +249,7 @@ body.consulta #bnav .solo-completo{display:none}
         <div id="agestado" class="note" style="margin-top:0">Cargando…</div>
         <label>Día de los reportes</label>
         <input id="agfecha" type="date">
-        <div class="btns"><button class="btn" id="agrep">Descargar stock, productos y movimientos</button></div>
+        <div class="btns"><button class="btn" id="agrep">Descargar reportes y PDF de cajas</button></div>
         <div id="agorden"></div>
       </div>
       <div class="card" style="display:block">
@@ -806,7 +806,7 @@ document.querySelectorAll('#mas [data-ir]').forEach(function(c){c.onclick=functi
 var AG={t:0,abierto:false,d:null};
 var AG_TXT={PENDIENTE:'Orden pendiente: esperando a la computadora del local',EJECUTANDO:'Civil Systems está trabajando',ARCHIVO_GENERADO:'Archivo generado',
   SINCRONIZANDO:'Subiendo los archivos a Google Drive',ESPERANDO_HORARIO:'Descargado: espera la hora de actualización',ACTUALIZANDO_ECHU:'ECHU está actualizando',COMPLETADO:'Actualizado correctamente',ERROR:'Error',CANCELADA:'Cancelada'};
-var AG_ARCH=[['stock','STOCK'],['productos','PRODUCTOS'],['movimientos','MOVIMIENTOS']];
+var AG_ARCH=[['stock','STOCK'],['productos','PRODUCTOS'],['movimientos','MOVIMIENTOS'],['cajas','PDF DE CAJAS']];
 function agFecha(t){t=String(t||'');return t?t.slice(8,10)+'/'+t.slice(5,7)+' '+t.slice(11,16):''}
 function agDia(f){f=String(f||'');return f?f.slice(8,10)+'/'+f.slice(5,7)+'/'+f.slice(0,4):''}
 function agAbrir(){
@@ -831,11 +831,12 @@ function agLista(o){
   h+=agFila(agEstadoPaso(x),'Civil abierto en el Menú Principal',x.e==='ERROR'?x.d:'',x.e==='OK'?x.h:'');
   AG_ARCH.forEach(function(a){
     var y=p[a[0]]||{};
-    if(y.e==='SIN_DATOS')h+=agFila('ok',a[1]+': no hubo movimientos ese día','No hay archivo para subir',y.h);
+    if(a[0]==='cajas'&&!p.cajas)return; // órdenes viejas, sin PDF de cajas
+    if(y.e==='SIN_DATOS')h+=agFila('ok',a[0]==='cajas'?'PDF DE CAJAS: Civil no tiene datos de ese día':a[1]+': no hubo movimientos ese día',a[0]==='cajas'?y.d:'No hay archivo para subir',y.h);
     else if(y.drive)h+=agFila('ok',a[1]+' en su carpeta de Drive',y.d,y.drive);
     else if(y.e==='COPIADO'||y.e==='YA_ESTABA')h+=agFila('curso',a[1]+' generado · subiendo a Drive',y.d,y.h);
-    else if(y.e==='EN_CURSO')h+=agFila('curso','Civil está generando '+a[1],'',y.h);
-    else if(y.e==='ERROR')h+=agFila('mal',a[1],y.d,y.h);
+    else if(y.e==='EN_CURSO')h+=agFila('curso','Civil está generando '+a[1],a[0]==='cajas'?y.d:'',y.h);
+    else if(y.e==='ERROR')h+=agFila('mal',a[1],y.d+(a[0]==='cajas'?' · ECHU actualiza igual con los otros archivos':''),y.h);
     else h+=agFila(o.estado==='ERROR'?'mal':'pend',a[1],'','');
   });
   var e=p.echu||{};
@@ -863,7 +864,7 @@ function agPintar(d){
   $('agestado').innerHTML='Agente: '+chip+' · '+det+(u?'<br>Última descarga completa: <b>'+esc(u.tipo==='REPORTES'?'reportes del '+agDia(u.fecha):u.archivo)+'</b> · '+agFecha(u.fin):'');
   if(!$('agfecha').value&&d.ayer)$('agfecha').value=d.ayer;
   if(d.ahora)$('agfecha').max=String(d.ahora).slice(0,10);
-  $('agrep').disabled=!!o||!d.tieneClave;$('agrep').textContent=o?'Descarga en marcha…':'Descargar stock, productos y movimientos';
+  $('agrep').disabled=!!o||!d.tieneClave;$('agrep').textContent=o?'Descarga en marcha…':'Descargar reportes y PDF de cajas';
   var h='';
   if(o)h=agOrdenHtml(o,true);
   else{var x=(d.historial||[])[0];if(x&&(x.estado==='COMPLETADO'||x.estado==='ERROR'||x.estado==='CANCELADA'))h=agOrdenHtml(x,false);}
@@ -872,7 +873,7 @@ function agPintar(d){
   if(document.activeElement!==$('aghora'))$('aghora').value=p.hora||'23:00';
   if(document.activeElement!==$('aghoraact'))$('aghoraact').value=p.horaAct||'00:00';
   $('agprog').textContent=p.activo?'Desactivar':'Activar';$('agprog').dataset.on=p.activo?'1':'';
-  $('agprogmsg').innerHTML=p.activo?'Activada: todos los días a las <b>'+esc(p.hora)+'</b> baja stock, productos y movimientos '+(p.hora>='12:00'?'de ese mismo día':'del día anterior')+', y ECHU los toma a las <b>'+esc(p.horaAct||'00:00')+'</b>. Próxima: '+esc(d.proximo||'')+'.<br>Funciona con la app cerrada. La computadora tiene que estar prendida con la sesión de SASHA iniciada (puede estar desconectada).':'Desactivada: solo baja cuando lo pedís acá.';
+  $('agprogmsg').innerHTML=p.activo?'Activada: todos los días a las <b>'+esc(p.hora)+'</b> baja stock, productos, movimientos y los PDF de cajas '+(p.hora>='12:00'?'de ese mismo día':'del día anterior')+', y ECHU los toma a las <b>'+esc(p.horaAct||'00:00')+'</b>. Próxima: '+esc(d.proximo||'')+'.<br>Funciona con la app cerrada. La computadora tiene que estar prendida con la sesión de SASHA iniciada (puede estar desconectada).':'Desactivada: solo baja cuando lo pedís acá.';
   $('aghist').innerHTML=(d.historial||[]).length?(d.historial||[]).map(function(x){
     var c=x.estado==='COMPLETADO'?'v':x.estado==='ERROR'?'r':x.estado==='CANCELADA'?'c':'a';
     var t=x.tipo==='REPORTES'?'Reportes del '+agDia(x.fecha).slice(0,5):x.tipo;
@@ -888,7 +889,7 @@ $('agrep').onclick=function(){
   var b=$('agrep');if(b.disabled)return;
   var f=$('agfecha').value;if(!f){$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">Elegí el día.</div>';return}
   b.disabled=true;b.textContent='Preparando la descarga…';
-  api('agente_crear_orden',{tipo:'REPORTES',fecha:f}).then(function(d){agPintar(d);agCargar()}).catch(function(e){b.disabled=false;b.textContent='Descargar stock, productos y movimientos';$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>'});
+  api('agente_crear_orden',{tipo:'REPORTES',fecha:f}).then(function(d){agPintar(d);agCargar()}).catch(function(e){b.disabled=false;b.textContent='Descargar reportes y PDF de cajas';$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>'});
 };
 function agProgramar(activo){
   api('agente_programar',{activo:activo?'1':'0',hora:$('aghora').value||'23:00',horaAct:$('aghoraact').value||'00:00'}).then(function(d){agPintar(d);$('agprogmsg').insertAdjacentHTML('afterbegin','<b>Guardado.</b> ')}).catch(function(e){$('agprogmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
@@ -3092,7 +3093,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=167');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=168');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);

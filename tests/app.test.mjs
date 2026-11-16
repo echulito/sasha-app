@@ -755,7 +755,7 @@ test('agentes automáticos v164: reportes de un día con la lista que se tilda e
   assert.equal(await page.inputValue('#agfecha'), '2026-11-15', 'por defecto, ayer');
   assert.equal(await page.getAttribute('#agfecha', 'max'), '2026-11-16', 'no deja elegir días que no pasaron');
   // ya viene programada a las 23:00 y ECHU actualiza a las 00:00
-  assert.match(await page.locator('#agprogmsg').innerText(), /todos los días a las 23:00 baja stock, productos y movimientos de ese mismo día, y ECHU los toma a las 00:00/);
+  assert.match(await page.locator('#agprogmsg').innerText(), /todos los días a las 23:00 baja stock, productos, movimientos y los PDF de cajas de ese mismo día, y ECHU los toma a las 00:00/);
   await page.fill('#agfecha', '2026-11-14');
   await page.click('#agrep');
   await page.locator('#agorden', {hasText: 'Reportes del 14/11/2026'}).waitFor();
@@ -843,5 +843,35 @@ test('v162: con Cajas abierta hay un solo scroll (el de Cajas): la página de af
   assert.deepEqual(await page.evaluate(() => ({afuera: scrollY, adentro: document.getElementById('cajframe').contentWindow.scrollY})), {afuera: 0, adentro: 0}, 'se puede volver arriba');
   await page.click('#bnav button[data-b="inicio"]'); await page.waitForTimeout(600);
   assert.equal(await page.evaluate(() => document.documentElement.classList.contains('cajfija')), false, 'en el resto de la app la página se mueve normal');
+  await ctx.close();
+});
+
+test('agentes v168: la lista muestra los PDF de cajas (y si fallan, ECHU igual actualiza)', async () => {
+  const {ctx, page, errores} = await abrir();
+  await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+  const orden = {id: 'A2', tipo: 'REPORTES', fecha: '2026-11-14', pedida: '2026-11-16 23:00:00', estado: 'EJECUTANDO', detalle: '', archivo: 'Reportes del 14/11/2026', error: '', origen: 'PROGRAMADA', fin: '',
+    pasos: {pantalla: {e: 'OK', h: '23:00:10'}, civil: {e: 'OK', h: '23:00:40'}, stock: {e: 'YA_ESTABA', d: 'stock 14.11.26.xlsx', drive: '23:00:00'}, productos: {e: 'YA_ESTABA', d: 'productos 14.11.26.xlsx', drive: '23:00:00'},
+      movimientos: {e: 'YA_ESTABA', d: 'movimientos 14.11.26.xlsx', drive: '23:00:00'}, cajas: {e: 'EN_CURSO', d: 'Cierre caja 0001 vuelco 2515', h: '23:04:00'}}};
+  const base = {tieneClave: true, agente: {disponible: true, hace: 5, civil: true, sesion: 'activa'}, activa: orden, ultima: null, historial: [orden],
+    prog: {activo: true, hora: '23:00', horaAct: '00:00'}, proximo: '17/11 a las 23:00', tipos: ['STOCK', 'REPORTES'], ahora: '2026-11-16 23:05:00', ayer: '2026-11-15'};
+  DATOS.agente_estado = () => base;
+  await page.click('#bnav button[data-b="mas"]');
+  await page.click('#mas [data-ir="agentes"]');
+  await page.locator('#agorden', {hasText: 'Civil está generando PDF DE CAJAS'}).waitFor();
+  assert.match(await page.locator('#agorden').innerText(), /Cierre caja 0001 vuelco 2515/);
+  assert.equal(await page.locator('#agrep').innerText(), 'Descarga en marcha…');
+  Object.assign(orden.pasos.cajas, {e: 'COPIADO', d: '6 PDF: tickets, ventas y 4 cierres', h: '23:09:00', drive: '23:09:40'});
+  orden.estado = 'ESPERANDO_HORARIO';
+  await page.evaluate(() => agCargar());
+  await page.locator('#agorden', {hasText: 'PDF DE CAJAS en su carpeta de Drive'}).waitFor();
+  assert.match(await page.locator('#agorden').innerText(), /6 PDF: tickets, ventas y 4 cierres/);
+  orden.pasos.cajas = {e: 'ERROR', d: 'No aparecio el cuadro CAJAS en Civil', h: '23:06:00'};
+  await page.evaluate(() => agCargar());
+  await page.locator('#agorden', {hasText: 'ECHU actualiza igual'}).waitFor();
+  delete orden.pasos.cajas;
+  await page.evaluate(() => agCargar());
+  await page.locator('#agorden', {hasText: 'ECHU actualiza a las 00:00'}).waitFor();
+  assert.doesNotMatch(await page.locator('#agorden').innerText(), /PDF DE CAJAS/, 'las órdenes viejas no muestran la fila');
+  assert.deepEqual(errores, []);
   await ctx.close();
 });
