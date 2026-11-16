@@ -736,46 +736,69 @@ test('simular compra: ofertas por cantidad (2x1, 3x2, 2da unidad al 80%)', async
 });
 
 // v159: Más › Agentes automáticos › Civil Systems.
-test('agentes automáticos: Descargar STOCK crea una sola orden, muestra el paso y recién al final "actualizado correctamente"', async () => {
+test('agentes automáticos v164: reportes de un día con la lista que se tilda en vivo, y horarios configurables', async () => {
   const {ctx, page, errores} = await abrir();
   await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
-  const base = {tieneClave: true, agente: {disponible: true, hace: 12, civil: true, sesion: 'ok'}, activa: null, ultima: null, historial: [], prog: {activo: false, hora: '21:00'}, proximo: '', tipos: ['STOCK']};
-  let creadas = 0;
-  const orden = {id: 'A1', tipo: 'STOCK', pedida: '2026-11-13 19:40:00', estado: 'PENDIENTE', detalle: 'Esperando al agente de la computadora', archivo: '', error: '', origen: 'APP', fin: ''};
+  const base = {tieneClave: true, agente: {disponible: true, hace: 12, civil: true, sesion: 'desconectada'}, activa: null, ultima: null, historial: [],
+    prog: {activo: true, hora: '23:00', horaAct: '00:00'}, proximo: '16/11 a las 23:00', tipos: ['STOCK', 'REPORTES'], ahora: '2026-11-16 14:00:00', ayer: '2026-11-15'};
+  let pedidas = [];
+  const orden = {id: 'A1', tipo: 'REPORTES', fecha: '2026-11-14', pedida: '2026-11-16 14:01:00', estado: 'PENDIENTE', detalle: 'Esperando al agente de la computadora',
+    archivo: 'Reportes del 14/11/2026', error: '', origen: 'APP', fin: '',
+    pasos: {pantalla: {e: 'PENDIENTE'}, civil: {e: 'PENDIENTE'}, stock: {e: 'PENDIENTE', d: 'stock 14.11.26.xlsx'}, productos: {e: 'PENDIENTE', d: 'productos 14.11.26.xlsx'}, movimientos: {e: 'PENDIENTE', d: 'movimientos 14.11.26.xlsx'}}};
   DATOS.agente_estado = () => base;
-  DATOS.agente_crear_orden = () => { creadas++; base.activa = orden; base.historial = [orden]; return base; };
-  DATOS.agente_programar = p => { base.prog = {activo: p.activo === '1', hora: p.hora}; base.proximo = '14/11 a las ' + p.hora; return base; };
+  DATOS.agente_crear_orden = p => { pedidas.push(p.tipo + ' ' + p.fecha); base.activa = orden; base.historial = [orden]; return base; };
+  DATOS.agente_programar = p => { base.prog = {activo: p.activo === '1', hora: p.hora, horaAct: p.horaAct}; base.proximo = '16/11 a las ' + p.hora; return base; };
   await page.click('#bnav button[data-b="mas"]');
   await page.click('#mas [data-ir="agentes"]');
   await page.locator('#agestado', {hasText: 'Disponible'}).waitFor();
-  assert.match(await page.locator('#agpanel').innerText(), /Civil Systems abierto[\s\S]*Descargar PRODUCTOS · próximamente/);
-  assert.equal(await page.locator('#agpanel button:disabled').count(), 2, 'PRODUCTOS y MOVIMIENTOS todavía no se pueden tocar');
-  await page.click('#agstock');
-  await page.locator('#agorden', {hasText: 'Orden pendiente'}).waitFor();
-  assert.equal(await page.locator('#agstock').isDisabled(), true, 'con una orden en marcha no se puede pedir otra');
-  assert.equal(creadas, 1);
-  assert.doesNotMatch(await page.locator('#agpanel').innerText(), /actualizado correctamente/);
-  // el archivo llegó a Drive: no se actualiza en el momento, espera la hora fija
-  Object.assign(orden, {estado: 'ESPERANDO_HORARIO', detalle: 'El archivo ya está en Drive. ECHU lo actualiza solo a las 00:00 (o antes, si tocás Actualizar).', archivo: 'stock 13.11.26.xlsx'});
+  assert.match(await page.locator('#agestado').innerText(), /Civil Systems abierto/);
+  assert.equal(await page.inputValue('#agfecha'), '2026-11-15', 'por defecto, ayer');
+  assert.equal(await page.getAttribute('#agfecha', 'max'), '2026-11-16', 'no deja elegir días que no pasaron');
+  // ya viene programada a las 23:00 y ECHU actualiza a las 00:00
+  assert.match(await page.locator('#agprogmsg').innerText(), /todos los días a las 23:00 baja stock, productos y movimientos de ese mismo día, y ECHU los toma a las 00:00/);
+  await page.fill('#agfecha', '2026-11-14');
+  await page.click('#agrep');
+  await page.locator('#agorden', {hasText: 'Reportes del 14/11/2026'}).waitFor();
+  assert.deepEqual(pedidas, ['REPORTES 2026-11-14']);
+  assert.equal(await page.locator('#agrep').isDisabled(), true, 'con una descarga en marcha no se puede pedir otra');
+  const lista = async () => (await page.locator('#agorden .agl').innerText()).replace(/\s+/g, ' ');
+  const tildados = () => page.locator('#agorden .agp.ok').count();
+  assert.equal(await tildados(), 0);
+  // en vivo: pantalla lista, Civil en el menú, el stock generado y en Drive, productos generándose
+  Object.assign(orden, {estado: 'EJECUTANDO', detalle: 'Civil esta generando PRODUCTOS', pasos: {
+    pantalla: {e: 'OK', d: 'SASHA en la pantalla del servidor', h: '14:02:10'}, civil: {e: 'OK', d: 'Menu Principal', h: '14:02:40'},
+    stock: {e: 'COPIADO', d: 'stock 14.11.26.xlsx', h: '14:05:30', drive: '14:05:52'}, productos: {e: 'EN_CURSO', d: '', h: '14:05:40'}, movimientos: {e: 'PENDIENTE', d: 'movimientos 14.11.26.xlsx'}}});
   await page.evaluate(() => agCargar());
-  await page.locator('#agorden', {hasText: 'Paso 5 de 6'}).waitFor();
-  assert.match(await page.locator('#agorden').innerText(), /espera la hora de actualización[\s\S]*a las 00:00/);
-  assert.doesNotMatch(await page.locator('#agpanel').innerText(), /actualizado correctamente/);
-  Object.assign(orden, {estado: 'ACTUALIZANDO_ECHU', detalle: 'ECHU está actualizando el stock'});
+  await page.locator('#agorden', {hasText: 'STOCK en su carpeta de Drive'}).waitFor();
+  assert.equal(await tildados(), 3, 'pantalla, Civil y STOCK tildados');
+  assert.match(await lista(), /Civil está generando PRODUCTOS/);
+  assert.equal(await page.locator('#agorden .agp.curso').count(), 1);
+  // movimientos sin datos (domingo) cuenta como listo; queda esperando la hora de ECHU
+  Object.assign(orden, {estado: 'ESPERANDO_HORARIO', detalle: 'Los archivos ya están en Drive. ECHU actualiza solo a las 00:00 (o antes, si tocás Actualizar).'});
+  Object.assign(orden.pasos, {productos: {e: 'COPIADO', d: 'productos 14.11.26.xlsx', h: '14:09:00', drive: '14:09:31'}, movimientos: {e: 'SIN_DATOS', d: '', h: '14:09:40'}, echu: {e: 'ESPERANDO', h: '00:00'}});
   await page.evaluate(() => agCargar());
-  await page.locator('#agorden', {hasText: 'Paso 6 de 6'}).waitFor();
-  Object.assign(orden, {estado: 'COMPLETADO', fin: '2026-11-13 19:52:00'}); base.activa = null; base.ultima = orden;
+  await page.locator('#agorden', {hasText: 'ECHU actualiza a las 00:00'}).waitFor();
+  assert.equal(await tildados(), 5);
+  assert.match(await lista(), /MOVIMIENTOS: no hubo movimientos ese día/);
+  assert.doesNotMatch(await page.locator('#agorden').innerText(), /actualizado correctamente/);
+  Object.assign(orden, {estado: 'COMPLETADO', fin: '2026-11-17 00:21:00'}); orden.pasos.echu = {e: 'OK', h: '00:21:05'}; base.activa = null; base.ultima = orden;
   await page.evaluate(() => agCargar());
-  await page.locator('#agorden', {hasText: 'STOCK actualizado correctamente'}).waitFor();
-  assert.match(await page.locator('#aghist').innerText(), /13\/11 19:40 · STOCK\s*stock 13\.11\.26\.xlsx\s*Completado/);
-  // un error se ve con su motivo
-  Object.assign(orden, {estado: 'ERROR', error: 'Civil Systems no disponible'}); base.ultima = null;
+  await page.locator('#agorden', {hasText: 'actualizado correctamente'}).waitFor();
+  assert.equal(await tildados(), 6, 'todo tildado');
+  assert.equal(await page.locator('#agrep').isDisabled(), false);
+  assert.match(await page.locator('#aghist').innerText(), /16\/11 14:01 · Reportes del 14\/11\s*Completado/);
+  // un error se ve con su motivo y marca en rojo lo que no llegó
+  Object.assign(orden, {estado: 'ERROR', error: 'Archivo Destino sigue abierto', fin: '2026-11-16 14:07:00'}); orden.pasos.productos = {e: 'ERROR', d: 'Archivo Destino sigue abierto', h: '14:07:00'}; delete orden.pasos.echu; base.ultima = null;
   await page.evaluate(() => agCargar());
-  await page.locator('#agorden', {hasText: 'Civil Systems no disponible'}).waitFor();
-  // descarga automática
-  await page.fill('#aghora', '20:30'); await page.click('#agprog');
-  await page.locator('#agprogmsg', {hasText: 'todos los días a las 20:30'}).waitFor();
-  assert.equal(await page.locator('#agprog').innerText(), 'Desactivar');
+  await page.locator('#agorden', {hasText: 'se detuvo'}).waitFor();
+  assert.equal(await page.locator('#agorden .agp.mal').count(), 2, 'PRODUCTOS y ECHU en rojo');
+  // horarios: se cambian los dos y se guardan
+  await page.fill('#aghora', '22:15'); await page.fill('#aghoraact', '01:30'); await page.click('#agguardar');
+  await page.locator('#agprogmsg', {hasText: 'todos los días a las 22:15'}).waitFor();
+  assert.match(await page.locator('#agprogmsg').innerText(), /Guardado[\s\S]*ECHU los toma a las 01:30/);
+  await page.click('#agprog');
+  await page.locator('#agprogmsg', {hasText: 'Desactivada'}).waitFor();
+  assert.equal(await page.locator('#agprog').innerText(), 'Activar');
   await page.click('#agvolver');
   assert.equal(await page.locator('#mas [data-ir="conta"]').isVisible(), true);
   assert.deepEqual(errores, []);
