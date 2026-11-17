@@ -922,6 +922,15 @@ test('v170: Cambiar precios en Civil: desde Inicio, en vivo con Detener, el PDF 
     await page.locator('#agcosorden', {hasText: 'Deteniendo: termina el producto'}).waitFor();
     assert.deepEqual(canceladas, ['A9']);
     assert.equal(await page.locator('#agcosdet').count(), 0);
+    // v171: si no se mueve, "Destrabar" cierra la orden desde la app
+    assert.equal(await page.locator('#agcosdes').isVisible(), true);
+    const forzadas = [];
+    DATOS.agente_cancelar = p => { forzadas.push(p.forzar); return base; };
+    page.once('dialog', d => d.accept());
+    await page.click('#agcosdes');
+    await page.waitForFunction(() => true);
+    await page.waitForTimeout(300);
+    assert.deepEqual(forzadas, ['1']);
     // terminó: resumen y el PDF
     Object.assign(orden, {estado: 'COMPLETADO', fin: '2026-11-17 14:09:00', detalle: '2 cambiados, 1 sin tocar · Detenido desde la app · transferencia 7430'});
     base.activa = null;
