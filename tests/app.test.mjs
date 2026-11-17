@@ -821,6 +821,15 @@ test('agentes automáticos v164: reportes de un día con la lista que se tilda e
   await page.click('#agprog');
   await page.locator('#agprogmsg', {hasText: 'Desactivada'}).waitFor();
   assert.equal(await page.locator('#agprog').innerText(), 'Activar');
+  // v172 (ECHU 6.80): ECHU se actualiza apenas llegan los archivos: no hay hora para elegir
+  base.prog = {activo: true, hora: '23:00', horaAct: 'YA'}; base.activa = orden;
+  Object.assign(orden, {estado: 'ESPERANDO_HORARIO', fin: ''}); orden.pasos.echu = {e: 'ESPERANDO', h: 'YA'};
+  await page.evaluate(() => agCargar());
+  await page.locator('#agorden', {hasText: 'ECHU se actualiza en un minuto'}).waitFor();
+  assert.equal(await page.locator('#aghoraact').isVisible(), false);
+  assert.match(await page.locator('#agprogmsg').innerText(), /y ECHU se actualiza apenas están en Drive/);
+  base.activa = null;
+  await page.evaluate(() => agCargar());
   await page.click('#agvolver');
   assert.equal(await page.locator('#mas [data-ir="conta"]').isVisible(), true);
   assert.deepEqual(errores, []);

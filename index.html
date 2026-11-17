@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=171;
+var APP_V=172;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -276,7 +276,7 @@ body.consulta #bnav .solo-completo{display:none}
       </div>
       <div class="card" style="display:block">
         <h2 style="margin-top:0">Descarga automática de todos los días</h2>
-        <div class="two"><div><label>Descarga a las</label><input id="aghora" type="time" value="23:00"></div><div><label>ECHU actualiza a las</label><input id="aghoraact" type="time" value="00:00"></div></div>
+        <div class="two" id="aghoras"><div><label>Descarga a las</label><input id="aghora" type="time" value="23:00"></div><div id="aghoraactc"><label>ECHU actualiza a las</label><input id="aghoraact" type="time" value="00:00"></div></div>
         <div class="btns"><button class="btn" id="agguardar">Guardar horarios</button><button class="btn sec" id="agprog">Desactivar</button></div>
         <div id="agprogmsg" class="note"></div>
       </div>
@@ -945,7 +945,7 @@ function agLista(o){
   var e=p.echu||{};
   if(o.estado==='COMPLETADO')h+=agFila('ok','ECHU actualizado','',e.h||String(o.fin||'').slice(11,16));
   else if(o.estado==='ACTUALIZANDO_ECHU')h+=agFila('curso','ECHU está actualizando','',e.h);
-  else if(o.estado==='ESPERANDO_HORARIO')h+=agFila('curso','ECHU actualiza a las '+(e.h||'00:00'),'O antes, si tocás Actualizar','');
+  else if(o.estado==='ESPERANDO_HORARIO')h+=e.h==='YA'?agFila('curso','ECHU se actualiza en un minuto','Los archivos ya están en Drive',''):agFila('curso','ECHU actualiza a las '+(e.h||'00:00'),'O antes, si tocás Actualizar','');
   else h+=agFila(o.estado==='ERROR'?'mal':'pend','ECHU actualizado','','');
   return '<div class="agl">'+h+'</div>';
 }
@@ -977,9 +977,11 @@ function agPintar(d){
   agCosPintar(d);
   var p=d.prog||{};
   if(document.activeElement!==$('aghora'))$('aghora').value=p.hora||'23:00';
-  if(document.activeElement!==$('aghoraact'))$('aghoraact').value=p.horaAct||'00:00';
+  // v172 (ECHU 6.80): ECHU se actualiza apenas llegan los archivos: ya no hay hora de actualización para elegir.
+  var ya=p.horaAct==='YA';$('aghoraactc').classList.toggle('oculto',ya);$('aghoras').classList.toggle('two',!ya);
+  if(!ya&&document.activeElement!==$('aghoraact'))$('aghoraact').value=p.horaAct||'00:00';
   $('agprog').textContent=p.activo?'Desactivar':'Activar';$('agprog').dataset.on=p.activo?'1':'';
-  $('agprogmsg').innerHTML=p.activo?'Activada: todos los días a las <b>'+esc(p.hora)+'</b> baja stock, productos, movimientos y los PDF de cajas '+(p.hora>='12:00'?'de ese mismo día':'del día anterior')+', y ECHU los toma a las <b>'+esc(p.horaAct||'00:00')+'</b>. Próxima: '+esc(d.proximo||'')+'.<br>Funciona con la app cerrada. La computadora tiene que estar prendida con la sesión de SASHA iniciada (puede estar desconectada).':'Desactivada: solo baja cuando lo pedís acá.';
+  $('agprogmsg').innerHTML=p.activo?'Activada: todos los días a las <b>'+esc(p.hora)+'</b> baja stock, productos, movimientos y los PDF de cajas '+(p.hora>='12:00'?'de ese mismo día':'del día anterior')+(ya?', y ECHU se actualiza apenas están en Drive':', y ECHU los toma a las <b>'+esc(p.horaAct||'00:00')+'</b>')+'. Próxima: '+esc(d.proximo||'')+'.<br>Funciona con la app cerrada. La computadora tiene que estar prendida con la sesión de SASHA iniciada (puede estar desconectada).':'Desactivada: solo baja cuando lo pedís acá.';
   $('aghist').innerHTML=(d.historial||[]).length?(d.historial||[]).slice(0,12).map(function(x){
     var c=x.estado==='COMPLETADO'?'v':x.estado==='ERROR'?'r':x.estado==='CANCELADA'?'c':'a';
     var t=x.tipo==='REPORTES'?'Reportes del '+agDia(x.fecha).slice(0,5):x.tipo==='COSTOS'?'Cambios de precios':x.tipo==='STOCK'?'Stock':x.tipo;
@@ -1001,7 +1003,7 @@ $('agrep').onclick=function(){
   api('agente_crear_orden',{tipo:'REPORTES',fecha:f}).then(function(d){agPintar(d);agCargar()}).catch(function(e){b.disabled=false;b.textContent='Descargar reportes y PDF de cajas';$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>'});
 };
 function agProgramar(activo){
-  api('agente_programar',{activo:activo?'1':'0',hora:$('aghora').value||'23:00',horaAct:$('aghoraact').value||'00:00'}).then(function(d){agPintar(d);$('agprogmsg').insertAdjacentHTML('afterbegin','<b>Guardado.</b> ')}).catch(function(e){$('agprogmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+  api('agente_programar',{activo:activo?'1':'0',hora:$('aghora').value||'23:00',horaAct:(AG.d&&AG.d.prog&&AG.d.prog.horaAct==='YA')?'':($('aghoraact').value||'00:00')}).then(function(d){agPintar(d);$('agprogmsg').insertAdjacentHTML('afterbegin','<b>Guardado.</b> ')}).catch(function(e){$('agprogmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
 $('agprog').onclick=function(){agProgramar(!$('agprog').dataset.on)};
 /* v170: CAMBIAR PRECIOS EN CIVIL. El agente carga en Civil el costo y el precio nuevos de la solapa CAMBIOS COSTOS de ECHU
@@ -3263,7 +3265,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=171');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=172');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
