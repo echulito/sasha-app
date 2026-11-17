@@ -876,6 +876,79 @@ test('agentes v168: la lista muestra los PDF de cajas (y si fallan, ECHU igual a
   await ctx.close();
 });
 
+test('v170: Cambiar precios en Civil: desde Inicio, en vivo con Detener, el PDF y el horario de/hasta', async () => {
+  const antesAv = DATOS.inicio.avisos;
+  DATOS.inicio.avisos = [{nivel: 'azul', titulo: '3 cambios de costo', detalle: 'El agente los carga en el sistema de ventas.', ir: 'costos'}].concat(antesAv);
+  const antes = {e: DATOS.agente_estado, c: DATOS.agente_crear_orden, x: DATOS.agente_cancelar, p: DATOS.agente_costos_programar};
+  try {
+    const {ctx, page, errores} = await abrir();
+    const base = {tieneClave: true, agente: {disponible: true, hace: 8, civil: true, sesion: 'desconectada'}, activa: null, ultima: null, historial: [],
+      prog: {activo: true, hora: '23:00', horaAct: '00:00'}, proximo: '17/11 a las 23:00', tipos: ['STOCK', 'REPORTES', 'COSTOS'], ahora: '2026-11-17 14:00:00', ayer: '2026-11-16',
+      costos: {pendientes: 3, revisar: 1, tildados: 0, prog: {activo: false, desde: '01:00', hasta: '09:00'}, ultimo: null}};
+    const orden = {id: 'A9', tipo: 'COSTOS', fecha: '2026-11-17', pedida: '2026-11-17 14:01:00', estado: 'PENDIENTE', detalle: 'Esperando al agente de la computadora',
+      archivo: '3 productos de CAMBIOS COSTOS', error: '', origen: 'APP', fin: '', pasos: {total: 3, hasta: '', ok: 0, salt: 0, err: 0, pantalla: {e: 'PENDIENTE'}, actual: {e: 'PENDIENTE'}}};
+    const pedidos = [], canceladas = [];
+    DATOS.agente_estado = () => base;
+    DATOS.agente_crear_orden = p => { pedidos.push(p.tipo); base.activa = orden; base.historial = [orden]; return base; };
+    DATOS.agente_cancelar = p => { canceladas.push(p.id); orden.pasos.detener = true; orden.detalle = 'Deteniendo'; return base; };
+    DATOS.agente_costos_programar = p => { base.costos.prog = {activo: p.activo === '1', desde: p.desde, hasta: p.hasta}; return base; };
+    // Inicio: el aviso de cambios de costo tiene el botón "Cambiar precios" y lleva a la tarjeta del agente
+    await page.locator('#inicio [data-ir="costos"]').first().waitFor();
+    assert.equal(await page.locator('#inicio button[data-ir="costos"]').first().innerText(), 'Cambiar precios');
+    await page.locator('#inicio button[data-ir="costos"]').first().click();
+    await page.locator('#agcosest', {hasText: 'Para cambiar: 3 productos'}).waitFor();
+    assert.equal(await page.locator('#agpanel').isVisible(), true);
+    assert.match(await page.locator('#agcosest').innerText(), /1 para revisar a mano/);
+    assert.match(await page.locator('#agcosmsg').innerText(), /Desactivado: solo cambia cuando tocás "Cambiar costos ahora"/);
+    // ahora mismo
+    await page.click('#agcosya');
+    await page.locator('#agcosorden', {hasText: 'Esperando a la computadora del local'}).waitFor();
+    assert.deepEqual(pedidos, ['COSTOS']);
+    assert.equal(await page.locator('#agcosya').isDisabled(), true);
+    assert.equal(await page.locator('#agrep').isDisabled(), true, 'mientras cambia precios no se puede descargar');
+    assert.equal(await page.locator('#agrep').innerText(), 'Ocupado cambiando precios…');
+    // en vivo
+    Object.assign(orden, {estado: 'EJECUTANDO', inicio: '2026-11-17 14:01:20'});
+    Object.assign(orden.pasos, {ok: 1, salt: 1, pantalla: {e: 'OK'}, actual: {e: 'EN_CURSO', d: '3/3 56081 PANTENE AC KERATINA X 300'}});
+    base.costos.pendientes = 1;
+    await page.evaluate(() => agCargar());
+    await page.locator('#agcosorden', {hasText: 'Van 2 de 3'}).waitFor();
+    assert.match(await page.locator('#agcosorden').innerText(), /1 cambiado · 1 sin tocar/);
+    assert.match(await page.locator('#agcosorden').innerText(), /56081 PANTENE AC/);
+    assert.equal(await page.locator('#agcosorden .agbar i').getAttribute('style'), 'width:67%');
+    // Detener (con confirmación)
+    page.once('dialog', d => d.accept());
+    await page.click('#agcosdet');
+    await page.locator('#agcosorden', {hasText: 'Deteniendo: termina el producto'}).waitFor();
+    assert.deepEqual(canceladas, ['A9']);
+    assert.equal(await page.locator('#agcosdet').count(), 0);
+    // terminó: resumen y el PDF
+    Object.assign(orden, {estado: 'COMPLETADO', fin: '2026-11-17 14:09:00', detalle: '2 cambiados, 1 sin tocar · Detenido desde la app · transferencia 7430'});
+    base.activa = null;
+    base.costos.ultimo = {id: 'A9', estado: 'COMPLETADO', fin: '2026-11-17 14:09:00', detalle: orden.detalle, pdf: 'https://drive.google.com/file/d/PDF/view', total: 3};
+    await page.evaluate(() => agCargar());
+    await page.locator('#agcosorden', {hasText: 'Última vez'}).waitFor();
+    assert.match(await page.locator('#agcosorden').innerText(), /3 cambios de precios en el PDF/);
+    await page.evaluate(() => { window.__abiertos = []; window.open = u => { window.__abiertos.push(u); return null; }; });
+    await page.click('#agcospdf');
+    assert.deepEqual(await page.evaluate(() => window.__abiertos), ['https://drive.google.com/file/d/PDF/view']);
+    assert.match(await page.locator('#aghist').innerText(), /Cambios de precios[\s\S]*2 cambiados/);
+    assert.equal(await page.locator('#agrep').isDisabled(), false);
+    // horario automático de 1 a 9
+    await page.fill('#agcosdesde', '01:30'); await page.fill('#agcoshasta', '08:45'); await page.click('#agcosguardar');
+    await page.locator('#agcosmsg', {hasText: 'Activado: todos los días de 01:30 a 08:45'}).waitFor();
+    assert.match(await page.locator('#agcosmsg').innerText(), /A las 08:45 termina el producto que está haciendo y para/);
+    await page.click('#agcosprog');
+    await page.locator('#agcosmsg', {hasText: 'Desactivado'}).waitFor();
+    // con un ECHU viejo (sin "costos") la tarjeta no aparece
+    delete base.costos;
+    await page.evaluate(() => agCargar());
+    await page.waitForFunction(() => document.getElementById('agcostos').classList.contains('oculto'));
+    assert.deepEqual(errores, []);
+    await ctx.close();
+  } finally { DATOS.inicio.avisos = antesAv; Object.assign(DATOS, {agente_estado: antes.e, agente_crear_orden: antes.c, agente_cancelar: antes.x, agente_costos_programar: antes.p}); }
+});
+
 test('v169: pagar un gasto desde la app con el comprobante (foto o PDF) y anotar el aumento', async () => {
   const antes = {h: DATOS.pagos_historial, r: DATOS.pago_registrar};
   const enviados = [];

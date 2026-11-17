@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=169;
+var APP_V=170;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -190,6 +190,8 @@ body.consulta #bnav .solo-completo{display:none}
 .agp.pend b{color:#7a8594;font-weight:600}
 .agp>div{flex:1;min-width:0}
 .agp small{color:#6b7480}
+/* v170: avance de los cambios de precios */
+.agbar{height:6px;border-radius:4px;background:#e3e8ef;margin:8px 0 6px;overflow:hidden}.agbar i{display:block;height:100%;background:var(--azul2);border-radius:4px}
 .agp .agh{flex:0 0 auto;font-variant-numeric:tabular-nums}
 .agp.curso .agi{animation:agGira 1.4s linear infinite}
 @keyframes agGira{to{transform:rotate(360deg)}}
@@ -242,7 +244,7 @@ body.consulta #bnav .solo-completo{display:none}
     <div class="card" data-ir="conta"><div><b>Contabilidad</b><small>Facturas e IVA, sueldos y gastos</small></div><b style="color:var(--azul2)">›</b></div>
     <div class="card" data-ir="limpieza"><div><b>Limpieza</b><small>Recibos de limpieza</small></div><b style="color:var(--azul2)">›</b></div>
     <div class="card" data-ir="ajustes"><div><b>Ajustes</b><small>Actualizar ECHU, PIN y la app en el celular</small></div><b style="color:var(--azul2)">›</b></div>
-    <div class="card" data-ir="agentes"><div><b>Agentes automáticos</b><small>Civil Systems: stock, productos y movimientos</small></div><b style="color:var(--azul2)">›</b></div>
+    <div class="card" data-ir="agentes"><div><b>Agentes automáticos</b><small>Civil: reportes, PDF de cajas y precios</small></div><b style="color:var(--azul2)">›</b></div>
     <div id="agpanel" class="oculto">
       <button class="btn sec" id="agvolver" style="margin-bottom:10px">← Volver</button>
       <div class="card" style="display:block">
@@ -252,6 +254,16 @@ body.consulta #bnav .solo-completo{display:none}
         <input id="agfecha" type="date">
         <div class="btns"><button class="btn" id="agrep">Descargar reportes y PDF de cajas</button></div>
         <div id="agorden"></div>
+      </div>
+      <div class="card" style="display:block" id="agcostos">
+        <h2 style="margin-top:0">Cambiar precios en Civil</h2>
+        <div id="agcosest" class="note" style="margin-top:0">Cargando…</div>
+        <div class="btns"><button class="btn" id="agcosya">Cambiar costos ahora</button></div>
+        <div id="agcosorden"></div>
+        <h3 style="margin:18px 0 0;font-size:15px">Horario automático</h3>
+        <div class="two"><div><label>Desde</label><input id="agcosdesde" type="time" value="01:00"></div><div><label>Hasta</label><input id="agcoshasta" type="time" value="09:00"></div></div>
+        <div class="btns"><button class="btn" id="agcosguardar">Guardar horario</button><button class="btn sec" id="agcosprog">Activar</button></div>
+        <div id="agcosmsg" class="note"></div>
       </div>
       <div class="card" style="display:block">
         <h2 style="margin-top:0">Descarga automática de todos los días</h2>
@@ -710,7 +722,7 @@ function iniDatosAlDia(){
   return '<div class="idat"><i style="background:'+col+'"></i>'+esc(txt)+'</div>';
 }
 function iniBoton(a){
-  var t={caja:['Resolver',''],pagos:['Ver pagos','sec'],pedido:['Armar pedido','sec'],tareas:['Ver tareas','sec']}[a.ir]||['Ver','sec'];
+  var t={caja:['Resolver',''],pagos:['Ver pagos','sec'],pedido:['Armar pedido','sec'],tareas:['Ver tareas','sec'],costos:['Cambiar precios','']}[a.ir]||['Ver','sec'];
   return '<button class="btn '+t[1]+'" data-ir="'+esc(a.ir)+'">'+t[0]+'</button>';
 }
 function pintarInicio(){
@@ -744,6 +756,8 @@ function iniIr(ir){
   if(ir==='pedido'){try{localStorage.setItem('sasha_compras','simulador')}catch(e){}irA('simulador');var b=document.querySelector('#simmodo button[data-m="ped"]');if(b)b.click();return}
   if(ir==='contadora'){irA('admin');admSec('conta');contaSub('cdor');return}
   if(ir==='tareas'){if(INI&&INI.tareasUrl)window.open(INI.tareasUrl,'_blank','noopener');return}
+  // v170: los cambios de costo los carga el agente en Civil (Más › Agentes automáticos › Cambiar precios).
+  if(ir==='costos'){irA('mas');agAbrir();setTimeout(function(){var c=$('agcostos');if(c&&c.scrollIntoView)c.scrollIntoView({block:'start'})},60);return}
 }
 /* ---------------- v107: CAJA Y PLATA ---------------- */
 var CAJSEC='cajas';
@@ -944,11 +958,14 @@ function agPintar(d){
   $('agestado').innerHTML='Agente: '+chip+' · '+det+(u?'<br>Última descarga completa: <b>'+esc(u.tipo==='REPORTES'?'reportes del '+agDia(u.fecha):u.archivo)+'</b> · '+agFecha(u.fin):'');
   if(!$('agfecha').value&&d.ayer)$('agfecha').value=d.ayer;
   if(d.ahora)$('agfecha').max=String(d.ahora).slice(0,10);
-  $('agrep').disabled=!!o||!d.tieneClave;$('agrep').textContent=o?'Descarga en marcha…':'Descargar reportes y PDF de cajas';
+  var oc=o&&o.tipo==='COSTOS';
+  $('agrep').disabled=!!o||!d.tieneClave;$('agrep').textContent=oc?'Ocupado cambiando precios…':o?'Descarga en marcha…':'Descargar reportes y PDF de cajas';
   var h='';
-  if(o)h=agOrdenHtml(o,true);
-  else{var x=(d.historial||[])[0];if(x&&(x.estado==='COMPLETADO'||x.estado==='ERROR'||x.estado==='CANCELADA'))h=agOrdenHtml(x,false);}
+  if(oc)h='<div class="note">La computadora está cambiando precios en Civil (abajo). Para descargar, esperá a que termine.</div>';
+  else if(o)h=agOrdenHtml(o,true);
+  else{var x=(d.historial||[]).filter(function(y){return y.tipo!=='COSTOS'})[0];if(x&&x===(d.historial||[])[0]&&(x.estado==='COMPLETADO'||x.estado==='ERROR'||x.estado==='CANCELADA'))h=agOrdenHtml(x,false);}
   $('agorden').innerHTML=h;
+  agCosPintar(d);
   var p=d.prog||{};
   if(document.activeElement!==$('aghora'))$('aghora').value=p.hora||'23:00';
   if(document.activeElement!==$('aghoraact'))$('aghoraact').value=p.horaAct||'00:00';
@@ -956,8 +973,8 @@ function agPintar(d){
   $('agprogmsg').innerHTML=p.activo?'Activada: todos los días a las <b>'+esc(p.hora)+'</b> baja stock, productos, movimientos y los PDF de cajas '+(p.hora>='12:00'?'de ese mismo día':'del día anterior')+', y ECHU los toma a las <b>'+esc(p.horaAct||'00:00')+'</b>. Próxima: '+esc(d.proximo||'')+'.<br>Funciona con la app cerrada. La computadora tiene que estar prendida con la sesión de SASHA iniciada (puede estar desconectada).':'Desactivada: solo baja cuando lo pedís acá.';
   $('aghist').innerHTML=(d.historial||[]).length?(d.historial||[]).map(function(x){
     var c=x.estado==='COMPLETADO'?'v':x.estado==='ERROR'?'r':x.estado==='CANCELADA'?'c':'a';
-    var t=x.tipo==='REPORTES'?'Reportes del '+agDia(x.fecha).slice(0,5):x.tipo;
-    return '<div class="row"><span>'+agFecha(x.pedida)+' · '+esc(t)+(x.origen==='PROGRAMADA'?' · automática':'')+(x.tipo!=='REPORTES'&&x.archivo?'<br><small>'+esc(x.archivo)+'</small>':'')+(x.error?'<br><small class="neg">'+esc(x.error)+'</small>':'')+'</span><span class="chip '+c+'">'+esc(x.estado==='COMPLETADO'?'Completado':x.estado==='ERROR'?'Error':x.estado==='CANCELADA'?'Cancelada':'En marcha')+'</span></div>'}).join(''):'Todavía no hay descargas.';
+    var t=x.tipo==='REPORTES'?'Reportes del '+agDia(x.fecha).slice(0,5):x.tipo==='COSTOS'?'Cambios de precios':x.tipo;
+    return '<div class="row"><span>'+agFecha(x.pedida)+' · '+esc(t)+(x.origen==='PROGRAMADA'?' · automática':'')+(x.tipo==='COSTOS'&&x.detalle&&x.estado!=='ERROR'?'<br><small>'+esc(x.detalle)+'</small>':x.tipo!=='REPORTES'&&x.tipo!=='COSTOS'&&x.archivo?'<br><small>'+esc(x.archivo)+'</small>':'')+(x.error?'<br><small class="neg">'+esc(x.error)+'</small>':'')+'</span><span class="chip '+c+'">'+esc(x.estado==='COMPLETADO'?'Completado':x.estado==='ERROR'?'Error':x.estado==='CANCELADA'?'Cancelada':'En marcha')+'</span></div>'}).join(''):'Todavía no hay descargas.';
 }
 function agCancelar(id,estado){
   if(estado!=='PENDIENTE'&&!confirm('¿Cancelar la descarga? La computadora termina el reporte que está haciendo y para (Civil queda en el Menú Principal).'))return;
@@ -975,6 +992,58 @@ function agProgramar(activo){
   api('agente_programar',{activo:activo?'1':'0',hora:$('aghora').value||'23:00',horaAct:$('aghoraact').value||'00:00'}).then(function(d){agPintar(d);$('agprogmsg').insertAdjacentHTML('afterbegin','<b>Guardado.</b> ')}).catch(function(e){$('agprogmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
 $('agprog').onclick=function(){agProgramar(!$('agprog').dataset.on)};
+/* v170: CAMBIAR PRECIOS EN CIVIL. El agente carga en Civil el costo y el precio nuevos de la solapa CAMBIOS COSTOS de ECHU
+   (los de REVISAR A MANO no), tilda cada uno en vivo, transfiere a las cajas y manda el PDF por WhatsApp. */
+function agCosPintar(d){
+  var c=d.costos,card=$('agcostos');
+  if(!c){card.classList.add('oculto');return}
+  card.classList.remove('oculto');
+  var o=d.activa&&d.activa.tipo==='COSTOS'?d.activa:null,otra=d.activa&&!o;
+  $('agcosest').innerHTML=c.pendientes?'Para cambiar: <b>'+c.pendientes+'</b> '+(c.pendientes===1?'producto':'productos')+(c.revisar?' · '+c.revisar+' para revisar a mano (el agente no los toca)':'')
+    :'No hay cambios de costos pendientes'+(c.revisar?' (quedan '+c.revisar+' para revisar a mano)':'')+'.';
+  var b=$('agcosya');b.disabled=!!d.activa||!c.pendientes||!d.tieneClave;
+  b.textContent=o?'Cambiando precios…':otra?'Esperando a que termine la descarga…':'Cambiar costos ahora';
+  var h='';
+  if(o){
+    var p=o.pasos||{},tot=Number(p.total)||0,ok=Number(p.ok)||0,salt=Number(p.salt)||0,err=Number(p.err)||0,hecho=ok+salt+err,act=(p.actual||{}).d||'',pa=p.pantalla||{};
+    var linea=o.estado==='PENDIENTE'?'Esperando a la computadora del local':pa.e==='ESPERANDO'?pa.d:hecho?'Van <b>'+hecho+'</b> de '+tot+' · '+ok+' '+(ok===1?'cambiado':'cambiados')+(salt?' · '+salt+' sin tocar':''):'Preparando Civil'+(tot?' para '+tot+' productos':'');
+    h='<div class="eval ok" style="margin-top:10px"><b>'+(p.detener?'Deteniendo: termina el producto que está haciendo y transfiere':'Cambiando precios en Civil')+'</b><br>'+linea
+      +(tot?'<div class="agbar"><i style="width:'+Math.min(100,Math.round(hecho*100/tot))+'%"></i></div>':'')
+      +(act&&o.estado!=='PENDIENTE'?'<div><small>'+esc(act)+'</small></div>':'')
+      +'<small>Pedido '+agFecha(o.pedida)+(o.origen==='PROGRAMADA'?' · automático':'')+(p.hasta?' · hasta las '+esc(p.hasta):'')+'</small></div>'
+      +(p.detener?'':'<div class="btns"><button class="btn sec" id="agcosdet" onclick="agCosDetener(\''+esc(o.id)+'\',\''+esc(o.estado)+'\')">'+(o.estado==='PENDIENTE'?'Cancelar':'Detener')+'</button></div>');
+  }else if(c.ultimo){
+    var u=c.ultimo;
+    h=(u.estado==='ERROR'?'<div class="eval mal" style="margin-top:10px"><b>La última vez se detuvo</b><br>'+esc(u.error||u.detalle)
+      :u.estado==='CANCELADA'?'<div class="eval mal" style="margin-top:10px"><b>Cancelado</b><br>'+esc(u.detalle||'')
+      :'<div class="eval bien" style="margin-top:10px"><b>Última vez: '+esc(u.detalle||'terminado')+'</b>'+(u.total?'<br>'+u.total+' '+(u.total===1?'cambio de precio':'cambios de precios')+' en el PDF':''))
+      +'<br><small>'+agFecha(u.fin)+'</small></div>'
+      +(u.pdf?'<div class="btns"><button class="btn sec" id="agcospdf" data-url="'+esc(u.pdf)+'">Ver PDF de cambios de precios</button></div>':'');
+  }
+  $('agcosorden').innerHTML=h;
+  var pdf=$('agcospdf');if(pdf)pdf.onclick=function(){window.open(pdf.dataset.url,'_blank','noopener')};
+  var g=c.prog||{};
+  if(document.activeElement!==$('agcosdesde'))$('agcosdesde').value=g.desde||'01:00';
+  if(document.activeElement!==$('agcoshasta'))$('agcoshasta').value=g.hasta||'09:00';
+  $('agcosprog').textContent=g.activo?'Desactivar':'Activar';$('agcosprog').dataset.on=g.activo?'1':'';
+  $('agcosmsg').innerHTML=g.activo?'Activado: todos los días de <b>'+esc(g.desde)+'</b> a <b>'+esc(g.hasta)+'</b> cambia en Civil lo que haya en CAMBIOS COSTOS (después de la descarga y la actualización de la noche). A las '+esc(g.hasta)+' termina el producto que está haciendo y para. Al final transfiere a las cajas y te manda el PDF por WhatsApp.'
+    :'Desactivado: solo cambia cuando tocás "Cambiar costos ahora".';
+}
+function agCosDetener(id,estado){
+  if(estado!=='PENDIENTE'&&!confirm('¿Detener? La computadora termina el producto que está cambiando, transfiere a las cajas lo que ya cambió y te manda el PDF.'))return;
+  var b=$('agcosdet');if(b){b.disabled=true;b.textContent='Deteniendo…'}
+  api('agente_cancelar',{id:id}).then(function(d){agPintar(d);agCargar()}).catch(function(e){if(b){b.disabled=false;b.textContent='Detener'}$('agcosorden').insertAdjacentHTML('beforeend','<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>')});
+}
+$('agcosya').onclick=function(){
+  var b=$('agcosya');if(b.disabled)return;
+  b.disabled=true;b.textContent='Pidiendo…';
+  api('agente_crear_orden',{tipo:'COSTOS'}).then(function(d){agPintar(d);agCargar()}).catch(function(e){b.disabled=false;b.textContent='Cambiar costos ahora';$('agcosorden').innerHTML='<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>'});
+};
+function agCosProgramar(activo){
+  api('agente_costos_programar',{activo:activo?'1':'0',desde:$('agcosdesde').value||'01:00',hasta:$('agcoshasta').value||'09:00'}).then(function(d){agPintar(d);$('agcosmsg').insertAdjacentHTML('afterbegin','<b>Guardado.</b> ')}).catch(function(e){$('agcosmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+}
+$('agcosprog').onclick=function(){agCosProgramar(!$('agcosprog').dataset.on)};
+$('agcosguardar').onclick=function(){agCosProgramar(true)};
 $('agguardar').onclick=function(){agProgramar(true)};
 
 /* ---------------- RESUMEN ---------------- */
@@ -3173,7 +3242,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=169');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=170');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
