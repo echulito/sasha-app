@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=168;
+var APP_V=169;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -236,6 +236,7 @@ body.consulta #bnav .solo-completo{display:none}
     <div class="seg" style="margin-top:0" id="cajsec"><button class="on" data-s="cajas">Cajas</button><button data-s="plata">Plata y pagos</button></div>
     <div id="caja-cajas"></div>
     <div id="caja-plata" class="oculto"><div class="cargando">Cargando…</div></div>
+    <div id="caja-pagos" class="oculto"></div>
   </section>
   <section id="mas" class="oculto mas">
     <div class="card" data-ir="conta"><div><b>Contabilidad</b><small>Facturas e IVA, sueldos y gastos</small></div><b style="color:var(--azul2)">›</b></div>
@@ -558,7 +559,7 @@ function postECHU(cuerpoObj,ms){
 var ESCRITURAS={guardar_propuesta:'Guardado',borrar_propuesta:'Borrado',marcar_pedido:'Guardado',marcar_cargado:'Guardado',marcar_pedido_grupo:'Guardado',
   guardar_pedido:'Guardado',borrar_pedido:'Borrado',limpieza_config_guardar:'Guardado',limpieza_sync:'Guardado',conta_config_guardar:'Guardado',
   conta_proveedor:'Guardado',conta_borrar:'Borrado',sue_empleado:'Guardado',sue_borrar_liq:'Borrado',actualizar_echu:'Pedido',
-  limpieza_importar:'Guardado',limpieza_emitir:'Guardado',gastos_guardar:'Guardado',sue_liquidar:'Guardado',sue_config:'Guardado',conta_guardar:'Guardado',sue_doc_subir:'Guardado',sue_monotributo:'Guardado',contador_subir:'Guardado',contador_enviar:'Mandado'};
+  limpieza_importar:'Guardado',limpieza_emitir:'Guardado',gastos_guardar:'Guardado',pago_registrar:'Guardado',sue_liquidar:'Guardado',sue_config:'Guardado',conta_guardar:'Guardado',sue_doc_subir:'Guardado',sue_monotributo:'Guardado',contador_subir:'Guardado',contador_enviar:'Mandado'};
 // Cargas que muestran "Llegó completo" arriba (no las que corren solas de fondo).
 var CARGAS_AVISO={resumen:1,producto:1,oportunidades:1,sugerencias:1,ranking:1,propuestas:1,conta_mes:1,sue_datos:1,gastos_datos:1,limpieza_recibos:1,candidatos_pedido:1,candidatos_gama:1};
 function api(accion,params,intento){
@@ -749,7 +750,7 @@ var CAJSEC='cajas';
 function cajSec(s){
   CAJSEC=s==='plata'?'plata':'cajas';
   document.querySelectorAll('#cajsec button').forEach(function(b){b.classList.toggle('on',b.dataset.s===CAJSEC)});
-  $('caja-cajas').classList.toggle('oculto',CAJSEC!=='cajas');$('caja-plata').classList.toggle('oculto',CAJSEC!=='plata');
+  $('caja-cajas').classList.toggle('oculto',CAJSEC!=='cajas');$('caja-plata').classList.toggle('oculto',CAJSEC!=='plata');$('caja-pagos').classList.toggle('oculto',CAJSEC!=='plata');if(CAJSEC==='plata')pgPintar();
   // Cajeras se mudó acá desde Administración (el mismo módulo, sin cambios).
   var a=$('a-cajeras');if(a&&a.parentNode!==$('caja-cajas'))$('caja-cajas').appendChild(a);
   if(CAJSEC==='cajas'&&a){a.classList.remove('oculto');cajAbrir()}
@@ -772,6 +773,84 @@ function plReparto(pl,pg,mes){
   h+='<div class="note">'+(cual.length?'Además se pueden pagar con cualquiera de los dos: '+cual.join(' · ')+'. ':'')+(mes&&mes.cantidad?'"Falta pagar en el mes" incluye los 7 días. ':'')+'Sin contar lo que entre por las cajas de acá en adelante.</div></div>';
   return h;
 }
+/* v169: pagos de los gastos con su comprobante (foto o PDF). Va en su propio lugar (caja-pagos): si se recarga la plata, el formulario no se borra. */
+var PG={D:null,form:null,hist:false,listo:null};
+function pgCargar(){return api('pagos_historial').then(function(d){PG.D=d;return d})}
+function pgPintar(){
+  var el=$('caja-pagos');if(!el)return;
+  if(!el.dataset.armado){el.dataset.armado='1';
+    el.innerHTML='<div class="card"><h2>Pagos con comprobante</h2><div class="note" style="margin-top:0">Cargá lo que pagaste con la foto o el PDF del comprobante: queda guardado en Drive, se tilda como pagado y, si aumentó, se anota el aumento.</div>'+
+      '<div class="btns"><button class="btn sec" id="pg_nuevo">+ Cargar un pago</button><button class="btn sec" id="pg_ver">Ver pagos hechos</button></div><div id="pgform"></div><div id="pghist"></div></div>';
+    $('pg_nuevo').onclick=function(){pgAbrir('')};$('pg_ver').onclick=function(){PG.hist=!PG.hist;pgHist()};}
+}
+function pgAbrir(nombre){
+  pgPintar();var box=$('pgform');PG.form={gasto:nombre,archivo:null};PG.listo=null;
+  box.innerHTML='<div class="cargando">Cargando los gastos…</div>';box.scrollIntoView({behavior:'smooth',block:'center'});
+  (PG.D?Promise.resolve(PG.D):pgCargar()).then(pgForm).catch(function(e){box.innerHTML=err(e)});
+}
+function pgForm(){
+  var box=$('pgform'),gs=(PG.D&&PG.D.gastos)||[],sel=PG.form.gasto,g0=gs.filter(function(g){return g.label===sel})[0];
+  var hoy=new Date(),f=hoy.getFullYear()+'-'+('0'+(hoy.getMonth()+1)).slice(-2)+'-'+('0'+hoy.getDate()).slice(-2);
+  var medios=(PG.D&&PG.D.medios)||['EFECTIVO','MERCADO PAGO','TRANSFERENCIA','DÉBITO AUTOMÁTICO','OTRO'];
+  var med0=g0&&g0.medio==='EFECTIVO'?'EFECTIVO':g0&&g0.medio==='MERCADO PAGO'?'MERCADO PAGO':'';
+  box.innerHTML='<div class="card" style="margin-top:8px;background:#f8fafd">'+
+    '<label>Qué pagaste</label><select id="pg_gasto"><option value="">Elegí el gasto…</option>'+gs.map(function(g){return '<option value="'+esc(g.label)+'"'+(g.label===sel?' selected':'')+'>'+esc(g.label)+(g.monto?' · '+pesos(g.monto):'')+(g.pagado?' · ya tildado este mes':'')+'</option>'}).join('')+'</select>'+
+    '<div class="g2"><div><label>Importe pagado</label><input id="pg_monto" data-pesos inputmode="decimal" value="'+(g0&&g0.monto?'$ '+cNum(g0.monto):'')+'"></div><div><label>Fecha del pago</label><input id="pg_fecha" type="date" max="'+f+'" value="'+f+'"></div></div>'+
+    '<label>Se pagó con</label><select id="pg_medio">'+medios.map(function(m){return '<option'+(m===med0?' selected':'')+'>'+esc(m)+'</option>'}).join('')+'</select>'+
+    '<div id="pg_dif" class="note"></div>'+
+    '<div id="pg_nuevo_lbl" class="oculto"><label style="display:flex;gap:8px;align-items:center;margin-top:6px;font-size:14px;color:var(--txt)"><input type="checkbox" id="pg_nuevoimp" style="width:auto" checked> Es el importe nuevo del gasto (desde ahora vale esto)</label></div>'+
+    '<label>Comprobante (foto o PDF)</label><div class="btns" style="margin-top:4px"><label class="btn sec" style="margin:0">Sacar foto<input id="pg_cam" type="file" accept="image/*" capture="environment" class="oculto"></label>'+
+    '<label class="btn sec" style="margin:0">Adjuntar foto o PDF<input id="pg_adj" type="file" accept="image/*,application/pdf" class="oculto"></label></div><div id="pg_arch" class="note">Sin comprobante todavía.</div>'+
+    '<label>Nota (opcional)</label><input id="pg_nota" maxlength="200" placeholder="Ej.: pagado por homebanking">'+
+    '<div class="btns"><button class="btn" id="pg_ok">Guardar el pago</button><button class="btn sec" id="pg_no">Cancelar</button></div><div id="pg_msg"></div></div>';
+  var dif=function(){var g=gs.filter(function(y){return y.label===$('pg_gasto').value})[0],m=parsePesos($('pg_monto').value),a=g&&g.monto||0;
+    if(a>0&&m>0&&Math.abs(m-a)>=1){var pc=Math.round((m/a-1)*1000)/10;$('pg_dif').innerHTML='Figuraba '+pesos(a)+': '+(pc>0?'<b class="neg">aumentó '+String(pc).replace('.',',')+'%</b>':'<b class="pos">bajó '+String(-pc).replace('.',',')+'%</b>');$('pg_nuevo_lbl').classList.toggle('oculto',!!(g&&g.grupo))}
+    else{$('pg_dif').innerHTML='';$('pg_nuevo_lbl').classList.add('oculto')}};
+  $('pg_gasto').onchange=function(){var g=gs.filter(function(y){return y.label===$('pg_gasto').value})[0];if(g&&g.monto)$('pg_monto').value='$ '+cNum(g.monto);if(g&&(g.medio==='EFECTIVO'||g.medio==='MERCADO PAGO'))$('pg_medio').value=g.medio;dif()};
+  $('pg_monto').addEventListener('input',dif);dif();
+  $('pg_cam').onchange=function(){pgArchivo(this)};$('pg_adj').onchange=function(){pgArchivo(this)};
+  $('pg_no').onclick=function(){PG.form=null;$('pgform').innerHTML=''};
+  $('pg_ok').onclick=pgGuardar;
+}
+function pgArchivo(input){
+  var f=input.files&&input.files[0];input.value='';if(!f)return;
+  var pdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);
+  if(f.size>11*1024*1024){alert('El archivo es muy grande (hasta 11 MB).');return}
+  $('pg_arch').innerHTML='Preparando el comprobante…';
+  var datos=pdf?leerDataURL(f).then(function(u){return u.replace(/^data:[^,]*,/,'data:application/pdf;base64,')}):new Promise(function(ok,mal){
+    var url=URL.createObjectURL(f),img=new Image();
+    img.onload=function(){var k=Math.min(1,2000/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');cv.width=Math.round(img.naturalWidth*k);cv.height=Math.round(img.naturalHeight*k);
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);URL.revokeObjectURL(url);ok(cv.toDataURL('image/jpeg',0.85))};
+    img.onerror=function(){mal(new Error('No se pudo abrir la foto.'))};img.src=url});
+  datos.then(function(u){PG.form.archivo={data:u,mime:pdf?'application/pdf':'image/jpeg',nombre:f.name};$('pg_arch').innerHTML='<b class="pos">✓ '+esc(pdf?f.name:'Foto lista')+'</b>'})
+    .catch(function(e){$('pg_arch').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+}
+function pgGuardar(){
+  var b=$('pg_ok'),g=$('pg_gasto').value,m=parsePesos($('pg_monto').value),fe=$('pg_fecha').value,msg=$('pg_msg');
+  if(!g){msg.innerHTML='<span class="neg">Elegí qué gasto pagaste.</span>';return}
+  if(!(m>0)){msg.innerHTML='<span class="neg">Poné el importe que pagaste.</span>';return}
+  if(!fe){msg.innerHTML='<span class="neg">Poné la fecha del pago.</span>';return}
+  if(!PG.form.archivo&&!confirm('No adjuntaste el comprobante. ¿Lo guardo igual?'))return;
+  var nl=$('pg_nuevo_lbl'),datos={gasto:g,monto:m,fecha:fe,medio:$('pg_medio').value,nota:$('pg_nota').value.trim(),importeNuevo:!nl.classList.contains('oculto')&&$('pg_nuevoimp').checked};
+  b.disabled=true;msg.innerHTML='<div class="note">Guardando'+(PG.form.archivo?' y subiendo el comprobante':'')+'…</div>';
+  lPost('pago_registrar',{datos:JSON.stringify(datos),archivo:PG.form.archivo?PG.form.archivo.data:'',mime:PG.form.archivo?PG.form.archivo.mime:''}).then(function(r){
+    PG.D=Object.assign({},PG.D||{},r.historial||{});PG.form=null;
+    $('pgform').innerHTML='<div class="card" style="margin-top:8px"><b class="pos">Listo: '+esc(r.gasto)+' '+pesos(r.monto)+' pagado.</b>'+
+      (r.aumento?'<div class="note">Figuraba '+pesos(r.antes)+' ('+esc(r.aumento)+')'+(r.aplicado?': quedó como el importe nuevo del gasto.':'.')+'</div>':'')+
+      '<div class="note">'+(r.tildado?'Tildado como pagado este mes. ':'')+(r.comprobante?'<a href="'+esc(r.comprobante)+'" target="_blank" rel="noopener">Ver el comprobante en Drive</a>':'Sin comprobante.')+'</div></div>';
+    INI=null;try{cargarInicio()}catch(e){}if(PG.hist)pgHist();
+  }).catch(function(e){b.disabled=false;msg.innerHTML='<span class="neg">'+esc(/ACCI|desconoc|no existe/i.test(e.message)?'Falta pegar ECHU 6.75.':e.message)+'</span>'});
+}
+function pgHist(){
+  var box=$('pghist');if(!box)return;
+  if(!PG.hist){box.innerHTML='';return}
+  box.innerHTML='<div class="cargando">Cargando los pagos…</div>';
+  pgCargar().then(function(d){var ps=d.pagos||[];
+    box.innerHTML='<div style="margin-top:8px">'+(ps.length?ps.map(function(x){return '<div class="row"><span>'+esc(x.fecha.split('-').reverse().join('/'))+' · <b>'+esc(x.gasto)+'</b><br><span class="rk">'+esc(x.medio.toLowerCase())+(x.aumento?' · '+esc(x.aumento):'')+(x.nota?' · '+esc(x.nota):'')+'</span></span><span style="text-align:right">'+pesos(x.monto)+
+      (x.comprobante?'<br><a href="'+esc(x.comprobante)+'" target="_blank" rel="noopener" class="rk">comprobante</a>':'<br><span class="rk">sin comprobante</span>')+'</span></div>'}).join(''):'<div class="note">Todavía no cargaste pagos desde la app.</div>')+(d.aviso?'<div class="note neg">'+esc(d.aviso)+'</div>':'')+'</div>'})
+    .catch(function(e){box.innerHTML=err(e)});
+}
+document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-pagar]');if(b){ev.preventDefault();pgAbrir(b.getAttribute('data-pagar'))}});
 function pintarPlata(){
   var el=$('caja-plata');if(!el)return;
   if(INI_ERR){el.innerHTML='<div class="card"><b class="neg">No se pudo traer la plata.</b> <span class="note">'+esc(INI_ERR)+'</span></div>';return}
@@ -789,8 +868,9 @@ function pintarPlata(){
   h+='<div class="card"><h2>Pagos de los próximos 7 días · '+pesos(pg.total)+'</h2>';
   if(!pg.items.length)h+='<div class="note" style="margin-top:0">No vence nada en los próximos 7 días.</div>';
   pg.items.forEach(function(x){var p=plParte(x),med=[p.ef>0?'efectivo '+pesos(p.ef):'',p.mp>0?'MP '+pesos(p.mp):'',p.cual>0?'cualquiera '+pesos(p.cual):''].filter(Boolean).join(' + ');
-    h+='<div class="row"><span>'+(x.vencido?'<b class="neg">Venció</b> ':'')+esc(x.nombre)+' · '+esc(x.vence)+(x.dias===0&&!x.vencido?' (hoy)':'')+'<br><span class="rk">'+med+'</span></span><span>'+pesos(x.monto)+'</span></div>'});
-  h+='</div><div class="note">Los saldos, los vencimientos y los pagados se cargan en ECHU › ADMINISTRACION › Reparto de la plata. Próximo paso: cargarlos desde acá, con Cuenta DNI y los aportes y retiros de cada dueño.</div>';
+    h+='<div class="row"><span>'+(x.vencido?'<b class="neg">Venció</b> ':'')+esc(x.nombre)+' · '+esc(x.vence)+(x.dias===0&&!x.vencido?' (hoy)':'')+'<br><span class="rk">'+med+'</span></span><span style="text-align:right">'+pesos(x.monto)+
+      '<br><button class="btn sec" style="padding:4px 12px;font-size:13px;margin-top:4px" data-pagar="'+esc(x.nombre)+'">Pagar</button></span></div>'});
+  h+='</div><div class="note">Los saldos y los vencimientos se cargan en ECHU › ADMINISTRACION › Reparto de la plata. Los pagos, desde acá abajo con su comprobante.</div>';
   el.innerHTML=h;
 }
 document.querySelectorAll('#cajsec button').forEach(function(b){b.onclick=function(){cajSec(b.dataset.s)}});
@@ -3093,7 +3173,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=168');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=169');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);

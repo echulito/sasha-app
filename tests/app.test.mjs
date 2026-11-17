@@ -875,3 +875,43 @@ test('agentes v168: la lista muestra los PDF de cajas (y si fallan, ECHU igual a
   assert.deepEqual(errores, []);
   await ctx.close();
 });
+
+test('v169: pagar un gasto desde la app con el comprobante (foto o PDF) y anotar el aumento', async () => {
+  const antes = {h: DATOS.pagos_historial, r: DATOS.pago_registrar};
+  const enviados = [];
+  DATOS.pagos_historial = {gastos: [{label: 'Alquiler', monto: 180000, dia: 4, medio: 'MERCADO PAGO', pagado: false}, {label: 'Internet', monto: 58500, dia: 7, medio: 'MIXTO', pagado: false}],
+    medios: ['EFECTIVO', 'MERCADO PAGO', 'TRANSFERENCIA', 'DÉBITO AUTOMÁTICO', 'OTRO'], pagos: []};
+  DATOS.pago_registrar = p => { const d = JSON.parse(p.datos); enviados.push({d, mime: p.mime, archivo: p.archivo});
+    DATOS.pagos_historial.pagos.unshift({fecha: d.fecha, gasto: d.gasto, monto: d.monto, medio: d.medio, antes: 180000, aumento: '+10% (es el importe nuevo)', vencia: '', comprobante: 'https://drive.google.com/file/d/PRUEBA/view', nota: ''});
+    return {gasto: d.gasto, monto: d.monto, antes: 180000, aumento: '+10%', aplicado: d.importeNuevo, tildado: true, comprobante: 'https://drive.google.com/file/d/PRUEBA/view',
+      historial: {gastos: DATOS.pagos_historial.gastos, pagos: [{fecha: d.fecha, gasto: d.gasto, monto: d.monto, medio: d.medio, antes: 180000, aumento: '+10% (es el importe nuevo)', vencia: '', comprobante: 'https://drive.google.com/file/d/PRUEBA/view', nota: ''}]}}; };
+  const {ctx, page, errores} = await abrir();
+  try {
+    await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+    await page.click('#inicio .iav button[data-ir="pagos"]');
+    await page.click('#caja-plata [data-pagar="Alquiler"]');
+    await page.locator('#pg_gasto').waitFor();
+    assert.equal(await page.inputValue('#pg_gasto'), 'Alquiler');
+    assert.equal(await page.inputValue('#pg_medio'), 'MERCADO PAGO');
+    assert.match(await page.inputValue('#pg_monto'), /180\.000/);
+    assert.equal(await page.locator('#pg_nuevo_lbl').isVisible(), false, 'mismo importe: no pregunta por el aumento');
+    await page.fill('#pg_monto', '$ 198.000');
+    await page.locator('#pg_dif', {hasText: 'aumentó 10%'}).waitFor();
+    assert.equal(await page.locator('#pg_nuevo_lbl').isVisible(), true);
+    await page.setInputFiles('#pg_adj', {name: 'comprobante.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF\n')});
+    await page.locator('#pg_arch', {hasText: 'comprobante.pdf'}).waitFor();
+    await page.click('#pg_ok');
+    await page.locator('#pgform', {hasText: 'Listo: Alquiler $ 198.000 pagado.'}).waitFor();
+    assert.equal(enviados.length, 1);
+    assert.equal(enviados[0].d.gasto, 'Alquiler'); assert.equal(enviados[0].d.monto, 198000); assert.equal(enviados[0].d.medio, 'MERCADO PAGO');
+    assert.equal(enviados[0].d.importeNuevo, true); assert.equal(enviados[0].mime, 'application/pdf'); assert.match(enviados[0].archivo, /^data:application\/pdf;base64,/);
+    assert.match(await page.locator('#pgform').innerText(), /quedó como el importe nuevo[\s\S]*Ver el comprobante en Drive/);
+    await page.click('#pg_ver');
+    await page.locator('#pghist', {hasText: 'Alquiler'}).waitFor();
+    assert.match(await page.locator('#pghist').innerText(), /\$ 198\.000[\s\S]*comprobante/);
+    assert.deepEqual(errores, []);
+  } finally {
+    await ctx.close();
+    for (const [k, v] of [['pagos_historial', antes.h], ['pago_registrar', antes.r]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
+  }
+});
