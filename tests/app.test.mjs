@@ -983,7 +983,7 @@ test('v173: elegir qué cambia el agente (subir, bajar, solo costo) y pedir solo
     await page.click('#mas [data-ir="agentes"]');
     await page.locator('#agcosest', {hasText: '40 bajas esperan: tienen stock'}).waitFor();
     assert.equal(await page.locator('#agcostipos label.on').count(), 3);
-    assert.match(await page.locator('#agcostipos').innerText(), /Subir\s*120[\s\S]*Bajar\s*20[\s\S]*Solo costo\s*10/);
+    assert.match(await page.locator('#agcostipos').innerText(), /Subir costo y precio\s*120[\s\S]*Bajar costo y precio\s*20[\s\S]*Solo costo\s*10/);
     await page.locator('#agcostipos input[data-t="BAJAR"]').uncheck();
     await page.locator('#agcosest', {hasText: 'Para cambiar: 120'}).waitFor();
     assert.deepEqual(tipos, ['SUBIR,SOLO COSTO']);
