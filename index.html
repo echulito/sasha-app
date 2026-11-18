@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=173;
+var APP_V=174;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -267,6 +267,8 @@ body.consulta #bnav .solo-completo{display:none}
         <div id="agestado" class="note" style="margin-top:0">Cargando…</div>
         <label>Día de los reportes</label>
         <input id="agfecha" type="date">
+        <label>Qué bajar</label>
+        <div id="agque" class="agtipos"><label class="on"><input type="checkbox" data-k="stock" checked>Stock</label><label class="on"><input type="checkbox" data-k="productos" checked>Productos</label><label class="on"><input type="checkbox" data-k="movimientos" checked>Movimientos</label><label class="on"><input type="checkbox" data-k="cajas" checked>PDF de cajas</label></div>
         <div class="btns"><button class="btn" id="agrep">Descargar reportes y PDF de cajas</button></div>
         <div id="agorden"></div>
       </div>
@@ -945,6 +947,7 @@ function agLista(o){
   AG_ARCH.forEach(function(a){
     var y=p[a[0]]||{};
     if(a[0]==='cajas'&&!p.cajas)return; // órdenes viejas, sin PDF de cajas
+    if(y.e==='NO_PEDIDO')return; // v174: no se pidió en esta descarga
     if(y.e==='SIN_DATOS')h+=agFila('ok',a[0]==='cajas'?'PDF DE CAJAS: Civil no tiene datos de ese día':a[1]+': no hubo movimientos ese día',a[0]==='cajas'?y.d:'No hay archivo para subir',y.h);
     else if(y.drive)h+=agFila('ok',a[1]+' en su carpeta de Drive',y.d,y.drive);
     else if(y.e==='COPIADO'||y.e==='YA_ESTABA')h+=agFila('curso',a[1]+' generado · subiendo a Drive',y.d,y.h);
@@ -960,7 +963,7 @@ function agLista(o){
   return '<div class="agl">'+h+'</div>';
 }
 function agOrdenHtml(o,activa){
-  var t=o.tipo==='REPORTES'?'Reportes del '+agDia(o.fecha):'STOCK';
+  var t=o.tipo==='REPORTES'?(/^Reportes del /.test(o.archivo||'')||!o.archivo?'Reportes del '+agDia(o.fecha):o.archivo.charAt(0).toUpperCase()+o.archivo.slice(1)):'STOCK';
   var cab=o.estado==='ERROR'?'<div class="eval mal" style="margin-top:10px"><b>'+esc(t)+': se detuvo</b><br>'+esc(o.error)+' · '+agFecha(o.fin)+'</div>'
     :o.estado==='CANCELADA'?'<div class="eval mal" style="margin-top:10px"><b>'+esc(t)+': cancelada</b><br>'+esc(o.detalle||'Cancelada desde la app')+' · '+agFecha(o.fin)+'</div>'
     :o.estado==='COMPLETADO'?'<div class="eval bien" style="margin-top:10px"><b>'+esc(t)+': '+(o.tipo==='REPORTES'?'actualizado correctamente':'STOCK actualizado correctamente')+'</b><br>'+(o.tipo==='REPORTES'?'':esc(o.archivo)+' · ')+agFecha(o.fin)+'</div>'
@@ -978,7 +981,7 @@ function agPintar(d){
   if(!$('agfecha').value&&d.ayer)$('agfecha').value=d.ayer;
   if(d.ahora)$('agfecha').max=String(d.ahora).slice(0,10);
   var oc=o&&o.tipo==='COSTOS';
-  $('agrep').disabled=!!o||!d.tieneClave;$('agrep').textContent=oc?'Ocupado cambiando precios…':o?'Descarga en marcha…':'Descargar reportes y PDF de cajas';
+  $('agrep').disabled=!!o||!d.tieneClave;$('agrep').textContent=oc?'Ocupado cambiando precios…':o?'Descarga en marcha…':document.querySelectorAll('#agque input:checked').length===4?'Descargar reportes y PDF de cajas':'Descargar lo elegido';
   var h='';
   if(oc)h='<div class="note">La computadora está cambiando precios en Civil (abajo). Para descargar, esperá a que termine.</div>';
   else if(o)h=agOrdenHtml(o,true);
@@ -1009,13 +1012,18 @@ $('agvolver').onclick=agCerrar;
 $('agrep').onclick=function(){
   var b=$('agrep');if(b.disabled)return;
   var f=$('agfecha').value;if(!f){$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">Elegí el día.</div>';return}
+  var solo=[].map.call(document.querySelectorAll('#agque input:checked'),function(x){return x.dataset.k});
+  if(!solo.length){$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">Elegí al menos un reporte.</div>';return}
   b.disabled=true;b.textContent='Preparando la descarga…';
-  api('agente_crear_orden',{tipo:'REPORTES',fecha:f}).then(function(d){agPintar(d);agCargar()}).catch(function(e){b.disabled=false;b.textContent='Descargar reportes y PDF de cajas';$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>'});
+  api('agente_crear_orden',{tipo:'REPORTES',fecha:f,solo:solo.length===4?'':solo.join(',')}).then(function(d){agPintar(d);agCargar()}).catch(function(e){b.disabled=false;b.textContent='Descargar reportes y PDF de cajas';$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>'});
 };
 function agProgramar(activo){
   api('agente_programar',{activo:activo?'1':'0',hora:$('aghora').value||'23:00',horaAct:(AG.d&&AG.d.prog&&AG.d.prog.horaAct==='YA')?'':($('aghoraact').value||'00:00')}).then(function(d){agPintar(d);$('agprogmsg').insertAdjacentHTML('afterbegin','<b>Guardado.</b> ')}).catch(function(e){$('agprogmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
 $('agprog').onclick=function(){agProgramar(!$('agprog').dataset.on)};
+// v174: elegir qué reportes bajar
+document.querySelectorAll('#agque input').forEach(function(x){x.onchange=function(){x.parentNode.classList.toggle('on',x.checked);
+  var n=document.querySelectorAll('#agque input:checked').length,b=$('agrep');if(!b.disabled)b.textContent=n===4?'Descargar reportes y PDF de cajas':'Descargar lo elegido'}});
 /* v170: CAMBIAR PRECIOS EN CIVIL. El agente carga en Civil el costo y el precio nuevos de la solapa CAMBIOS COSTOS de ECHU
    (los de REVISAR A MANO no), tilda cada uno en vivo, transfiere a las cajas y manda el PDF por WhatsApp. */
 // v171: motivo corto para el historial (sin los datos técnicos entre llaves ni el detalle largo).
@@ -3291,7 +3299,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=173');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=174');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
