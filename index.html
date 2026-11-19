@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=175;
+var APP_V=176;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -198,6 +198,13 @@ body.consulta #bnav .solo-completo{display:none}
 #aghist .chip{flex:0 0 auto;align-self:flex-start;white-space:nowrap;margin-top:1px}
 #aghist .agt{display:block;font-weight:600;color:#2b3440}
 #aghist .agd{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:13px;color:#6b7480;margin-top:2px;line-height:1.35}
+/* v176: historial con desglose */
+#aghist .agh{cursor:pointer}
+#aghist .aghd{background:#f6f8fb;border-radius:10px;padding:4px 10px 8px;margin:0 0 8px}
+#aghist .aghd .agd{-webkit-line-clamp:4}
+#aghmas>summary{cursor:pointer;padding:8px 0;color:var(--azul2);font-weight:600;list-style:none}
+.agrec{margin-top:6px;border-top:1px solid #e3e7ec;padding-top:4px}
+.fchk{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:15px}.fchk input{width:20px;height:20px}
 #aghist .agd.neg{color:var(--rojo)}
 /* v173: qué cambia el agente */
 .agtipos{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
@@ -494,6 +501,11 @@ body.consulta #bnav .solo-completo{display:none}
         <label>Planilla Limpieza (link o ID)</label><input id="lcsheet">
         <div class="btns"><button class="btn" id="lcsave">Guardar</button></div><div class="note" id="lcmsg"></div>
       </div>
+      <div class="card" style="margin-top:12px"><h2>Aumento desde una fecha</h2>
+        <div class="note" style="margin-top:0">Lo de antes de esa fecha se paga con el valor que venía; desde esa fecha, con el nuevo. En Gastos se aclara el aumento en %.</div>
+        <div class="two"><div><label>Nuevo valor por asistencia</label><input id="lcnuevo" inputmode="decimal" placeholder="Ej: 26.000"></div><div><label>Desde el día</label><input id="lcdesde" type="date"></div></div>
+        <div class="btns"><button class="btn" id="lcaum">Guardar el aumento</button></div><div id="lctar" class="note"></div>
+      </div>
       <div class="card" style="margin-top:12px"><h2>Lectura de fotos</h2><div id="lcvis" class="note" style="margin-top:0"></div></div>
       <div class="card" style="margin-top:12px">
         <h2>Traer los recibos de la app vieja</h2>
@@ -736,7 +748,7 @@ function cargarInicio(){
 function iniDatosAlDia(){
   var dt=(D&&D.datos)||{},c=String(dt.completa||''),m=c.match(/(\d{2})\/(\d{2})\/(\d{4})/),col='var(--verde)',txt;
   if(dt.estado==='ERROR'){col='var(--rojo)';txt='La última actualización de ECHU dio error'}
-  else if(dt.estado==='EN PROCESO'){col='var(--amar)';txt='ECHU se está actualizando'}
+  else if(dt.estado==='EN PROCESO'){col='var(--amar)';var fa=/·\s*(falta[^·]*)/.exec(String(dt.detalle||''));txt='ECHU se está actualizando'+(fa?' · '+fa[1].trim():'')}
   else if(m){var f=new Date(Number(m[3]),Number(m[2])-1,Number(m[1])),dias=Math.floor((new Date().setHours(0,0,0,0)-f)/86400000);
     if(dias>1)col='var(--amar)';txt=(dias>1?'Datos atrasados: ':'Datos al día: ')+c}
   else{col='var(--amar)';txt='Todavía no hay una actualización completa'}
@@ -763,12 +775,27 @@ function pintarInicio(){
     if(!av.length)h+='<div class="card"><b class="pos">✓ Todo al día.</b> <span class="note">No hay diferencias de caja, vencimientos ni tareas pendientes.</span></div>';
     av.forEach(function(a){
       var ic={rojo:'!',amarillo:a.ir==='pagos'?'◷':'▦',azul:'✓'}[a.nivel]||'·';
-      h+='<div class="card iav"><div class="ic '+esc(a.nivel)+'">'+ic+'</div><div><b>'+esc(a.titulo)+'</b><p>'+esc(a.detalle)+'</p>'+iniBoton(a)+'</div></div>';
+      // v176: los productos para contar: el PDF para las cajeras sale directo de acá.
+      var contar=/para contar/i.test(a.titulo||'')?' <button class="btn" data-contar="1">PDF para las cajeras</button>':'';
+      h+='<div class="card iav"><div class="ic '+esc(a.nivel)+'">'+ic+'</div><div><b>'+esc(a.titulo)+'</b><p>'+esc(a.detalle)+'</p>'+iniBoton(a)+contar+'<div class="note oculto" data-contarmsg></div></div></div>';
     });
     if((INI.errores||[]).length)h+='<div class="note">No se pudo leer: '+esc(INI.errores.join(' · '))+'</div>';
   }
   el.innerHTML=h;
   el.querySelectorAll('[data-ir]').forEach(function(x){x.onclick=function(ev){ev.stopPropagation();iniIr(x.dataset.ir)}});
+  el.querySelectorAll('[data-contar]').forEach(function(b){b.onclick=function(ev){ev.stopPropagation();iniPdfContar(b)}});
+}
+// v176 (ECHU 6.86): arma el PDF de la lista para contar (stock negativo y no coincide) y lo comparte (WhatsApp) o lo abre.
+function iniPdfContar(b){
+  var msg=b.parentNode.querySelector('[data-contarmsg]');b.disabled=true;b.textContent='Armando el PDF…';msg.classList.add('oculto');
+  api('lista_contar').then(function(d){
+    var bin=atob(d.base64),arr=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+    var blob=new Blob([arr],{type:'application/pdf'}),f=null;try{f=new File([blob],d.nombre,{type:'application/pdf'})}catch(e){f=null}
+    b.disabled=false;b.textContent='PDF para las cajeras';
+    msg.classList.remove('oculto');msg.innerHTML=d.cantidad+' productos. '+(d.url?'<a href="'+esc(d.url)+'" target="_blank" rel="noopener">Abrir en Drive</a>':'');
+    if(f&&navigator.canShare&&navigator.canShare({files:[f]}))navigator.share({files:[f],title:d.nombre}).catch(function(){});
+    else{var u=URL.createObjectURL(blob),l=document.createElement('a');l.href=u;l.download=d.nombre;document.body.appendChild(l);l.click();l.remove();setTimeout(function(){URL.revokeObjectURL(u)},60000)}
+  }).catch(function(e){b.disabled=false;b.textContent='PDF para las cajeras';msg.classList.remove('oculto');msg.innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
 function iniIr(ir){
   if(ir==='ventas')return irA('resumen');
@@ -995,13 +1022,36 @@ function agPintar(d){
   if(!ya&&document.activeElement!==$('aghoraact'))$('aghoraact').value=p.horaAct||'00:00';
   $('agprog').textContent=p.activo?'Desactivar':'Activar';$('agprog').dataset.on=p.activo?'1':'';
   $('agprogmsg').innerHTML=p.activo?'Activada: todos los días a las <b>'+esc(p.hora)+'</b> baja stock, productos, movimientos y los PDF de cajas '+(p.hora>='12:00'?'de ese mismo día':'del día anterior')+(ya?', y ECHU se actualiza apenas están en Drive':', y ECHU los toma a las <b>'+esc(p.horaAct||'00:00')+'</b>')+'. Próxima: '+esc(d.proximo||'')+'.<br>Funciona con la app cerrada. La computadora tiene que estar prendida con la sesión de SASHA iniciada (puede estar desconectada).':'Desactivada: solo baja cuando lo pedís acá.';
-  $('aghist').innerHTML=(d.historial||[]).length?(d.historial||[]).slice(0,12).map(function(x){
+  // v176: todo el historial; los más viejos plegados ("Ver N más"). Tocando uno se ve el desglose (y el PDF si hay).
+  var agFilaHist=function(x){
     var c=x.estado==='COMPLETADO'?'v':x.estado==='ERROR'?'r':x.estado==='CANCELADA'?'c':'a';
     var t=x.tipo==='REPORTES'?'Reportes del '+agDia(x.fecha).slice(0,5):x.tipo==='COSTOS'?'Cambios de precios':x.tipo==='STOCK'?'Stock':x.tipo;
     var det=x.estado==='ERROR'?agCorto(x.error):x.tipo==='COSTOS'||x.estado==='CANCELADA'?agCorto(x.detalle):x.tipo==='STOCK'?agCorto(x.archivo):'';
     if(x.estado==='CANCELADA'&&/^Cancelada desde la app/.test(det))det='';
-    return '<div class="row"><span><span class="agt">'+agFecha(x.pedida)+' · '+esc(t)+(x.origen==='PROGRAMADA'?' · automática':'')+'</span>'+(det?'<span class="agd'+(x.estado==='ERROR'?' neg':'')+'">'+esc(det)+'</span>':'')+'</span>'
-      +'<span class="chip '+c+'">'+esc(x.estado==='COMPLETADO'?'Completado':x.estado==='ERROR'?'Error':x.estado==='CANCELADA'?'Cancelada':'En marcha')+'</span></div>'}).join(''):'Todavía no hay descargas.';
+    return '<div class="row agh" data-id="'+esc(x.id)+'" role="button" tabindex="0"><span><span class="agt">'+agFecha(x.pedida)+' · '+esc(t)+(x.origen==='PROGRAMADA'?' · automática':'')+'</span>'+(det?'<span class="agd'+(x.estado==='ERROR'?' neg':'')+'">'+esc(det)+'</span>':'')+'</span>'
+      +'<span class="chip '+c+'">'+esc(x.estado==='COMPLETADO'?'Completado':x.estado==='ERROR'?'Error':x.estado==='CANCELADA'?'Cancelada':'En marcha')+'</span></div><div class="aghd oculto" data-det="'+esc(x.id)+'"></div>'};
+  var hl=d.historial||[],abiertoMas=!!document.querySelector('#aghmas[open]');
+  $('aghist').innerHTML=hl.length?hl.slice(0,12).map(agFilaHist).join('')+(hl.length>12?'<details id="aghmas"'+(abiertoMas?' open':'')+'><summary class="lnk">Ver '+(hl.length-12)+' más</summary>'+hl.slice(12).map(agFilaHist).join('')+'</details>':''):'Todavía no hay descargas.';
+  document.querySelectorAll('#aghist .agh').forEach(function(r){r.onclick=function(){agDetalle(r.dataset.id)}});
+}
+function agDetalle(id){
+  var el=document.querySelector('#aghist [data-det="'+id+'"]');if(!el)return;
+  if(!el.classList.contains('oculto')){el.classList.add('oculto');return}
+  el.classList.remove('oculto');el.innerHTML='<div class="note">Cargando el detalle…</div>';
+  api('agente_detalle',{id:id}).then(function(x){
+    var h='';
+    if(x.tipo==='COSTOS'){
+      var l=x.productos||[],ok=l.filter(function(p){return /^Cambiado|^Ya estaba/.test(p.resultado)}).length;
+      h='<div class="note" style="margin-top:0">'+l.length+' productos · '+ok+' cambiados o ya estaban · '+(l.length-ok)+' sin tocar o con error</div>'+
+        (x.pdf?'<div class="btns"><button class="btn sec" data-pdf="'+esc(x.pdf)+'">Bajar el PDF de cambios de precios</button></div>':'')+
+        l.map(function(p){var bien=/^Cambiado|^Ya estaba/.test(p.resultado);
+          return '<div class="row"><span><span class="agt">'+esc(p.hora)+' · '+esc(p.cod)+' '+esc(p.prod)+'</span><span class="agd">'+
+            (p.costoNuevo?'Costo '+pesos(p.costoAntes)+' → '+pesos(p.costoNuevo):'')+(p.precioNuevo?' · Precio '+pesos(p.precioAntes)+' → '+pesos(p.precioNuevo):'')+
+            (!bien&&p.detalle?'<br><span class="neg">'+esc(p.detalle)+'</span>':'')+'</span></span><span class="chip '+(bien?'v':/^Error/.test(p.resultado)?'r':'c')+'">'+esc(p.resultado)+'</span></div>'}).join('')||'<div class="note">Sin productos anotados.</div>';
+    }else h=agLista({estado:x.estado,pasos:x.pasos||{}});
+    el.innerHTML=h;
+    el.querySelectorAll('[data-pdf]').forEach(function(b){b.onclick=function(ev){ev.stopPropagation();window.open(b.dataset.pdf,'_blank','noopener')}});
+  }).catch(function(e){el.innerHTML='<div class="note neg">'+esc(e.message)+'</div>'});
 }
 function agCancelar(id,estado){
   if(estado!=='PENDIENTE'&&!confirm('¿Cancelar la descarga? La computadora termina el reporte que está haciendo y para (Civil queda en el Menú Principal).'))return;
@@ -1054,6 +1104,7 @@ function agCosPintar(d){
     h='<div class="eval ok" style="margin-top:10px"><b>'+(p.detener?'Deteniendo: termina el producto que está haciendo y transfiere':'Cambiando precios en Civil')+'</b><br>'+linea
       +(tot?'<div class="agbar"><i style="width:'+Math.min(100,Math.round(hecho*100/tot))+'%"></i></div>':'')
       +(act&&o.estado!=='PENDIENTE'?'<div><small>'+esc(act)+'</small></div>':'')
+      +agCosRecorrido(p)
       +'<small>Pedido '+agFecha(o.pedida)+(o.origen==='PROGRAMADA'?' · automático':'')+(p.hasta?' · hasta las '+esc(p.hasta):'')+'</small></div>'
       +(p.detener?'<div class="btns"><button class="btn sec" id="agcosdes" onclick="agCosDestrabar(\''+esc(o.id)+'\')">Destrabar</button></div><div class="note">Si no se mueve, tocá Destrabar: cierra la orden desde acá.</div>'
         :'<div class="btns"><button class="btn sec" id="agcosdet" onclick="agCosDetener(\''+esc(o.id)+'\',\''+esc(o.estado)+'\')">'+(o.estado==='PENDIENTE'?'Cancelar':'Detener')+'</button></div>');
@@ -1073,6 +1124,13 @@ function agCosPintar(d){
   $('agcosprog').textContent=g.activo?'Desactivar':'Activar';$('agcosprog').dataset.on=g.activo?'1':'';
   $('agcosmsg').innerHTML=g.activo?'Activado: todos los días de <b>'+esc(g.desde)+'</b> a <b>'+esc(g.hasta)+'</b> cambia en Civil lo que haya en CAMBIOS COSTOS (después de la descarga y la actualización de la noche). A las '+esc(g.hasta)+' termina el producto que está haciendo y para. Al final transfiere a las cajas y te manda el PDF por WhatsApp.'
     :'Desactivado: solo cambia cuando tocás "Cambiar costos ahora".';
+}
+// v176: el recorrido en vivo: la hora en que terminó cada producto (los últimos 8; el más nuevo arriba).
+function agCosRecorrido(p){
+  var hs=p.hs||{},res=p.res||{},k=Object.keys(hs).sort(function(a,b){return hs[a]<hs[b]?1:hs[a]>hs[b]?-1:0});
+  if(!k.length)return '';
+  var T={O:'cambiado',Y:'ya estaba',S:'sin tocar',E:'error'};
+  return '<div class="agrec">'+k.slice(0,8).map(function(c){return '<div><small>'+esc(hs[c].slice(0,5))+' · '+esc(c)+' · <span class="'+(res[c]==='E'?'neg':res[c]==='S'?'':'pos')+'">'+(T[res[c]]||'')+'</span></small></div>'}).join('')+(k.length>8?'<div><small>… y '+(k.length-8)+' antes</small></div>':'')+'</div>';
 }
 function agCosDetener(id,estado){
   if(estado!=='PENDIENTE'&&!confirm('¿Detener? La computadora termina el producto que está cambiando, transfiere a las cajas lo que ya cambió y te manda el PDF.'))return;
@@ -1128,7 +1186,9 @@ function pintarResumen(d){
       // v30: el % se ve grande y con barra. Acepta "47%" o 0,47 (si la planilla lo guardó como número).
       var t=String(dt.detalle==null?'':dt.detalle).replace(',','.'), mm=t.match(/(\d{1,3})\s*%/), n=mm?Number(mm[1]):(/^\s*0?\.\d+\s*$/.test(t)?Math.round(Number(t)*100):(/^\s*1\s*$/.test(t)?100:null));
       $('estado').innerHTML='<div style="display:flex;align-items:center;gap:10px"><span style="font-size:20px">⟳</span><b style="font-size:22px">'+(n===null?'…':n+'%')+'</b>'+
-        '<div class="bar" style="flex:1;margin:0"><i style="width:'+(n||0)+'%;background:var(--azul2)"></i></div></div>';
+        '<div class="bar" style="flex:1;margin:0"><i style="width:'+(n||0)+'%;background:var(--azul2)"></i></div></div>'+
+        // v176 (ECHU 6.86): cuánto falta, según cuánto tardaron las anteriores, y cuánto viene acertando.
+        (/·/.test(t)?'<div style="font-size:13px;color:#6b7480;margin-top:4px">'+esc(String(dt.detalle).split('·').slice(1).join('·').trim())+'</div>':'');
     }
   }
   var m=d.mes, h='';
@@ -1560,12 +1620,27 @@ function verProducto(c){
       '<div class="btns"><button class="btn" id="bsim">Simular una compra de este producto</button></div>'+
       '<div class="btns solo-completo"><button class="btn sec" id="bsinest"></button></div><div class="note solo-completo" id="sinestmsg"></div></div>';
     h+='</div>'+(window.__ventasHtml||'');
+    // v176 (ECHU 6.86): abajo de todo, "no tiene código de barras / de proveedor" (se guarda en PRODUCTOS de ECHU).
+    h+='<div class="card solo-completo" id="fmarcas"><h2 style="margin-top:0">Códigos</h2><div class="note" style="margin-top:0">Tildalo si el producto no tiene ese código a propósito: ECHU deja de pedirlo en TAREAS.</div>'+
+      '<label class="fchk"><input type="checkbox" data-m="sinBarras" disabled> No tiene código de barras</label>'+
+      '<label class="fchk"><input type="checkbox" data-m="sinCodProv" disabled> No tiene código de proveedor</label><div class="note" id="fmarcasmsg">Cargando…</div></div>';
     $('detalle').innerHTML=h;
     $('bsim').onclick=function(){cerrarFicha();elegirSim(p);irA('simulador')};
     pintarBotonSinEst(p);
+    fichaMarcas(p.codigo);
   }).catch(function(e){$('detalle').innerHTML=err(e)});
 }
 
+function fichaMarcas(cod){
+  var box=$('fmarcas');if(!box||esConsulta())return;
+  var ins=box.querySelectorAll('input'),msg=$('fmarcasmsg');
+  var pintar=function(d){ins.forEach(function(x){x.checked=!!d[x.dataset.m];x.disabled=false});msg.textContent=(d.barras?'Código de barras: '+d.barras:'Sin código de barras cargado')+' · '+(d.codProv?'Código de proveedor: '+d.codProv:'sin código de proveedor cargado')};
+  api('marcar_sin_codigo',{codigo:cod}).then(pintar).catch(function(e){msg.innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+  ins.forEach(function(x){x.onchange=function(){
+    var q={codigo:cod};q[x.dataset.m]=x.checked?'1':'0';ins.forEach(function(y){y.disabled=true});msg.textContent='Guardando en ECHU…';
+    api('marcar_sin_codigo',q).then(function(d){pintar(d);msg.innerHTML='<span class="pos">Guardado en ECHU.</span> '+msg.innerHTML}).catch(function(e){x.checked=!x.checked;ins.forEach(function(y){y.disabled=false});msg.innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+  }});
+}
 /* ---------------- SIMULADOR ---------------- */
 buscador($('sq'),$('sresultados'),function(c){
   $('sprod').textContent='Cargando…';
@@ -3133,6 +3208,8 @@ function lTocar(i){
 function lTotales(){
   var c=LMP.cfg||{},n=LMP.days.filter(function(x){return x.status==='asistencia'}).length,f=LMP.days.filter(function(x){return x.status==='falta'}).length,
       dud=LMP.days.filter(function(x){return x.status==='dudoso'}).length,rate=LMP.rate||c.rate||0,tot=Math.round(rate*100)*n/100;
+  // v176: si el valor cambió dentro del mes, cada asistencia con el valor de su día.
+  if((c.tarifas||[]).length>1)tot=LMP.days.filter(function(x){return x.status==='asistencia'}).reduce(function(a,x){return a+Math.round(lValorDia(c,LMP.y,LMP.m,x.day)*100)},0)/100;
   $('ltot').classList.remove('oculto');
   $('ltot').innerHTML='<div class="lsum"><div><b>'+n+'</b><span class="rk">asistencias</span></div><div><b>'+f+'</b><span class="rk">'+(f===1?'falta':'faltas')+'</span></div><div><b class="pos">'+lPesos(tot)+'</b><span class="rk">a pagar</span></div></div>'+
     '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="lpag" style="width:auto"'+(LMP.pagado?' checked':'')+'> Confirmo que este importe fue pagado</label>'+
@@ -3182,7 +3259,7 @@ function lPDFs(rec){
     var recibo=function(kind,label,firma){return doc().then(function(a){
       var p=a.pdf.addPage([595,842]);header(p,a.bold,d.paid?'RECIBO DE PAGO':'LIQUIDACION - PAGO PENDIENTE');line(p,a.bold,label,40,720,12);
       var ls=['Comprobante: '+id.slice(0,8),(d.paid?'Fecha de pago':'Fecha prevista')+': '+(d.paymentDate||''),(d.paid?'Recibi de':'A pagar por')+': '+d.payer,'Beneficiario/a: '+d.name,'DNI: '+(d.dni||'____________________'),
-        'Importe: '+lPesos(d.total)+' pesos argentinos',LMESES[d.month-1]+' '+d.year+': '+d.count+' asistencias x '+lPesos(d.rate)+'.','Dias: '+d.days.filter(function(x){return x.status==='asistencia'}).map(function(x){return x.day}).join(', '),'Forma de pago: '+(d.method||'____________________')];
+        'Importe: '+lPesos(d.total)+' pesos argentinos',LMESES[d.month-1]+' '+d.year+': '+(d.tramos&&d.tramos.length>1?d.tramos.map(function(t){return t.count+' asistencias x '+lPesos(t.rate)+' (del '+t.desde.slice(8)+' al '+t.hasta.slice(8)+')'}).join(' + ')+(d.aumentoPct?' (aumento del '+String(d.aumentoPct).replace('.',',')+'%)':''):d.count+' asistencias x '+lPesos(d.rate))+'.','Dias: '+d.days.filter(function(x){return x.status==='asistencia'}).map(function(x){return x.day}).join(', '),'Forma de pago: '+(d.method||'____________________')];
       var cur=696;ls.forEach(function(text){var part='';safe(text).split(' ').forEach(function(w){var nx=part?part+' '+w:w;if(a.font.widthOfTextAtSize(nx,10)>510&&part){line(p,a.font,part,40,cur,10);cur-=17;part=w}else part=nx});if(part){line(p,a.font,part,40,cur,10);cur-=17}});
       if(!d.paid)line(p,a.bold,'Borrador: no acredita recepcion del pago.',40,450,10);
       if(firma){line(p,a.bold,'Recibi conforme',40,410,12);p.drawLine({start:{x:40,y:350},end:{x:275,y:350},thickness:.6});p.drawLine({start:{x:330,y:350},end:{x:555,y:350},thickness:.6});line(p,a.font,'Firma de la beneficiaria',40,334,10);line(p,a.font,'Aclaracion',330,334,10)}
@@ -3192,7 +3269,7 @@ function lPDFs(rec){
       var q=b.pdf.addPage([595,842]);header(q,b.bold,'DETALLE DE ASISTENCIAS');line(q,b.bold,label,40,735,11);
       var tt=d.name+' | '+LMESES[d.month-1]+' '+d.year;line(q,b.bold,tt,40,715,Math.min(12,515/b.bold.widthOfTextAtSize(safe(tt),1)));
       var y=685;line(q,b.bold,'Dia',40,y);line(q,b.bold,'Registro',100,y);line(q,b.bold,'Importe ARS',450,y);y-=24;
-      d.days.forEach(function(x){if(x.status==='asistencia')q.drawRectangle({x:35,y:y-4,width:525,height:18,color:rgb(0.91,0.94,0.99)});line(q,b.font,x.day,40,y,10);line(q,b.font,LAB[x.status]||x.status,100,y,10);line(q,b.font,x.status==='asistencia'?lPesos(d.rate):'$ 0',450,y,10);y-=18});
+      d.days.forEach(function(x){if(x.status==='asistencia')q.drawRectangle({x:35,y:y-4,width:525,height:18,color:rgb(0.91,0.94,0.99)});line(q,b.font,x.day,40,y,10);line(q,b.font,LAB[x.status]||x.status,100,y,10);line(q,b.font,x.status==='asistencia'?lPesos(x.rate||d.rate):'$ 0',450,y,10);y-=18});
       line(q,b.bold,'TOTAL: '+d.count+' asistencias - '+lPesos(d.total),40,y-20,13);line(q,b.font,'Blanco en dia previsto transcurrido = falta. No se paga ese dia.',40,55,9);
       return b.pdf.save().then(function(x){files[kind]=x})})};
     var planilla=function(){if(!d.plan)return Promise.resolve();var plan=d.plan;return doc().then(function(a){
@@ -3258,6 +3335,7 @@ function lReintentar(id,b){
 function lPintarCfg(){
   lCargarCfg().then(function(c){
     $('lcname').value=c.name||'';$('lcdni').value=c.dni||'';$('lcpayer').value=c.payer||'';$('lcrate').value=c.rate||'';
+    lPintarTarifas(c);
     $('lcsheet').value=c.sheetId?'https://docs.google.com/spreadsheets/d/'+c.sheetId:'';
     document.querySelectorAll('#lcmet button').forEach(function(b){b.classList.toggle('on',b.dataset.m===(c.method||'Efectivo'))});
     $('lcvis').innerHTML=c.vision?'<span class="chip v">conectada</span> Las fotos se leen solas. Siempre podés corregir los días antes de generar.':
@@ -3265,10 +3343,29 @@ function lPintarCfg(){
   }).catch(function(e){$('lcmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
 document.querySelectorAll('#lcmet button').forEach(function(b){b.onclick=function(){document.querySelectorAll('#lcmet button').forEach(function(x){x.classList.toggle('on',x===b)})}});
+// v176 (ECHU 6.86): valores por asistencia con fecha de inicio.
+function lPintarTarifas(c){
+  var t=(c&&c.tarifas)||[];
+  $('lctar').innerHTML=t.length>1?t.map(function(x,i){var ant=i?t[i-1].rate:0,pc=ant?Math.round((x.rate/ant-1)*1000)/10:0;
+    return '<div class="row"><span>'+(x.desde?'Desde el '+x.desde.split('-').reverse().join('/'):'Antes')+'</span><span>'+lPesos(x.rate)+(pc?' <small class="'+(pc>0?'neg':'pos')+'">'+(pc>0?'+':'')+String(pc).replace('.',',')+'%</small>':'')+
+      (x.desde?' <button class="lnk" data-borrar="'+esc(x.desde)+'">quitar</button>':'')+'</span></div>'}).join(''):'';
+  $('lctar').querySelectorAll('[data-borrar]').forEach(function(b){b.onclick=function(){if(!confirm('¿Quitar el aumento desde el '+b.dataset.borrar.split('-').reverse().join('/')+'?'))return;
+    api('limpieza_config_guardar',{borrarDesde:b.dataset.borrar}).then(function(c){LMP.cfg=c;LMP.rate=c.rate;lPintarCfg()}).catch(function(e){$('lctar').insertAdjacentHTML('afterbegin','<span class="neg">'+esc(e.message)+'</span>')})}});
+}
+$('lcaum').onclick=function(){
+  var v=parsePesos($('lcnuevo').value),f=$('lcdesde').value;
+  if(!(v>0)||!f){$('lctar').innerHTML='<span class="neg">Poné el valor nuevo y desde qué día.</span>';return}
+  api('limpieza_config_guardar',{rate:v,rateDesde:f}).then(function(c){LMP.cfg=c;LMP.rate=c.rate;$('lcnuevo').value='';lPintarCfg();if(LMP.days.length)lPintar()})
+    .catch(function(e){$('lctar').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+};
+// Valor por asistencia de un día (según los aumentos con fecha).
+function lValorDia(c,y,m,d){var f=y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0'),v=0;((c&&c.tarifas)||[]).forEach(function(t){if(!t.desde||t.desde<=f)v=t.rate});return v}
 $('lcsave').onclick=function(){
   var met=(document.querySelector('#lcmet button.on')||{}).dataset||{};
   $('lcmsg').textContent='Guardando…';
-  api('limpieza_config_guardar',{name:$('lcname').value,dni:$('lcdni').value,payer:$('lcpayer').value,rate:parsePesos($('lcrate').value),method:met.m||'Efectivo',sheetId:$('lcsheet').value})
+  // Con aumentos por fecha, el valor de arriba no se toca desde acá (se usa "Aumento desde una fecha").
+  var cc=LMP.cfg||{},conTar=(cc.tarifas||[]).length>1,rv=parsePesos($('lcrate').value);
+  api('limpieza_config_guardar',{name:$('lcname').value,dni:$('lcdni').value,payer:$('lcpayer').value,rate:conTar?'':rv,method:met.m||'Efectivo',sheetId:$('lcsheet').value})
     .then(function(c){LMP.cfg=c;LMP.rate=c.rate;LMP.met=c.method;$('lcmsg').innerHTML='<span class="pos">Guardado.</span>';if(LMP.days.length)lPintar()})
     .catch(function(e){$('lcmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 };
@@ -3299,7 +3396,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=175');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=176');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
