@@ -755,7 +755,7 @@ test('agentes automáticos v164: reportes de un día con la lista que se tilda e
   assert.equal(await page.inputValue('#agfecha'), '2026-11-15', 'por defecto, ayer');
   assert.equal(await page.getAttribute('#agfecha', 'max'), '2026-11-16', 'no deja elegir días que no pasaron');
   // ya viene programada a las 23:00 y ECHU actualiza a las 00:00
-  assert.match(await page.locator('#agprogmsg').innerText(), /todos los días a las 23:00 baja stock, productos, movimientos y los PDF de cajas de ese mismo día, y ECHU los toma a las 00:00/);
+  assert.match(await page.locator('#agprogmsg').innerText(), /todos los días a las 23:00 baja stock, productos, movimientos, los PDF de cajas y las ofertas de ese mismo día, y ECHU los toma a las 00:00/);
   await page.fill('#agfecha', '2026-11-14');
   await page.click('#agrep');
   await page.locator('#agorden', {hasText: 'Reportes del 14/11/2026'}).waitFor();
@@ -1019,6 +1019,7 @@ test('v174: bajar solo algunos reportes; la lista muestra solo lo pedido', async
     await page.locator('#agque input[data-k="stock"]').uncheck();
     await page.locator('#agque input[data-k="movimientos"]').uncheck();
     await page.locator('#agque input[data-k="cajas"]').uncheck();
+    await page.locator('#agque input[data-k="ofertas"]').uncheck();
     assert.equal(await page.locator('#agrep').innerText(), 'Descargar lo elegido');
     await page.fill('#agfecha', '2026-11-17');
     await page.click('#agrep');
