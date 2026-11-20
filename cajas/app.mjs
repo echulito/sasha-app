@@ -463,14 +463,20 @@ function openSection(id){const target=$(id);if(!target)return;const view=target.
 // v167: los PDF que el agente de la computadora dejó en Drive (CAJAS PDF / dd.mm.aa) se importan solos al abrir,
 // con el mismo lector que "Importar PDF". Si ya había otro distinto para ese día no se reemplaza (eso queda a mano).
 let DRIVE_ULTIMO=0;
-export async function importarDrive(){if(!online||busy||Date.now()-DRIVE_ULTIMO<300000)return;DRIVE_ULTIMO=Date.now();let lista;try{lista=(await echu('cajas_pdf_nuevos')).archivos||[];}catch{return;}if(!lista.length)return;
+// v180: también se vuelven a probar los PDF de Drive ya tomados que no quedaron cargados (los que no se pudieron leer):
+// cada lector nuevo los prueba una vez; si sigue sin poder, no insiste hasta la próxima versión.
+const LECTOR_V=180,FALLOS_K='cajas_pdf_fallos';
+function fallos(){try{return JSON.parse(localStorage.getItem(FALLOS_K)||'{}')||{};}catch{return {};}}
+function anotarFallo(id){try{const f=fallos();f[id]=LECTOR_V;const k=Object.keys(f);if(k.length>200)delete f[k[0]];localStorage.setItem(FALLOS_K,JSON.stringify(f));}catch{}}
+export async function importarDrive(){if(!online||busy||Date.now()-DRIVE_ULTIMO<300000)return;DRIVE_ULTIMO=Date.now();let lista;try{lista=(await echu('cajas_pdf_nuevos',undefined,{todos:'1'})).archivos||[];}catch{return;}
+ const yaFallo=fallos(),cargados=new Set(state.reports.map(r=>r.filename).filter(Boolean));lista=lista.filter(a=>!(a.hecho&&(cargados.has(a.nombre)||yaFallo[a.id]===LECTOR_V)));if(!lista.length)return;
  busy=true;const hechos=[],avisos=[];let nuevos=0;msg('Trayendo '+lista.length+' PDF de Drive…',true);
  try{for(const a of lista){try{const d=await echu('cajas_pdf_bajar',undefined,{id:a.id}),bin=atob(d.data),buf=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
    const report=parseReport(await extractPdf(buf.buffer));report.filename=a.nombre;const idx=state.reports.findIndex(r=>reportKey(r)===reportKey(report));
    if(idx<0){state.reports.push(report);state.completedDays=state.completedDays.filter(x=>x!==report.date);nuevos++;}
-   else if(JSON.stringify(state.reports[idx].rows)!==JSON.stringify(report.rows))avisos.push(a.nombre+': ya había otro para ese día y no se reemplazó (si este es el bueno, importalo a mano)');
-   hechos.push(a.id);
-  }catch(e){if(e.status===401||e.status===503)break;avisos.push(a.nombre+': '+e.message);hechos.push(a.id);}}
+   else{anotarFallo(a.id);if(JSON.stringify(state.reports[idx].rows)!==JSON.stringify(report.rows))avisos.push(a.nombre+': ya había otro para ese día y no se reemplazó (si este es el bueno, importalo a mano)');}
+   if(!a.hecho)hechos.push(a.id);
+  }catch(e){if(e.status===401||e.status===503)break;avisos.push(a.nombre+': '+e.message);anotarFallo(a.id);if(!a.hecho)hechos.push(a.id);}}
  }finally{busy=false;}
  if(nuevos)save(nuevos+(nuevos===1?' PDF importado':' PDF importados')+' de Drive');
  if(hechos.length){try{await echu('cajas_pdf_hechos',hechos);}catch{}}
