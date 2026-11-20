@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=185;
+var APP_V=186;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1558,6 +1558,8 @@ function verProducto(c){
       }
       if(vt.meses&&vt.meses.length){
         hv+='<div class="note">Por mes (archivos de VENTAS: precio y costo promedio de lo vendido)</div><table><tr><th>Mes</th><th>U.</th><th>Precio prom.</th><th>Costo prom.</th><th>Margen</th></tr>';
+        // v186: el mes en curso arriba, aclarando que no es el número final.
+        if(p.mesActual)hv+='<tr><td>'+esc(cMesCorto(p.mesActual.mes))+'<br><span class="chip a" style="font-size:10px">en curso</span></td><td>'+$$(p.mesActual.vendidas)+'</td><td colspan="3" class="rk" style="text-align:left">hasta el '+esc(p.mesActual.hasta)+' · todavía no es el número final</td></tr>';
         vt.meses.forEach(function(x){
           hv+='<tr><td>'+esc(x.mes)+'</td><td>'+$$(x.unidades)+'</td><td>'+pesos(x.precio)+'</td><td>'+(x.costo?pesos(x.costo):'-')+'</td><td class="'+(x.margen===null?'':(x.margen<(p.minimo||0)?'neg':'pos'))+'">'+(x.margen===null?'-':pct(x.margen))+'</td></tr>';
         });
@@ -1587,6 +1589,9 @@ function verProducto(c){
     h+='<div class="card"><h2>Historial</h2>'+
       (f.mejorMes?'<div class="row"><span>Mejor mes</span><span class="pos">'+esc(f.mejorMes.mes)+' · '+$$(f.mejorMes.unidades)+' u.'+(f.mejorMes.precio?' a '+pesos(f.mejorMes.precio):'')+'</span></div>':'<div class="note">Sin historial de ventas.</div>')+
       (f.peorMes?'<div class="row"><span>Peor mes</span><span>'+esc(f.peorMes.mes)+' · '+$$(f.peorMes.unidades)+' u.</span></div>':'')+
+      (function(ma){if(!ma||!ma.diasTranscurridos)return '';var tot=ma.diasTranscurridos+(ma.diasQuedan||0),va=Math.round(ma.vendidas/ma.diasTranscurridos*tot);
+        return '<div class="row"><span>'+esc(cMesCorto(ma.mes))+' <span class="rk">(en curso, hasta el '+esc(ma.hasta)+')</span></span><span><b>'+$$(ma.vendidas)+' u.</b>'+(ma.diasQuedan>0?' · a este ritmo ~'+va+' u.':'')+'</span></div>'+
+          '<div class="note" style="margin-top:0">El mes en curso no es el número final: no cuenta para el mejor y el peor mes.</div>'})(p.mesActual)+
       (f.tendencia?'<div class="row"><span>Tendencia</span><span>'+esc(f.tendencia)+'</span></div>':'')+
       '<div class="row"><span>Peor período sin stock</span><span class="'+(f.peorQuiebre?'neg':'pos')+'">'+(f.peorQuiebre?f.peorQuiebre.dias+' días ('+esc(f.peorQuiebre.desde)+(f.peorQuiebre.sigue?' y sigue':' al '+esc(f.peorQuiebre.hasta))+')':'nunca se quedó sin stock')+'</span></div>'+
       (f.quiebres?'<div class="row"><span>Veces que se agotó</span><span>'+f.quiebres+'</span></div>':'')+
@@ -3389,6 +3394,7 @@ function cMesTxt(p){return LMESES[Number(p.slice(5,7))-1]+' '+p.slice(0,4)}
 function cNro(o){return (o.pv?String(o.pv).padStart(4,'0')+'-':'')+(o.numero?String(o.numero).padStart(8,'0'):'')}
 function cTitulo(o){return o.tipo==='cierre_z'?'Cierre Z N° '+(o.numero||'?'):(CTIPOS[o.tipo]||'Comprobante')+(o.letra&&o.tipo!=='remito'?' '+o.letra:'')+' '+cNro(o)}
 function cFecha(f){return f?f.slice(8,10)+'/'+f.slice(5,7):'sin fecha'}
+function cMesCorto(m){m=String(m||'');var p=m.split(' ');return p.length>1?p[0].slice(0,3).toLowerCase()+' '+p[p.length-1]:m}
 function cNum(n){n=Math.round((Number(n)||0)*100)/100;return n?n.toLocaleString('es-AR',{minimumFractionDigits:Number.isInteger(n)?0:2,maximumFractionDigits:2}):''}
 function admSec(s){
   document.querySelectorAll('#admsec button').forEach(function(b){b.classList.toggle('on',b.dataset.s===s)});
@@ -3400,7 +3406,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=185');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=186');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);

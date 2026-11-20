@@ -747,6 +747,26 @@ test('Ficha v150: "Proveedor y costo" separa el proveedor actual de los precios 
   await ctx.close();
 });
 
+test('Ficha v186: el mes en curso aparece en el historial y en la tabla por mes, aclarando que no es el número final', async () => {
+  DATOS.producto = {codigo: '40224', producto: 'REXONA CREMA PRUEBA', proveedor: 'TORNADO', codigoProveedor: '4376', precio: 3199, costo: 1690, costoSistema: 1690, margen: 0.47, stock: 20,
+    ventaDiaria: 1.7, ventaMensual: 48.7, evaluacion: {nivel: 'ok', texto: 'ACEPTABLE'}, mejorCosto: 0, bultos: [],
+    mesActual: {mes: 'noviembre 2026', hasta: '19/11', vendidas: 38, diasConStock: 19, diasTranscurridos: 19, diasQuedan: 11, normal: 52.2, restoMes: {min: 14, max: 18}, mesQueViene: 'diciembre', comprarHastaFinMesQueViene: 54},
+    ficha: {mejorMes: {mes: 'mar 2026', unidades: 84, precio: 2582}, peorMes: {mes: 'ago 2026', unidades: 44}},
+    ventas: {ultimas: [], meses: [{mes: 'oct 2026', unidades: 54, precio: 3175, costo: 2071, margen: 0.348}]}};
+  const {ctx, page, errores} = await abrir();
+  await page.evaluate(() => verProducto('40224'));
+  await page.locator('#bsim').waitFor();
+  const h = await page.locator('.card', {hasText: 'Historial'}).first().innerText();
+  assert.match(h, /Mejor mes\s*mar 2026 · 84 u\. a \$ 2\.582/); assert.match(h, /Peor mes\s*ago 2026 · 44 u\./);
+  assert.match(h, /nov 2026 \(en curso, hasta el 19\/11\)\s*38 u\. · a este ritmo ~60 u\./);
+  assert.match(h, /no es el número final/);
+  const t = await page.locator('table', {hasText: 'Precio prom.'}).innerText();
+  assert.match(t, /nov 2026\s*en curso\s*38\s*hasta el 19\/11 · todavía no es el número final\s*oct 2026\s*54/);
+  assert.deepEqual(errores, []);
+  delete DATOS.producto;
+  await ctx.close();
+});
+
 // v157: al simular una compra, la oferta puede ser 2x1, 3x2 o 2da unidad al X% (equivale a un descuento por unidad llevando la promo).
 test('simular compra: ofertas por cantidad (2x1, 3x2, 2da unidad al 80%)', async () => {
   const {ctx, page, errores} = await abrir();
