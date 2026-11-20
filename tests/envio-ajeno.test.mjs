@@ -30,10 +30,21 @@ test('si coincide con el cierre de quien figura, o no coincide con nadie, no se 
 });
 test('ya pasado a Fernanda: queda como error de carga de ella y como observación del día', () => {
   const s = estado(envio({cashierId: 'fernanda', cashier: 'Fernanda', shift: 'tarde', start: '15:30', end: '19:30', sentAsId: 'vanesa', sentAs: 'Vanesa', reassignBasis: 'Cuenta DNI $ 44.303 = cierre de la caja 0001, vuelco 2523'}));
-  const e = loadErrors(s, {month: '2026-11'});
+  const e = loadErrors(s, {month: '2026-11', cashierId: 'fernanda'});
   assert.equal(e.length, 1);
   assert.deepEqual([e[0].cashier, e[0].box, e[0].batch, e[0].what], ['Fernanda', '0001', '2523', 'Envío']);
   assert.match(e[0].note, /^Fernanda mandó su envío con el usuario de Vanesa\. Se pasó solo a Fernanda/);
-  assert.equal(loadErrors(s, {month: '2026-11', cashierId: 'vanesa'}).length, 0, 'no cuenta para Vanesa');
+  const v = loadErrors(s, {month: '2026-11', cashierId: 'vanesa'});
+  assert.deepEqual(v.map(x => [x.cashier, x.what]), [['Vanesa', 'Sin declaración']], 'a Vanesa le cuenta que no declaró (es peor)');
+  assert.match(v[0].note, /^Vanesa no mandó su declaración/);
+  assert.ok(controlStatus(s, '2026-11-19').warnings.some(w => /Vanesa no mandó su declaración/.test(w)));
   assert.ok(controlStatus(s, '2026-11-19').warnings.some(w => /usuario de Vanesa/.test(w)));
+});
+
+test('v182: si las dos mandaron su declaración no hay faltantes; antes de que se usaran los envíos tampoco', () => {
+  const s = estado(envio({cashierId: 'fernanda', cashier: 'Fernanda', shift: 'tarde', start: '15:30', end: '19:30'}));
+  s.teamSubmissions.push(envio({id: 'envio-prueba-0002', boxes: [{box: '0001', mercadoPago: 14876250, cuentaDni: 2116000, other: 0, pendingOrders: 0, expenses: []}]}));
+  assert.equal(loadErrors(s, {month: '2026-11'}).length, 0);
+  const viejo = estado(envio({date: '2026-11-20'}));
+  assert.equal(loadErrors(viejo, {month: '2026-11'}).filter(x => x.date === '2026-11-19').length, 0, 'el 19 es anterior al primer envío');
 });

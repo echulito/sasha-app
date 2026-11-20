@@ -71,6 +71,7 @@ export function controlStatus(s,date){if(isClosedDay(date,s)){const optional=s.r
  if(tickets.length&&closing.complete&&turns.every(r=>Number.isInteger(r.operations))){const salesCount=tickets.filter(t=>t.documentType!=='NC').length,operations=turns.reduce((n,t)=>n+t.operations,0);if(salesCount!==operations)warnings.push('El cierre informa '+operations+' operaciones y el detalle contiene '+salesCount+' tickets de venta, sin contar notas de crédito. La diferencia de cantidad queda registrada para revisar anulaciones o saltos de numeración; los importes se concilian por separado.');}
  // v181: envío mandado con el usuario de otra cajera (ECHU lo pasó solo a quien era): queda a la vista en el día.
  for(const x of (s.teamSubmissions||[]).filter(x=>x.date===date&&!x.deleted&&x.sentAsId))warnings.push(envioCorregidoTexto(x));
+ for(const x of declaracionesFaltantes(s,date))warnings.push(textoSinDeclaracion(x));
  if(tickets.some(t=>t.documentType==='NC'))warnings.push('Las notas de crédito identificadas en el detalle de cobros se descuentan de ventas y productos. Los PDF originales se conservan.');
  const timingObservations=[];
  for(const t of tickets){const cs=turns.filter(c=>c.branch===t.branch&&c.box===t.box&&Number(receiptId(t).split('-')[1])>=Number(c.firstTicket)&&Number(receiptId(t).split('-')[1])<=Number(c.lastTicket));if(cs.length===1&&(t.time<cs[0].openTime||t.time>cs[0].closeTime)){const related=payments.filter(p=>receiptKey(p)===receiptKey(t)),supported=related.length>0&&related.every(p=>p.batch===cs[0].batch)&&withinTolerance(related.reduce((n,p)=>n+p.amount,0)-t.amount);if(supported)timingObservations.push(t.ticket);else issues.push('Ticket '+t.ticket+' fuera del horario real de su cierre: revisá que el cobro pertenezca al mismo vuelco');}}
@@ -102,6 +103,9 @@ function compute_couponStatus(s,date){const r=(s.couponReviews||[]).find(r=>r.da
 export const LOAD_ERROR='Error de carga de la cajera';
 const esErrorCarga=n=>typeof n==='string'&&n.includes(LOAD_ERROR);
 const QUE={cash:'Efectivo contado',opening:'Apertura',digital:'Cupones',withdrawals:'Alivios',closingWithdrawal:'Retiro al cierre'};
+// v182: cajera con cierre de caja ese día que no mandó su declaración en la app (cuenta desde que se usan los envíos).
+export function declaracionesFaltantes(s,date){const env=(s.teamSubmissions||[]).filter(x=>!x.deleted);if(!env.length)return [];const desde=env.reduce((m,x)=>x.date<m?x.date:m,env[0].date);if(date<desde||isClosedDay(date,s))return [];const del=env.filter(x=>x.date===date);if(del.some(x=>x.shift==='cover'))return [];const out=new Map();for(const t of allTurns(s,date)){const a=assign(s,t,'close');if(!a.id||out.has(a.id)||del.some(x=>x.cashierId===a.id))continue;out.set(a.id,{cashierId:a.id,name:a.name,turn:t});}return [...out.values()];}
+export function textoSinDeclaracion(x){return x.name+' no mandó su declaración del cierre (Mercado Pago, Cuenta DNI y pedidos) en la app.';}
 export function envioCorregidoTexto(x){return x.cashier+' mandó su envío con el usuario de '+(x.sentAs||'otra cajera')+'. Se pasó solo a '+x.cashier+(x.reassignBasis?' ('+x.reassignBasis+')':'')+'.';}
 export function loadErrors(s,{month='',cashierId=''}={}){const out=new Map(),add=(date,branch,box,batch,que,note,id)=>{if(month&&!date.startsWith(month))return;const t=allTurns(s,date).find(t=>t.branch===branch&&t.box===box&&t.batch===batch),who=id||(t?assign(s,t,'close').id:''),name=t?assign(s,t,'close').name:'';if(cashierId&&who!==cashierId)return;const k=[date,branch,box,batch,que].join('|');if(!out.has(k))out.set(k,{date,branch,box,batch,cashierId:who,cashier:name,what:que,note:note.trim()});};
  // v129: los errores de declaración y "Otros" sin aval se anotan con su propio detalle (antes que la corrección de cupones que generan).
@@ -111,6 +115,7 @@ export function loadErrors(s,{month='',cashierId=''}={}){const out=new Map(),add
  for(const o of s.otherChecks||[])if(esErrorCarga(o.note))add(o.date,o.branch,o.box,o.batch,'Otros',o.note,'');
  // v181: el envío mandado con el usuario de otra cajera cuenta como error de carga de quien lo mandó.
  for(const x of s.teamSubmissions||[]){if(x.deleted||!x.sentAsId)continue;for(const b of x.boxes){const t=allTurns(s,x.date).find(t=>t.box===b.box&&assign(s,t,'close').id===x.cashierId);if(t)add(x.date,t.branch,t.box,t.batch,'Envío',envioCorregidoTexto(x),x.cashierId);}}
+ for(const d of new Set((s.teamSubmissions||[]).map(x=>x.date).concat(allTurns(s).map(t=>t.date)))){if(month&&!d.startsWith(month))continue;for(const x of declaracionesFaltantes(s,d))add(d,x.turn.branch,x.turn.box,x.turn.batch,'Sin declaración',textoSinDeclaracion(x),x.cashierId);}
  for(const g of s.guidedAnswers||[]){if(!esErrorCarga(g.note))continue;const [,date,branch,box,batch]=String(g.key).split('|');if(date&&box)add(date,branch,box,batch,'Cupones',g.note,'');}
  return [...out.values()].sort((a,b)=>a.date.localeCompare(b.date)||a.box.localeCompare(b.box));}
 // Sasha v103: los pedidos online se facturan SOLO por la Caja 1. Si uno se facturó por la Caja 3, queda como observación
