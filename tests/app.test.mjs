@@ -634,6 +634,38 @@ test('Facturas v185: la letra se elige (A, B o C); una B de compra se carga solo
   await ctx.close();
 });
 
+test('Facturas v187: el CUIT y la razón social de la factura se asocian al proveedor de ECHU (nombre de fantasía)', async () => {
+  DATOS.conta_guardar = p => ({comprobante: Object.assign(JSON.parse(p.datos), {id: 'N2', periodo: '2026-11', estado: 'ok'})});
+  const {ctx, page, errores, echu} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="iva"]');
+  await page.locator('#ctiles .card').nth(3).waitFor();
+  await page.evaluate(() => { CT.mes.proveedores = [{nombre: 'RAZ Y CIA', cuit: '', cuits: []}, {nombre: 'DAI NIPPON', cuit: '30500000003', cuits: ['30500000003']}]; });
+  // lo leído trae la razón social (no es un proveedor de ECHU): el proveedor queda para elegir
+  await page.waitForTimeout(800);
+  await page.evaluate(() => { CT.mes.proveedores = [{nombre: 'RAZ Y CIA', cuit: '', cuits: []}, {nombre: 'DAI NIPPON', cuit: '30500000003', cuits: ['30500000003']}]; CT.form = {nuevo: true, datos: {tipo: 'factura', letra: 'A', lado: 'compra', fecha: '2026-11-19', cuit: '30661110100', nombre: 'RAZ & CIA SRL', razonSocial: 'RAZ & CIA SRL', total: 1000, neto: {21: 826.45}, iva: {21: 173.55}}}; cForm(); });
+  assert.equal(await page.inputValue('#cf_razon'), 'RAZ & CIA SRL');
+  assert.equal(await page.inputValue('#cf_prov'), '');
+  assert.match(await page.locator('label', {hasText: 'Proveedor en ECHU'}).innerText(), /nombre de fantasía/);
+  assert.match(await page.locator('#cf_provinfo').innerText(), /Elegí a qué proveedor de ECHU corresponde/);
+  await page.fill('#cf_prov', 'raz y cia');
+  assert.match(await page.locator('#cf_provinfo').innerText(), /RAZ Y CIA · al guardar, el CUIT 30-66111010-0 \(RAZ & CIA SRL\) queda asociado a este proveedor/);
+  await page.click('#cf_guardar');
+  await page.waitForTimeout(500);
+  const q = echu.pedidos.filter(x => /conta_guardar/.test(x.cuerpo || '')).pop();
+  const d = JSON.parse(JSON.parse(q.cuerpo).datos);
+  assert.deepEqual([d.emisorNombre, d.emisorCuit, d.razonSocial, d.asociarCuit], ['RAZ Y CIA', '30-66111010-0', 'RAZ & CIA SRL', true]);
+  // un CUIT ya asociado: el proveedor viene solo; si se elige otro, avisa que se pasa
+  await page.waitForTimeout(800);
+  await page.evaluate(() => { CT.mes.proveedores = [{nombre: 'RAZ Y CIA', cuit: '30661110100', cuits: ['30661110100']}, {nombre: 'DAI NIPPON', cuit: '30500000003', cuits: ['30500000003']}]; CT.form = {nuevo: true, datos: {tipo: 'factura', letra: 'A', lado: 'compra', fecha: '2026-11-19', cuit: '30500000003', nombre: 'DAI NIPPON SA', razonSocial: 'DAI NIPPON SA', total: 1}}; cForm(); });
+  assert.equal(await page.inputValue('#cf_prov'), 'DAI NIPPON');
+  assert.match(await page.locator('#cf_provinfo').innerText(), /ya está asociado a DAI NIPPON/);
+  await page.fill('#cf_prov', 'RAZ Y CIA');
+  assert.match(await page.locator('#cf_provinfo').innerText(), /estaba asociado a DAI NIPPON\. Al guardar pasa a RAZ Y CIA/);
+  assert.deepEqual(errores, []);
+  delete DATOS.conta_guardar;
+  await ctx.close();
+});
+
 test('Contabilidad v140: se puede adjuntar la factura electrónica en PDF (se lee directo, sin escanear)', async () => {
   DATOS.conta_leer = p => { if (p.mime !== 'application/pdf' || !/^data:application\/pdf;base64,/.test(p.imagen)) throw new Error('no llegó el PDF'); return {ok: true, tipo: 'factura', letra: 'A', lado: 'compra', fecha: '2026-11-05', nombre: 'RAZ Y CIA', total: 1210, cae: '76451234567890', caeVto: '2026-11-15'}; };
   const {ctx, page, errores} = await abrir();

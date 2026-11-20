@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=186;
+var APP_V=187;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -3406,7 +3406,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=186');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=187');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -3626,7 +3626,9 @@ function cForm(){
     (t==='cierre_z'?'<div><label>Es</label><input value="Venta (controlador fiscal)" readonly></div>':t==='remito'?inp('cf_total','Importe del remito',cNum(d.total)):sel('cf_lado','Es',[['compra','Compra (proveedor)'],['venta','Venta (mía)']],d.lado||'compra'))+'</div>'+
     // v93: el remito va sin CUIT (solo el proveedor y el importe de la hoja)
     (t==='remito'?cSelProv(d)+'<div class="note" id="cf_provinfo" style="margin-top:2px"></div>':t==='cierre_z'?'':'<div class="g2">'+inp('cf_cuit',(d.lado==='venta'?'CUIT del cliente':'CUIT del proveedor'),d.cuit?String(d.cuit).replace(/^(\d{2})(\d{8})(\d)$/,'$1-$2-$3'):'',' inputmode="numeric"')+
-      (d.lado==='venta'?inp('cf_nom','Cliente',d.nombre,' '):cSelProv(d))+'</div>'+(d.lado==='venta'?'':'<div class="note" id="cf_provinfo" style="margin-top:2px"></div>'));
+      (d.lado==='venta'?inp('cf_nom','Cliente',d.nombre,' '):inp('cf_razon','Razón social (como dice la factura)',d.razonSocial||'',' autocapitalize="characters"'))+'</div>'+
+      // v187: el CUIT y la razón social se asocian a un proveedor de ECHU (el nombre de fantasía).
+      (d.lado==='venta'?'':cSelProv(d,'Proveedor en ECHU (nombre de fantasía)')+'<div class="note" id="cf_provinfo" style="margin-top:2px"></div>'));
   // v185: factura B o C de compra: no da crédito de IVA ni va a la contadora; se carga solo el total.
   var sinIva=d.lado!=='venta'&&['B','C'].indexOf(d.letra)>=0&&['factura','nota_credito','nota_debito'].indexOf(t)>=0;
   if(sinIva)h+='<div class="note" style="font-weight:600" id="cf_sin_iva">Factura '+esc(d.letra)+': no da crédito de IVA y no va a la contadora. Se carga solo el total'+(/IVA contenido/.test(d.notas||'')?' ('+esc(String(d.notas).split('. ')[0])+')':'')+'.</div>'+
@@ -3657,20 +3659,29 @@ function cForm(){
   $('cf_tipo').onchange=function(){CT.form.datos=cLeerForm();CT.form.datos.tipo=this.value;if(this.value==='remito')CT.form.datos.letra='R';else if(CT.form.datos.letra==='R')CT.form.datos.letra='A';cForm()};
   if($('cf_lado'))$('cf_lado').onchange=function(){CT.form.datos=cLeerForm();cForm()};
   // v89: proveedor = un campo para escribir o elegir de la lista (si no está, queda registrado al guardar)
-  if($('cf_prov')){var provInfo=function(){var v=$('cf_prov').value.trim(),pr=cProvMatch({nombre:v});
-      $('cf_provinfo').innerHTML=!v?'Escribí las primeras letras y elegilo de la lista.':pr?'<span class="pos">✔ '+esc(pr.nombre)+' (registrado en ECHU'+(pr.cuit?' · CUIT '+cuitTextoJS(pr.cuit):'')+')</span>':'<b>Proveedor nuevo:</b> al guardar queda registrado en ECHU › PROVEEDORES'+($('cf_cuit')?' (con el CUIT).':'.');
-      if(pr&&pr.cuit&&$('cf_cuit')&&!$('cf_cuit').value.replace(/\D/g,''))$('cf_cuit').value=cuitTextoJS(pr.cuit)};
+  if($('cf_prov')){var provInfo=function(){var v=$('cf_prov').value.trim(),pr=cProvMatch({nombre:v}),c=$('cf_cuit')?$('cf_cuit').value.replace(/\D/g,''):'',dueno=cProvCuit(c),
+        rz=$('cf_razon')?$('cf_razon').value.trim():'',ct=c?'el CUIT '+cuitTextoJS(c)+(rz?' ('+esc(rz.toUpperCase())+')':''):'';
+      $('cf_provinfo').innerHTML=!v?($('cf_razon')?'Elegí a qué proveedor de ECHU corresponde esta factura (escribí las primeras letras). Al guardar, '+(ct||'el CUIT')+' queda asociado a ese proveedor.':'Escribí las primeras letras y elegilo de la lista.'):
+        pr?(c&&dueno===pr?'<span class="pos">✔ '+ct+' ya está asociado a '+esc(pr.nombre)+'.</span>':
+          c&&dueno?'<b>Ojo:</b> '+ct+' estaba asociado a '+esc(dueno.nombre)+'. Al guardar pasa a '+esc(pr.nombre)+'.':
+          c?'<span class="pos">✔ '+esc(pr.nombre)+'</span> · al guardar, '+ct+' queda asociado a este proveedor: la próxima factura con ese CUIT ya viene con '+esc(pr.nombre)+'.':
+          '<span class="pos">✔ '+esc(pr.nombre)+' (registrado en ECHU)</span>'):
+        '<b>Proveedor nuevo:</b> al guardar queda registrado en ECHU › PROVEEDORES'+(c?' con '+ct+'.':'.')};
     $('cf_prov').addEventListener('input',provInfo);$('cf_prov').addEventListener('change',provInfo);provInfo();
-    if($('cf_cuit'))$('cf_cuit').addEventListener('change',function(){var c=this.value.replace(/\D/g,'');var pr=(CT.mes.proveedores||[]).filter(function(x){return x.cuit&&x.cuit===c})[0];if(pr){$('cf_prov').value=pr.nombre;provInfo()}})}
+    if($('cf_razon'))$('cf_razon').addEventListener('input',provInfo);
+    if($('cf_cuit'))$('cf_cuit').addEventListener('change',function(){var pr=cProvCuit(this.value);if(pr&&!$('cf_prov').value.trim())$('cf_prov').value=pr.nombre;provInfo()})}
   [['cf_n21','cf_i21',0.21],['cf_n105','cf_i105',0.105],['cf_n27','cf_i27',0.27]].forEach(function(x){var a=$(x[0]);if(a)a.addEventListener('change',function(){var b=$(x[1]);if(!parsePesos(b.value)&&parsePesos(a.value))b.value=cNum(parsePesos(a.value)*x[2])})});
   $('cf_guardar').onclick=cGuardar;
   if(F.nuevo||F.scroll!==false)box.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function cNormP(t){return String(t||'').toUpperCase().replace(/&/g,' Y ').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]/g,'')}
-function cProvMatch(d){var L=(CT.mes&&CT.mes.proveedores)||[],c=String(d.cuit||'').replace(/\D/g,'');
-  return (c&&L.filter(function(x){return x.cuit===c})[0])||L.filter(function(x){return d.nombre&&cNormP(x.nombre)===cNormP(d.nombre)})[0]||null}
-function cSelProv(d){var L=(CT.mes&&CT.mes.proveedores)||[],m=cProvMatch(d);
-  return '<div><label>Proveedor</label><input id="cf_prov" list="cf_provlist" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase" value="'+esc(String(m?m.nombre:(d.nombre||'')).toUpperCase())+'" placeholder="Escribí o elegí">'+
+function cProvCuit(c){c=String(c||'').replace(/\D/g,'');return c?((CT.mes&&CT.mes.proveedores)||[]).filter(function(x){return (x.cuits||[x.cuit]).indexOf(c)>=0})[0]||null:null}
+function cProvMatch(d){var L=(CT.mes&&CT.mes.proveedores)||[];
+  return cProvCuit(d.cuit)||L.filter(function(x){return d.nombre&&cNormP(x.nombre)===cNormP(d.nombre)})[0]||null}
+function cSelProv(d,label){var L=(CT.mes&&CT.mes.proveedores)||[],m=cProvMatch(d);
+  // v187: si lo leído es solo la razón social (no es un proveedor de ECHU), el campo queda vacío para elegirlo.
+  var val=m?m.nombre:(d.razonSocial&&cNormP(d.nombre)===cNormP(d.razonSocial)?'':(d.nombre||''));
+  return '<div><label>'+(label||'Proveedor')+'</label><input id="cf_prov" list="cf_provlist" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase" value="'+esc(String(val).toUpperCase())+'" placeholder="Escribí o elegí">'+
     '<datalist id="cf_provlist">'+L.map(function(x){return '<option value="'+esc(x.nombre)+'">'}).join('')+'</datalist></div>'}
 // v185: percepciones discriminadas (IIBB de cada provincia, IVA, Ganancias), una por renglón.
 var CPERC_T=[['IIBB','Ingresos Brutos'],['IVA','IVA'],['GANANCIAS','Ganancias'],['OTRO','Otra']];
@@ -3685,7 +3696,7 @@ function cLeerForm(){
   d.tipo=v('cf_tipo');d.letra=v('cf_letra')||'';d.pv=v('cf_pv')||'';d.numero=v('cf_num')||'';d.fecha=v('cf_fecha')||'';d.periodo=(d.fecha||'').slice(0,7);
   d.lado=d.tipo==='cierre_z'?'venta':(v('cf_lado')||'compra');
   if(d.tipo==='remito'){d.lado='compra';d.cuit='';d.total=n('cf_total')}
-  if($('cf_cuit')||$('cf_prov')){d.cuit=$('cf_cuit')?v('cf_cuit'):'';d.emisorCuit=undefined;d.nombre=$('cf_prov')?(function(){var t=$('cf_prov').value.trim().replace(/\s+/g,' ').toUpperCase(),pr=cProvMatch({nombre:t});return pr?pr.nombre:t})():v('cf_nom')}
+  if($('cf_cuit')||$('cf_prov')){d.cuit=$('cf_cuit')?v('cf_cuit'):'';d.emisorCuit=undefined;d.nombre=$('cf_prov')?(function(){var t=$('cf_prov').value.trim().replace(/\s+/g,' ').toUpperCase(),pr=cProvMatch({nombre:t});return pr?pr.nombre:t})():v('cf_nom');if($('cf_razon'))d.razonSocial=$('cf_razon').value.trim().replace(/\s+/g,' ').toUpperCase()}
   if(d.tipo!=='remito'){d.neto={'21':n('cf_n21'),'10.5':n('cf_n105'),'27':n('cf_n27')};d.iva={'21':n('cf_i21'),'10.5':n('cf_i105'),'27':n('cf_i27')};
     d.noGravado=n('cf_ng');d.percIVA=n('cf_piva');d.percIIBB=n('cf_piibb');d.otros=n('cf_otros');d.total=n('cf_total');
     var pl=cLeerPercs();if(pl){d.percepciones=pl;var sp=function(t){return Math.round(pl.filter(function(p){return p.tipo===t}).reduce(function(a,p){return a+p.importe},0)*100)/100};if(pl.some(function(p){return p.importe>0})){d.percIVA=sp('IVA');d.percIIBB=sp('IIBB')}}
@@ -3701,7 +3712,7 @@ function cGuardar(){
   if($('cf_prov')&&!String(d.nombre||'').trim()){$('cf_msg').innerHTML='<span class="neg">Escribí o elegí el proveedor.</span>';return}
   if(!d.letra&&d.tipo!=='cierre_z'){$('cf_msg').innerHTML='<span class="neg">Elegí la letra de la factura (A, B o C).</span>';return}
   var envio={tipo:d.tipo,letra:d.letra,pv:d.pv,numero:d.numero,fecha:d.fecha,periodo:d.periodo,lado:d.lado,neto:d.neto,iva:d.iva,noGravado:d.noGravado,percIVA:d.percIVA,percIIBB:d.percIIBB,otros:d.otros,total:d.total,
-    remitos:d.remitos,facturaMencionada:d.facturaMencionada,notas:d.notas,cae:d.cae,caeVto:d.caeVto,nc:d.nc,percepciones:d.percepciones,vinculo:d.tipo==='remito'?d.vinculo:undefined,revisado:$('cf_ok')?$('cf_ok').checked:false,id:CT.form.nuevo?'':d.id,hash:CT.hash};
+    remitos:d.remitos,facturaMencionada:d.facturaMencionada,notas:d.notas,cae:d.cae,caeVto:d.caeVto,nc:d.nc,percepciones:d.percepciones,razonSocial:d.razonSocial,asociarCuit:!!($('cf_razon')&&$('cf_prov')&&d.cuit),vinculo:d.tipo==='remito'?d.vinculo:undefined,revisado:$('cf_ok')?$('cf_ok').checked:false,id:CT.form.nuevo?'':d.id,hash:CT.hash};
   if(d.lado==='venta'){envio.receptorCuit=d.cuit;envio.receptorNombre=d.nombre}else{envio.emisorCuit=d.cuit;envio.emisorNombre=d.nombre}
   b.disabled=true;b.textContent='Guardando…';
   cPost('conta_guardar',{datos:JSON.stringify(envio),imagen:CT.form.nuevo?CT.foto:'',mime:CT.mime}).then(function(r){
