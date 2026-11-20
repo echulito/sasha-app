@@ -14,7 +14,7 @@ export function visibleTeamDeclarations(state,date){if(!state.reports.some(r=>r.
 // v181: un envío mandado con el usuario equivocado (por ejemplo, el celular quedó con la sesión de la otra cajera).
 // Se reconoce cuando sus importes coinciden exacto con el cierre de OTRA cajera de esa caja y con ninguno de la que figura.
 const pesosTxt=c=>'$ '+(c/100).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
-export function misattributedSubmissions(state){const out=[];for(const s of state.teamSubmissions||[]){if(s.deleted||s.shift==='cover'||s.sentAsId)continue;const turns=allTurns(state,s.date);if(!turns.length)continue;let target='',why='',ok=true;
+export function misattributedSubmissions(state){const out=[];for(const s of state.teamSubmissions||[]){if(s.deleted||s.shift==='cover'||s.sentAsId||s.manual)continue;const turns=allTurns(state,s.date);if(!turns.length)continue;let target='',why='',ok=true;
  for(const b of s.boxes){const campos=[['cuentaDni','sourceCouponDeclared','Cuenta DNI'],['mercadoPago','sourceMercadoPagoDeclared','Mercado Pago']].filter(([k])=>b[k]>=100000);if(!campos.length)continue;
   const coincide=t=>campos.filter(([k,f])=>b[k]===t[f]),deCaja=turns.filter(t=>t.box===b.box);
   if(deCaja.some(t=>assign(state,t,'close').id===s.cashierId&&coincide(t).length)){ok=false;break;}
