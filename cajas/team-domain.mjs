@@ -10,3 +10,16 @@ export function replaceTeamInbox(state,entries){normalizeState(state);const inco
 state.teamApplied=(state.teamApplied||[]).filter(k=>!ids.has(k.split('|')[0])&&!affectedKeys.has(k.slice(k.indexOf('|')+1)));state.teamSubmissions=structuredClone(incoming);reconcileTeam(state);return true;}
 
 export function visibleTeamDeclarations(state,date){if(!state.reports.some(r=>r.date===date&&Array.isArray(r.rows)&&r.rows.length))return [];return (state.teamSubmissions||[]).filter(s=>!s.deleted&&s.date===date);}
+
+// v181: un envío mandado con el usuario equivocado (por ejemplo, el celular quedó con la sesión de la otra cajera).
+// Se reconoce cuando sus importes coinciden exacto con el cierre de OTRA cajera de esa caja y con ninguno de la que figura.
+const pesosTxt=c=>'$ '+(c/100).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:2});
+export function misattributedSubmissions(state){const out=[];for(const s of state.teamSubmissions||[]){if(s.deleted||s.shift==='cover'||s.sentAsId)continue;const turns=allTurns(state,s.date);if(!turns.length)continue;let target='',why='',ok=true;
+ for(const b of s.boxes){const campos=[['cuentaDni','sourceCouponDeclared','Cuenta DNI'],['mercadoPago','sourceMercadoPagoDeclared','Mercado Pago']].filter(([k])=>b[k]>=100000);if(!campos.length)continue;
+  const coincide=t=>campos.filter(([k,f])=>b[k]===t[f]),deCaja=turns.filter(t=>t.box===b.box);
+  if(deCaja.some(t=>assign(state,t,'close').id===s.cashierId&&coincide(t).length)){ok=false;break;}
+  const otros=deCaja.filter(t=>{const id=assign(state,t,'close').id;return id&&id!==s.cashierId&&coincide(t).length;}),ids=new Set(otros.map(t=>assign(state,t,'close').id));
+  if(ids.size!==1)continue;const id=[...ids][0];if(target&&target!==id){ok=false;break;}target=id;const t=otros[0];why=coincide(t).map(([k,,n])=>n+' '+pesosTxt(b[k])).join(' y ')+' = cierre de la caja '+t.box+', vuelco '+t.batch;}
+ if(!ok||!target)continue;const person=roster(state,s.date).find(c=>c.id===target&&c.present!==false);if(!person)continue;
+ if((state.teamSubmissions||[]).some(x=>!x.deleted&&x.id!==s.id&&x.date===s.date&&x.cashierId===target))continue;
+ out.push({submission:s,cashierId:target,name:person.name,basis:why});}return out;}
