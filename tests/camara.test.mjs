@@ -53,3 +53,30 @@ test('Sin permiso de cámara: avisa y deja usar la cámara del celular', async (
   assert.ok(fc);
   await ctx.close();
 });
+test('v185: enfocar. Enfoque automático continuo al abrir; tocando la imagen enfoca en ese punto (si el celular lo permite)', async () => {
+  const {ctx, page, errores} = await abrir();
+  const r = await page.evaluate(async () => {
+    const E = window.__camaraSashaEnfoque, pedidos = [];
+    const pista = caps => ({getCapabilities: () => caps, applyConstraints: c => { pedidos.push(c); return Promise.resolve(); }});
+    await E.enfoqueContinuo(pista({focusMode: ['continuous', 'single-shot', 'manual']}));
+    const conPunto = await E.enfocarEn(pista({focusMode: ['continuous', 'single-shot'], pointsOfInterest: true}), 0.25, 0.75);
+    const soloContinuo = await E.enfocarEn(pista({focusMode: ['continuous']}), 0.5, 0.5);
+    const nada = await E.enfocarEn(pista({}), 0.5, 0.5);
+    return {pedidos, conPunto, soloContinuo, nada};
+  });
+  assert.deepEqual(r.pedidos[0], {advanced: [{focusMode: 'continuous'}]});
+  assert.deepEqual(r.pedidos[1], {advanced: [{pointsOfInterest: [{x: 0.25, y: 0.75}], focusMode: 'single-shot'}]});
+  assert.deepEqual(r.pedidos[2], {advanced: [{focusMode: 'continuous'}]});
+  assert.deepEqual([r.conPunto, r.soloContinuo, r.nada], [true, true, false]);
+  // con la cámara de prueba (no deja elegir el enfoque): tocar muestra el recuadro y explica qué hacer; la foto sale igual
+  await page.click('#lab'); await page.locator('[data-camara-sasha]').waitFor();
+  await page.waitForFunction(() => !document.querySelector('[data-camara-sasha] button[aria-label="Sacar foto"]').disabled, null, {timeout: 8000});
+  assert.match(await page.locator('[data-camara-sasha]').innerText(), /tocá la imagen para enfocar/);
+  await page.mouse.click(195, 300);
+  await page.waitForFunction(() => /enfoca solo|Enfocado/.test(document.querySelector('[data-camara-sasha]').textContent));
+  await page.click('[data-camara-sasha] button[aria-label="Sacar foto"]');
+  await page.waitForFunction(() => window.__llego);
+  assert.equal((await page.evaluate(() => window.__llego)).tipo, 'image/jpeg');
+  assert.deepEqual(errores, []);
+  await ctx.close();
+});

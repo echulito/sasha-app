@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=184;
+var APP_V=185;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -3400,7 +3400,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=184');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=185');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -3614,16 +3614,22 @@ function cForm(){
     (F.aviso?'<div class="note warn" style="font-weight:600;margin-top:0">'+esc(F.aviso)+'</div>':'')+
     (d.estado==='revisar'&&d.motivos&&d.motivos.length?'<div class="note neg" style="font-weight:600;margin-top:0">Para revisar: '+esc(d.motivos.join('; '))+'</div>':'')+
     '<div class="g2">'+sel('cf_tipo','Comprobante',Object.keys(CTIPOS).map(function(k){return [k,CTIPOS[k]]}),t)+
-    (t==='cierre_z'?inp('cf_num','N° de Z',d.numero,' inputmode="numeric"'):sel('cf_letra','Letra',[['A','A'],['B','B'],['C','C'],['M','M'],['R','R (remito)'],['X','X'],['E','E']],d.letra||(t==='remito'?'R':'A')))+'</div>'+
+    (t==='cierre_z'?inp('cf_num','N° de Z',d.numero,' inputmode="numeric"'):sel('cf_letra','Letra',(d.letra||t==='remito'?[]:[['','¿A, B o C?']]).concat([['A','A'],['B','B'],['C','C'],['M','M'],['R','R (remito)'],['X','X'],['E','E']]),d.letra||(t==='remito'?'R':'')))+'</div>'+
     (t==='cierre_z'?'':'<div class="g2">'+inp('cf_pv','Punto de venta',d.pv,' inputmode="numeric"')+inp('cf_num','Número',d.numero,' inputmode="numeric"')+'</div>')+
     '<div class="g2"><div><label>Fecha</label><input id="cf_fecha" type="date" value="'+esc(d.fecha||'')+'"></div>'+
     (t==='cierre_z'?'<div><label>Es</label><input value="Venta (controlador fiscal)" readonly></div>':t==='remito'?inp('cf_total','Importe del remito',cNum(d.total)):sel('cf_lado','Es',[['compra','Compra (proveedor)'],['venta','Venta (mía)']],d.lado||'compra'))+'</div>'+
     // v93: el remito va sin CUIT (solo el proveedor y el importe de la hoja)
     (t==='remito'?cSelProv(d)+'<div class="note" id="cf_provinfo" style="margin-top:2px"></div>':t==='cierre_z'?'':'<div class="g2">'+inp('cf_cuit',(d.lado==='venta'?'CUIT del cliente':'CUIT del proveedor'),d.cuit?String(d.cuit).replace(/^(\d{2})(\d{8})(\d)$/,'$1-$2-$3'):'',' inputmode="numeric"')+
       (d.lado==='venta'?inp('cf_nom','Cliente',d.nombre,' '):cSelProv(d))+'</div>'+(d.lado==='venta'?'':'<div class="note" id="cf_provinfo" style="margin-top:2px"></div>'));
-  if(t!=='remito'){
+  // v185: factura B o C de compra: no da crédito de IVA ni va a la contadora; se carga solo el total.
+  var sinIva=d.lado!=='venta'&&['B','C'].indexOf(d.letra)>=0&&['factura','nota_credito','nota_debito'].indexOf(t)>=0;
+  if(sinIva)h+='<div class="note" style="font-weight:600" id="cf_sin_iva">Factura '+esc(d.letra)+': no da crédito de IVA y no va a la contadora. Se carga solo el total'+(/IVA contenido/.test(d.notas||'')?' ('+esc(String(d.notas).split('. ')[0])+')':'')+'.</div>'+
+    '<div class="g2">'+inp('cf_total','Total',cNum(d.total))+(t==='factura'?inp('cf_rem','Remitos que menciona',(d.remitos||[]).join(', '),' '):'<div></div>')+'</div>'+cPercHtml(d)+
+    '<div class="g2">'+inp('cf_cae','CAE',d.cae||'',' inputmode="numeric"')+'<div><label>Vto. del CAE</label><input id="cf_caevto" type="date" value="'+esc(d.caeVto||'')+'"></div></div>';
+  else if(t!=='remito'){
     h+='<div class="g2">'+inp('cf_n21','Neto 21%',cNum(n['21']))+inp('cf_i21','IVA 21%',cNum(iv['21']))+inp('cf_n105','Neto 10,5%',cNum(n['10.5']))+inp('cf_i105','IVA 10,5%',cNum(iv['10.5']))+inp('cf_n27','Neto 27%',cNum(n['27']))+inp('cf_i27','IVA 27%',cNum(iv['27']))+'</div>'+
       '<div class="g2">'+inp('cf_ng','No gravado / exento',cNum(d.noGravado))+inp('cf_piva','Percepción IVA',cNum(d.percIVA))+inp('cf_piibb','Percepción IIBB',cNum(d.percIIBB))+inp('cf_otros','Otros impuestos',cNum(d.otros))+'</div>'+
+      (t==='cierre_z'?'':cPercHtml(d))+
       '<div class="g2">'+inp('cf_total','Total',cNum(d.total))+(t==='factura'&&d.lado!=='venta'?inp('cf_rem','Remitos que menciona',(d.remitos||[]).join(', '),' '):'<div></div>')+'</div>';
     // v139: CAE y su vencimiento (los lee de la foto; van en el IVA Compras para la contadora)
     if(t!=='cierre_z')h+='<div class="g2">'+inp('cf_cae','CAE',d.cae||'',' inputmode="numeric"')+'<div><label>Vto. del CAE</label><input id="cf_caevto" type="date" value="'+esc(d.caeVto||'')+'"></div></div>';
@@ -3640,6 +3646,8 @@ function cForm(){
     (!F.nuevo?'<div class="btns">'+(d.foto?'<a class="btn sec" style="text-align:center;text-decoration:none" href="'+esc(d.foto)+'" target="_blank" rel="noopener">Ver la foto</a>':'')+'<button class="btn sec" style="color:var(--rojo)" onclick="cBorrar(\''+d.id+'\')">Borrar</button></div>':'')+
     '<div class="note" id="cf_msg"></div>';
   box.innerHTML=h;
+  if($('cf_letra'))$('cf_letra').onchange=function(){CT.form.datos=cLeerForm();cForm()};
+  if($('cf_perc_mas'))$('cf_perc_mas').onclick=function(){var d=cLeerForm();d.percepciones=(d.percepciones||[]).concat([{tipo:'IIBB',nombre:'',importe:0}]);CT.form.datos=d;cForm();var u=document.querySelectorAll('#cf_percs [data-k=nombre]');if(u.length)u[u.length-1].focus()};
   $('cf_tipo').onchange=function(){CT.form.datos=cLeerForm();CT.form.datos.tipo=this.value;if(this.value==='remito')CT.form.datos.letra='R';else if(CT.form.datos.letra==='R')CT.form.datos.letra='A';cForm()};
   if($('cf_lado'))$('cf_lado').onchange=function(){CT.form.datos=cLeerForm();cForm()};
   // v89: proveedor = un campo para escribir o elegir de la lista (si no está, queda registrado al guardar)
@@ -3658,6 +3666,14 @@ function cProvMatch(d){var L=(CT.mes&&CT.mes.proveedores)||[],c=String(d.cuit||'
 function cSelProv(d){var L=(CT.mes&&CT.mes.proveedores)||[],m=cProvMatch(d);
   return '<div><label>Proveedor</label><input id="cf_prov" list="cf_provlist" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase" value="'+esc(String(m?m.nombre:(d.nombre||'')).toUpperCase())+'" placeholder="Escribí o elegí">'+
     '<datalist id="cf_provlist">'+L.map(function(x){return '<option value="'+esc(x.nombre)+'">'}).join('')+'</datalist></div>'}
+// v185: percepciones discriminadas (IIBB de cada provincia, IVA, Ganancias), una por renglón.
+var CPERC_T=[['IIBB','Ingresos Brutos'],['IVA','IVA'],['GANANCIAS','Ganancias'],['OTRO','Otra']];
+function cPercFila(p){p=p||{};return '<div class="g3" data-perc data-j="'+esc(p.jurisdiccion||'')+'"><div><label>Percepción</label><select data-k="tipo">'+CPERC_T.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===(p.tipo||'IIBB')?' selected':'')+'>'+o[1]+'</option>'}).join('')+'</select></div>'+
+  '<div><label>Nombre / provincia</label><input data-k="nombre" value="'+esc([p.nombre,p.jurisdiccion&&String(p.nombre||'').indexOf(p.jurisdiccion)<0?p.jurisdiccion:''].filter(Boolean).join(' · '))+'"></div><div><label>Importe</label><input data-k="importe" inputmode="decimal" value="'+esc(cNum(p.importe))+'"></div></div>'}
+function cPercHtml(d){var l=d.percepciones||[];return '<label style="margin-top:10px">Percepciones (cada una por separado)</label><div id="cf_percs">'+l.map(cPercFila).join('')+'</div>'+
+  '<button type="button" class="btn sec" id="cf_perc_mas" style="margin-top:6px">+ Agregar percepción</button>'+(l.length?'<div class="note">Los totales de percepción IVA e IIBB salen de este detalle.</div>':'')}
+function cLeerPercs(){var b=$('cf_percs');if(!b)return null;return Array.prototype.map.call(b.querySelectorAll('[data-perc]'),function(r){var nom=r.querySelector('[data-k=nombre]').value.trim(),j=r.dataset.j||'';
+  return {tipo:r.querySelector('[data-k=tipo]').value,nombre:j?nom.replace(' · '+j,''):nom,jurisdiccion:j,importe:parsePesos(r.querySelector('[data-k=importe]').value)}}).filter(function(p){return p.nombre||p.importe})}
 function cLeerForm(){
   var d=JSON.parse(JSON.stringify(CT.form.datos||{})),v=function(id){var e=$(id);return e?e.value:undefined},n=function(id){var e=$(id);return e?parsePesos(e.value):0};
   d.tipo=v('cf_tipo');d.letra=v('cf_letra')||'';d.pv=v('cf_pv')||'';d.numero=v('cf_num')||'';d.fecha=v('cf_fecha')||'';d.periodo=(d.fecha||'').slice(0,7);
@@ -3666,6 +3682,7 @@ function cLeerForm(){
   if($('cf_cuit')||$('cf_prov')){d.cuit=$('cf_cuit')?v('cf_cuit'):'';d.emisorCuit=undefined;d.nombre=$('cf_prov')?(function(){var t=$('cf_prov').value.trim().replace(/\s+/g,' ').toUpperCase(),pr=cProvMatch({nombre:t});return pr?pr.nombre:t})():v('cf_nom')}
   if(d.tipo!=='remito'){d.neto={'21':n('cf_n21'),'10.5':n('cf_n105'),'27':n('cf_n27')};d.iva={'21':n('cf_i21'),'10.5':n('cf_i105'),'27':n('cf_i27')};
     d.noGravado=n('cf_ng');d.percIVA=n('cf_piva');d.percIIBB=n('cf_piibb');d.otros=n('cf_otros');d.total=n('cf_total');
+    var pl=cLeerPercs();if(pl){d.percepciones=pl;var sp=function(t){return Math.round(pl.filter(function(p){return p.tipo===t}).reduce(function(a,p){return a+p.importe},0)*100)/100};if(pl.some(function(p){return p.importe>0})){d.percIVA=sp('IVA');d.percIIBB=sp('IIBB')}}
     if($('cf_rem'))d.remitos=String(v('cf_rem')||'').split(/[,;\s]+/).filter(Boolean);
     if($('cf_cae')){d.cae=String(v('cf_cae')||'').replace(/\D/g,'');d.caeVto=v('cf_caevto')||''}
     if(d.tipo==='cierre_z')d.nc={neto:n('cf_ncn'),iva:n('cf_nci'),total:n('cf_nct')};}
@@ -3676,8 +3693,9 @@ function cGuardar(){
   var d=cLeerForm(),b=$('cf_guardar');
   if(!d.fecha){$('cf_msg').innerHTML='<span class="neg">Falta la fecha.</span>';return}
   if($('cf_prov')&&!String(d.nombre||'').trim()){$('cf_msg').innerHTML='<span class="neg">Escribí o elegí el proveedor.</span>';return}
+  if(!d.letra&&d.tipo!=='cierre_z'){$('cf_msg').innerHTML='<span class="neg">Elegí la letra de la factura (A, B o C).</span>';return}
   var envio={tipo:d.tipo,letra:d.letra,pv:d.pv,numero:d.numero,fecha:d.fecha,periodo:d.periodo,lado:d.lado,neto:d.neto,iva:d.iva,noGravado:d.noGravado,percIVA:d.percIVA,percIIBB:d.percIIBB,otros:d.otros,total:d.total,
-    remitos:d.remitos,facturaMencionada:d.facturaMencionada,notas:d.notas,cae:d.cae,caeVto:d.caeVto,nc:d.nc,vinculo:d.tipo==='remito'?d.vinculo:undefined,revisado:$('cf_ok')?$('cf_ok').checked:false,id:CT.form.nuevo?'':d.id,hash:CT.hash};
+    remitos:d.remitos,facturaMencionada:d.facturaMencionada,notas:d.notas,cae:d.cae,caeVto:d.caeVto,nc:d.nc,percepciones:d.percepciones,vinculo:d.tipo==='remito'?d.vinculo:undefined,revisado:$('cf_ok')?$('cf_ok').checked:false,id:CT.form.nuevo?'':d.id,hash:CT.hash};
   if(d.lado==='venta'){envio.receptorCuit=d.cuit;envio.receptorNombre=d.nombre}else{envio.emisorCuit=d.cuit;envio.emisorNombre=d.nombre}
   b.disabled=true;b.textContent='Guardando…';
   cPost('conta_guardar',{datos:JSON.stringify(envio),imagen:CT.form.nuevo?CT.foto:'',mime:CT.mime}).then(function(r){
@@ -4410,7 +4428,7 @@ function gFacForm(){
     '<label>Va al gasto</label><select id="gf_gasto">'+ops+'</select><div id="gf_nuevo" class="oculto"><label>Nombre del gasto nuevo</label><input id="gf_nom" placeholder="Ej.: Alarma"></div>'+
     '<div class="g2"><div><label>Importe de la factura</label><input id="gf_monto" data-pesos inputmode="decimal" value="'+(c.total?'$ '+cNum(c.total):'')+'"></div><div><label>Vence</label><input id="gf_vence" type="date" value="'+esc(c.vencimiento||'')+'"></div></div>'+
     '<div class="note" id="gf_dif"></div>'+
-    '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="gf_iva" style="width:auto"'+(c.cuit?' checked':'')+'> Cargarla también en IVA Compras (para la contadora)</label>'+
+    '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="gf_iva" style="width:auto"'+(c.cuit&&['B','C','X'].indexOf(c.letra)<0?' checked':'')+'> Cargarla también en IVA Compras (para la contadora)</label>'+(['B','C'].indexOf(c.letra)>=0?'<div class="note">Es factura '+esc(c.letra)+': no da crédito de IVA, no hace falta mandarla a la contadora.</div>':'')+
     '<div class="btns"><button class="btn" id="gf_ok">Guardar</button><button class="btn sec" onclick="GA.fac=null;$(\'gfac\').innerHTML=\'\'">Cancelar</button></div><div class="note" id="gf_msg"></div>';
   pesosEnVivo($('gf_monto'));
   var dif=function(){var g=$('gf_gasto').value,m=parsePesos($('gf_monto').value),x=gs.filter(function(y){return y.label===g})[0];
@@ -4505,6 +4523,6 @@ function gNuevo(){
     this.disabled=true;lPost('gastos_guardar',{datos:JSON.stringify({nuevos:[{label:l,valor:v}]})}).then(function(r){GA.D=r;gPintar()}).catch(function(e){$('gn_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>';$('gn_ok').disabled=false})};
 }
 </script>
-<script src="camara.js?v=121" defer></script>
+<script src="camara.js?v=185" defer></script>
 </body>
 </html>

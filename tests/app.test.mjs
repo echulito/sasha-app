@@ -573,7 +573,7 @@ test('Facturas v139: el comprobante tiene CAE y vencimiento del CAE, y se mandan
 });
 
 test('Gastos v140: factura de un gasto en PDF: se lee, viene el gasto elegido, muestra el aumento y guarda importe, vencimiento e IVA Compras', async () => {
-  DATOS.gastos_factura_leer = () => ({ok: true, sugerido: 'Luz', comprobante: {tipo: 'factura', letra: 'B', nombre: 'EDENOR SA', cuit: '30655116202', total: 207000, vencimiento: '2026-11-18', periodoFacturado: 'Octubre 2026'},
+  DATOS.gastos_factura_leer = () => ({ok: true, sugerido: 'Luz', comprobante: {tipo: 'factura', letra: 'A', nombre: 'EDENOR SA', cuit: '30655116202', total: 207000, vencimiento: '2026-11-18', periodoFacturado: 'Octubre 2026'},
     gastos: [{label: 'Alquiler', valor: 1500000}, {label: 'Luz', valor: 180000}]});
   DATOS.gastos_factura_guardar = p => { const d = JSON.parse(p.datos); return {gasto: d.gasto, antes: 180000, monto: d.monto, vence: d.vence, comprobante: d.iva ? {id: 'C1'} : null, gastos: DATOS.gastos_datos}; };
   const {ctx, page, errores, echu} = await abrir();
@@ -593,6 +593,44 @@ test('Gastos v140: factura de un gasto en PDF: se lee, viene el gasto elegido, m
   assert.deepEqual([d.gasto, d.monto, d.vence, d.iva], ['Luz', 207000, '2026-11-18', true]); assert.equal(d.comprobante.cuit, '30655116202');
   assert.deepEqual(errores, []);
   delete DATOS.gastos_factura_leer; delete DATOS.gastos_factura_guardar;
+  await ctx.close();
+});
+
+test('Facturas v185: la letra se elige (A, B o C); una B de compra se carga solo con el total; las percepciones van por separado', async () => {
+  DATOS.conta_guardar = p => ({comprobante: Object.assign(JSON.parse(p.datos), {id: 'N1', periodo: '2026-11', estado: 'ok'})});
+  const {ctx, page, errores, echu} = await abrir();
+  await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="iva"]');
+  await page.locator('#ctiles .card').nth(3).waitFor();
+  const guardado = async () => { await page.waitForFunction(() => true); await page.waitForTimeout(400); const q = echu.pedidos.filter(x => /conta_guardar/.test(x.cuerpo || x.url || '')).pop(); return q && JSON.parse(JSON.parse(q.cuerpo).datos); };
+  // sin letra leída: hay que elegirla
+  await page.evaluate(() => { CT.form = {nuevo: true, datos: {tipo: 'factura', letra: '', lado: 'compra', fecha: '2026-11-20', nombre: 'INC SA', total: 86352.01}}; cForm(); });
+  assert.equal(await page.inputValue('#cf_letra'), '');
+  await page.fill('#cf_prov', 'INC SA'); await page.click('#cf_guardar');
+  assert.match(await page.locator('#cf_msg').innerText(), /Elegí la letra de la factura/);
+  assert.equal(echu.pedidos.filter(x => /conta_guardar/.test(x.cuerpo || '')).length, 0);
+  // factura B: solo el total (sin neto ni IVA)
+  await page.selectOption('#cf_letra', 'B');
+  await page.locator('#cf_sin_iva').waitFor();
+  assert.match(await page.locator('#cf_sin_iva').innerText(), /Factura B: no da crédito de IVA y no va a la contadora/);
+  assert.equal(await page.locator('#cf_i21').count(), 0);
+  assert.equal(await page.inputValue('#cf_total'), '86.352,01');
+  await page.click('#cf_guardar');
+  let d = await guardado();
+  assert.deepEqual([d.letra, d.total], ['B', 86352.01]);
+  // factura A con percepciones: cada una en su renglón, los totales salen del detalle
+  await page.evaluate(() => { CT.form = {nuevo: true, datos: {tipo: 'factura', letra: 'A', lado: 'compra', fecha: '2026-11-19', nombre: 'RAZ Y CIA', total: 103561.87, neto: {21: 83517.64}, iva: {21: 17538.7},
+    percepciones: [{nombre: 'IB410DGR05', tipo: 'IIBB', jurisdiccion: '', importe: 2505.53}]}}; cForm(); });
+  assert.equal(await page.locator('#cf_percs [data-perc]').count(), 1);
+  await page.click('#cf_perc_mas');
+  await page.locator('#cf_percs [data-perc]').nth(1).locator('[data-k=tipo]').selectOption('IVA');
+  await page.locator('#cf_percs [data-perc]').nth(1).locator('[data-k=nombre]').fill('IVA RG5329');
+  await page.locator('#cf_percs [data-perc]').nth(1).locator('[data-k=importe]').fill('10,50');
+  await page.fill('#cf_prov', 'RAZ Y CIA'); await page.click('#cf_guardar');
+  d = await guardado();
+  assert.deepEqual(d.percepciones, [{tipo: 'IIBB', nombre: 'IB410DGR05', jurisdiccion: '', importe: 2505.53}, {tipo: 'IVA', nombre: 'IVA RG5329', jurisdiccion: '', importe: 10.5}]);
+  assert.deepEqual([d.percIIBB, d.percIVA], [2505.53, 10.5]);
+  assert.deepEqual(errores, []);
+  delete DATOS.conta_guardar;
   await ctx.close();
 });
 
