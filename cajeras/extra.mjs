@@ -41,12 +41,18 @@ function formPedido(id, producto) {
     '<div class="dos"><label>¿Quién lo pide?<select data-pidio><option value="">Elegí…</option>' + ops + '</select></label><label>Cantidad sugerida<input data-cant type="number" min="1" max="9999" inputmode="numeric" value="1"></label></div>' +
     '<button class="primary" data-enviar>Enviar pedido</button><small data-msg></small></div>';
 }
+// v179: la oferta activada en Civil: qué oferta es y cuánto paga el cliente.
+function oferta(p) {
+  const o = p.oferta;
+  if (!Array.isArray(o) || !o[0]) return '';
+  return '<div class="oferta"><span class="chip rojo">OFERTA</span> ' + esc(o[0]) + ' · <b>' + pesos(o[1]) + (o[2] > 1 ? ' c/u llevando ' + esc(o[2]) : '') + '</b></div>';
+}
 function pintarResultados(r) {
   const L = r.productos || [];
   // v143: con código interno y stock actual
   const stock = p => p.stock == null ? '' : ' · ' + (p.stock > 0 ? 'Stock ' + new Intl.NumberFormat('es-AR').format(p.stock) : '<b class="sin">Sin stock</b>');
   $('resultados').innerHTML = (L.length ? L.map(p => '<div class="prod" data-cod="' + esc(p.codigo) + '"><div class="fila"><b>' + esc(p.producto) + '</b><span class="precio">' + pesos(p.precio) + '</span></div>' +
-      '<div class="cod">Cód. ' + esc(p.codigo) + stock(p) + (p.disc ? ' · Discontinuado' : '') + '</div>' +
+      '<div class="cod">Cód. ' + esc(p.codigo) + stock(p) + (p.disc ? ' · Discontinuado' : '') + '</div>' + oferta(p) +
       '<div class="fila"><span class="' + (CHIP[p.estado] || 'chip gris') + '" data-chip>' + esc(p.estadoTexto) + '</span>' + (p.estado === 'no' ? '<button class="mini" data-pedir>Pedir</button>' : '') + '</div></div>').join('')
     : '<p class="vacio">No encontré nada con eso.</p>') + (r.mas ? '<small>Hay más resultados: escribí algo más preciso.</small>' : '') +
     '<button class="link" data-libre>¿No lo encontrás? Pedilo igual</button><div id="libre"></div>';
@@ -75,7 +81,7 @@ function buscarLocal(q) {
   }
   // v151: los discontinuados también aparecen (marcados), después de los que están en lista.
   res.sort((a, b) => ((a[6] ? 1 : 0) - (b[6] ? 1 : 0)) || a[1].localeCompare(b[1]));
-  return {productos: exactos.concat(res).slice(0, 40).map(r => Object.assign({codigo: r[0], producto: r[1], precio: r[2], stock: r[5], disc: r[6] ? 1 : 0}, estadoLocal(r[0]))), mas: exactos.length + res.length > 40};
+  return {productos: exactos.concat(res).slice(0, 40).map(r => Object.assign({codigo: r[0], producto: r[1], precio: r[2], stock: r[5], disc: r[6] ? 1 : 0, oferta: r[7] || null}, estadoLocal(r[0]))), mas: exactos.length + res.length > 40};
 }
 // v154: sin buscar nada se ve la lista de pedidos: lo que ya se pidió al proveedor y lo que pidieron las cajeras y falta comprar.
 let listaPintada = '';
