@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=177;
+var APP_V=178;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1531,6 +1531,10 @@ function verProducto(c){
     var cMos=cs||cUso, mMos=pv&&cMos?(pv-cMos)/pv:null, gMos=pv&&cMos?pv-cMos:null, otroCosto=cUso&&cMos&&Math.abs(cUso-cMos)>1;
     h+='<div class="card"><h2>Precio y margen</h2>'+
       '<div class="row"><span>Precio de venta</span><span>'+pesos(pv)+'</span></div>'+
+      // v178 (ECHU 6.87): la oferta activada en Civil: lo que de verdad paga el cliente y el margen real.
+      (p.oferta?'<div class="row"><span><b>Con la oferta</b> · '+esc(p.oferta.texto)+(p.oferta.lista==='Descontinuados'?' (descontinuados)':'')+'</span><span class="neg"><b>'+pesos(p.oferta.precio)+'</b></span></div>'+
+        (p.oferta.margenReal!=null?'<div class="row"><span>Margen real (con la oferta)</span><span class="'+(p.oferta.margenReal>=0?'':'neg')+'">'+String(p.oferta.margenReal).replace('.',',')+'%</span></div>':'')+
+        (p.oferta.desde?'<div class="note" style="margin-top:0">Oferta activada desde el '+esc(p.oferta.desde)+'.</div>':''):'')+
       (cMos?'<div class="row"><span>Costo'+(cs?' (en el sistema)':' '+origen)+'</span><span>'+pesos2(cMos)+'</span></div>'+
         '<div class="row"><span><b>Ganancia por unidad</b> (precio − costo)</span><span class="'+(gMos>=0?'pos':'neg')+'"><b>'+pesos(gMos)+'</b></span></div>'+
         '<div class="row"><span><b>Margen</b></span><span><b>'+pct(mMos)+'</b></span></div>':'')+
@@ -3396,7 +3400,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=177');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=178');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
