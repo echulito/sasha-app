@@ -108,6 +108,47 @@ async function irAGastos(page) {
   await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="gas"]');
   await page.locator('#c-gas .cmp').first().waitFor();
 }
+test('gastos v188: cada gasto en su categoría (el desglose con su gasto), totales sin contar dos veces y se cambia la categoría', async () => {
+  const antes = DATOS.gastos_datos, guardados = [];
+  const F = (fila, label, nivel, valor, cat, o) => Object.assign({fila, label, nivel, valor, cat, col: nivel ? 3 : 2, formula: false, hijos: false, raiz: '', padre: ''}, o || {});
+  const cats = [{k: 'sue', n: 'Sueldos y cargas sociales'}, {k: 'alq', n: 'Alquiler'}, {k: 'srv', n: 'Servicios (luz, agua, internet)'}, {k: 'seg', n: 'Seguridad y seguros'},
+    {k: 'imp', n: 'Impuestos y tasas'}, {k: 'hon', n: 'Contadora y sistemas'}, {k: 'mkt', n: 'Marketing y venta online'}, {k: 'lim', n: 'Limpieza y mantenimiento'}, {k: 'fin', n: 'Bancos y gastos financieros'}, {k: 'otr', n: 'Otros e imprevistos'}];
+  const datos = Object.assign({}, antes, {categorias: cats, filas: [
+    F(44, 'Sueldos', 0, 3000, 'sue', {col: 0, total: true, formula: true, hijos: true}), F(45, 'Sueldos empleados', 1, 2000, 'sue', {formula: true, hijos: true}),
+    F(46, 'Adrián', 2, 1500, 'sue', {formula: true, hijos: true}), F(47, 'Sueldo', 3, 1100, 'sue'), F(48, 'Cargas sociales (mitad)', 3, 400, 'sue'),
+    F(50, 'Vanesa', 2, 500, 'sue', {formula: true, hijos: true}), F(51, 'Sueldo', 3, 500, 'sue'), F(59, 'Ezequiel (dueño)', 1, 1000, 'sue'),
+    F(71, 'Seguridad', 0, 154, 'seg', {col: 0, total: true, formula: true, hijos: true}), F(72, 'Medina', 1, 80, 'seg'), F(73, 'Verisure', 1, 74, 'seg'),
+    F(61, 'Alquiler', 0, 1481, 'alq'), F(64, 'ALSMI', 0, 4, 'imp')]});
+  DATOS.gastos_datos = datos;
+  DATOS.gastos_guardar = p => { const b = JSON.parse(p.datos); guardados.push(b);
+    if (b.categorias) datos.filas.forEach(f => { if (b.categorias[f.label]) f.cat = b.categorias[f.label]; });
+    return datos; };
+  const {ctx, page, errores} = await abrir();
+  try {
+    await irAGastos(page);
+    const t = await page.locator('#c-gas').innerText();
+    assert.match(t, /Sueldos y cargas sociales\s*\$ 3\.000/, 'solo el primer nivel: 3.000 (no 3.000 + 2.000 + 1.500…)');
+    assert.match(t, /Seguridad y seguros\s*\$ 154/);
+    assert.doesNotMatch(t, /Marketing y venta online/, 'las categorías sin gastos no aparecen');
+    await page.locator('#c-gas .cmp', {hasText: 'Sueldos y cargas sociales'}).locator('.t').click();
+    const sue = await page.locator('#c-gas .cmp', {hasText: 'Sueldos y cargas sociales'}).innerText();
+    assert.doesNotMatch(sue, /Medina|Verisure/, 'la seguridad no va en sueldos');
+    assert.equal(await page.locator('#c-gas [data-gf]').count(), 4, 'se editan Sueldo, Cargas, Sueldo y Ezequiel; las sumas no');
+    const inputs = page.locator('#c-gas [data-gf]');
+    await inputs.nth(2).fill('650');
+    await page.locator('#c-gas .cmp', {hasText: 'Sueldos y cargas sociales'}).locator('button.btn', {hasText: 'Guardar'}).click();
+    await page.waitForTimeout(300);
+    assert.deepEqual(guardados[0].valores, [{fila: 51, label: 'Sueldo', valor: 650}], 'el Sueldo de Vanesa, por renglón');
+    // ALSMI pasa a Otros
+    await page.locator('#c-gas .cmp > .t', {hasText: 'Impuestos y tasas'}).click();
+    await page.selectOption('#c-gas select[aria-label="Categoría de ALSMI"]', 'otr');
+    await page.locator('#c-gas .cmp > .t', {hasText: 'Otros e imprevistos'}).waitFor();
+    assert.deepEqual(guardados[guardados.length - 1], {categorias: {ALSMI: 'otr'}});
+    assert.equal(await page.locator('#c-gas .cmp > .t', {hasText: 'Impuestos y tasas'}).count(), 0);
+    assert.deepEqual(errores, []);
+  } finally { DATOS.gastos_datos = antes; delete DATOS.gastos_guardar; await ctx.close(); }
+});
+
 test('gastos › inflación: muestra qué pasó en el mes, los meses anteriores y se guarda la inflación', async () => {
   const {ctx, page, echu, errores} = await abrir();
   await irAGastos(page);
