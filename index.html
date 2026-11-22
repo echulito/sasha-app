@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=188;
+var APP_V=189;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -803,6 +803,7 @@ function iniIr(ir){
   if(ir==='pagos'){cajSec('plata');return irA('caja')}
   if(ir==='pedido'){try{localStorage.setItem('sasha_compras','simulador')}catch(e){}irA('simulador');var b=document.querySelector('#simmodo button[data-m="ped"]');if(b)b.click();return}
   if(ir==='contadora'){irA('admin');admSec('conta');contaSub('cdor');return}
+  if(ir==='sueldos'){irA('admin');admSec('conta');contaSub('sue');return}
   if(ir==='tareas'){if(INI&&INI.tareasUrl)window.open(INI.tareasUrl,'_blank','noopener');return}
   // v170: los cambios de costo los carga el agente en Civil (Más › Agentes automáticos › Cambiar precios).
   if(ir==='costos'){irA('mas');agAbrir();setTimeout(function(){var c=$('agcostos');if(c&&c.scrollIntoView)c.scrollIntoView({block:'start'})},60);return}
@@ -930,8 +931,9 @@ function pintarPlata(){
   h+='<div class="card"><h2>Pagos de los próximos 7 días · '+pesos(pg.total)+'</h2>';
   if(!pg.items.length)h+='<div class="note" style="margin-top:0">No vence nada en los próximos 7 días.</div>';
   pg.items.forEach(function(x){var p=plParte(x),med=[p.ef>0?'efectivo '+pesos(p.ef):'',p.mp>0?'MP '+pesos(p.mp):'',p.cual>0?'cualquiera '+pesos(p.cual):''].filter(Boolean).join(' + ');
-    h+='<div class="row"><span>'+(x.vencido?'<b class="neg">Venció</b> ':'')+esc(x.nombre)+' · '+esc(x.vence)+(x.dias===0&&!x.vencido?' (hoy)':'')+'<br><span class="rk">'+med+'</span></span><span style="text-align:right">'+pesos(x.monto)+
-      '<br><button class="btn sec" style="padding:4px 12px;font-size:13px;margin-top:4px" data-pagar="'+esc(x.nombre)+'">Pagar</button></span></div>'});
+    // v189: los sueldos van juntos (total a pagar); se pagan desde Sueldos, con los recibos.
+    h+='<div class="row"><span>'+(x.vencido?'<b class="neg">Venció</b> ':'')+esc(x.nombre)+' · '+esc(x.vence)+(x.dias===0&&!x.vencido?' (hoy)':'')+(x.detalle?'<br><span class="rk">'+esc(x.detalle)+'</span>':'')+'<br><span class="rk">'+med+'</span></span><span style="text-align:right">'+pesos(x.monto)+
+      '<br>'+(x.ir==='sueldos'?'<button class="btn sec" style="padding:4px 12px;font-size:13px;margin-top:4px" onclick="iniIr(\'sueldos\')">Ir a Sueldos</button>':'<button class="btn sec" style="padding:4px 12px;font-size:13px;margin-top:4px" data-pagar="'+esc(x.nombre)+'">Pagar</button>')+'</span></div>'});
   h+='</div><div class="note">Los saldos y los vencimientos se cargan en ECHU › ADMINISTRACION › Reparto de la plata. Los pagos, desde acá abajo con su comprobante.</div>';
   el.innerHTML=h;
 }
@@ -3406,7 +3408,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=188');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=189');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);

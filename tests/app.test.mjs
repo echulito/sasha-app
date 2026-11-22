@@ -108,6 +108,26 @@ async function irAGastos(page) {
   await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="gas"]');
   await page.locator('#c-gas .cmp').first().waitFor();
 }
+test('Plata v189: los sueldos van juntos en un renglón con el total y llevan a Sueldos para pagarlos con los recibos', async () => {
+  const antes = DATOS.inicio;
+  DATOS.inicio = Object.assign({}, antes, {pagos: {total: 3184000, items: [
+    {nombre: 'Sueldos', monto: 3003000, vence: '07/12', dias: 5, medio: 'MIXTO', medioTexto: 'mixto', vencido: false, ef: 1778000, mp: 1225000, cual: 0, detalle: 'Adrián, Vanesa, Fernanda', ir: 'sueldos'},
+    {nombre: 'Alquiler', monto: 181000, vence: '09/12', dias: 7, medio: 'MERCADO PAGO', vencido: false}]}});
+  const {ctx, page, errores} = await abrir();
+  try {
+    await page.click('#bnav button[data-b="caja"]'); await page.click('#cajsec button[data-s="plata"]');
+    const card = page.locator('.card', {hasText: 'Pagos de los próximos 7 días'});
+    await card.waitFor();
+    const t = await card.innerText();
+    assert.match(t, /Sueldos · 07\/12\s*Adrián, Vanesa, Fernanda\s*efectivo \$ 1\.778\.000 \+ MP \$ 1\.225\.000\s*\$ 3\.003\.000/);
+    assert.equal((t.match(/Sueldos? ·/g) || []).length, 1, 'un solo renglón de sueldos');
+    assert.equal(await card.locator('[data-pagar]').count(), 1, 'Pagar solo en Alquiler');
+    await card.locator('button', {hasText: 'Ir a Sueldos'}).click();
+    assert.equal(await page.locator('#csub button.on').innerText(), 'Sueldos');
+    assert.deepEqual(errores, []);
+  } finally { DATOS.inicio = antes; await ctx.close(); }
+});
+
 test('gastos v188: cada gasto en su categoría (el desglose con su gasto), totales sin contar dos veces y se cambia la categoría', async () => {
   const antes = DATOS.gastos_datos, guardados = [];
   const F = (fila, label, nivel, valor, cat, o) => Object.assign({fila, label, nivel, valor, cat, col: nivel ? 3 : 2, formula: false, hijos: false, raiz: '', padre: ''}, o || {});
