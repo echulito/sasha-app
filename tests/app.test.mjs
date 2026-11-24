@@ -147,6 +147,51 @@ test('gastos v191: si la factura no se pudo leer (sin saldo), se carga igual a m
   } finally { DATOS.gastos_datos = antes; DATOS.gastos_factura_leer = antesL; await ctx.close(); }
 });
 
+test('gastos v193: factura de servicio con 1er y 2do vencimiento, mes en que se aplica y código para pagar', async () => {
+  const antesL = DATOS.gastos_factura_leer, enviados = [];
+  const hoy = new Date(), prox = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 10), mm = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  DATOS.gastos_factura_leer = () => ({ok: true, sugerido: 'Agua - AySA', gastos: [{label: 'Agua - AySA', fila: 68, valor: 45022}],
+    comprobante: {tipo: 'factura', lado: 'compra', nombre: 'AGUA Y SANEAMIENTOS ARGENTINOS SA', total: 46897.39, vencimiento: mm(prox) + '-10', importe2: 48104.61, vencimiento2: mm(prox) + '-28', mes: mm(prox), codigoPago: '30411134946946261210000046897392500012072210'}});
+  DATOS.gastos_factura_guardar = p => { const d = JSON.parse(p.datos); enviados.push(d); return {gasto: d.gasto, monto: d.monto, antes: 45022, vence: d.vence, mes: d.mes, programado: true, gastos: DATOS.gastos_datos}; };
+  const {ctx, page, errores} = await abrir();
+  try {
+    await irAGastos(page);
+    await page.setInputFiles('#gfadj', {name: 'f.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64')});
+    await page.locator('#gf_mes').waitFor();
+    assert.equal(await page.inputValue('#gf_monto'), '$ 46.897,39', 'el del 1er vencimiento');
+    assert.match(await page.locator('#gfac').innerText(), /2do vencimiento \(28\/\d\d\/\d{4}\): \$ 48\.105 con recargo/);
+    assert.equal(await page.inputValue('#gf_mes'), mm(prox), 'por defecto, el mes del vencimiento');
+    assert.equal(await page.inputValue('#gf_cod'), '30411134946946261210000046897392500012072210');
+    await page.click('#gf_ok');
+    await page.waitForFunction(() => /desde/.test(document.getElementById('gfac').innerText));
+    assert.deepEqual([enviados[0].mes, enviados[0].codigoPago, enviados[0].monto], [mm(prox), '30411134946946261210000046897392500012072210', 46897.39]);
+    assert.deepEqual(errores, []);
+  } finally { DATOS.gastos_factura_leer = antesL; delete DATOS.gastos_factura_guardar; await ctx.close(); }
+});
+
+test('Plata v193: "Pagar ahora" con Mercado Pago (copia el código y abre la app); lo de efectivo no lo tiene', async () => {
+  const antes = DATOS.inicio;
+  DATOS.inicio = Object.assign({}, antes, {pagos: {total: 217897, items: [
+    {nombre: 'Agua - AySA', monto: 46897, vence: '10/12', dias: 5, medio: 'MERCADO PAGO', vencido: false, ef: 0, mp: 46897, cual: 0, codigoPago: '30411134946946261210000046897392500012072210'},
+    {nombre: 'Limpieza (Lita)', monto: 171000, vence: '11/12', dias: 6, medio: 'EFECTIVO', vencido: false, ef: 171000, mp: 0, cual: 0}]}});
+  const {ctx, page, errores} = await abrir();
+  try {
+    await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.evaluate(() => { window.mpAbrirApp = () => { window.__abrioMp = true; }; });
+    await page.click('#bnav button[data-b="caja"]'); await page.click('#cajsec button[data-s="plata"]');
+    const card = page.locator('.card', {hasText: 'Pagos de los próximos 7 días'});
+    await card.waitFor();
+    assert.equal(await card.locator('[data-mp-pagar]').count(), 1, 'Lita (efectivo) sin Pagar ahora');
+    await card.locator('[data-mp-pagar]').click();
+    assert.equal(await page.inputValue('#mp_dato'), '30411134946946261210000046897392500012072210');
+    assert.match(await page.locator('#mpPagarBox').innerText(), /Pagar servicios/);
+    await page.click('#mp_ir');
+    await page.waitForFunction(() => window.__abrioMp === true);
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), '30411134946946261210000046897392500012072210');
+    assert.deepEqual(errores, []);
+  } finally { DATOS.inicio = antes; await ctx.close(); }
+});
+
 test('gastos v188: cada gasto en su categoría (el desglose con su gasto), totales sin contar dos veces y se cambia la categoría', async () => {
   const antes = DATOS.gastos_datos, guardados = [];
   const F = (fila, label, nivel, valor, cat, o) => Object.assign({fila, label, nivel, valor, cat, col: nivel ? 3 : 2, formula: false, hijos: false, raiz: '', padre: ''}, o || {});
@@ -662,7 +707,7 @@ test('Gastos v140: factura de un gasto en PDF: se lee, viene el gasto elegido, m
   await page.setInputFiles('#gfadj', {name: 'factura.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 ' + 'x'.repeat(300))});
   await page.locator('#gf_gasto').waitFor();
   assert.equal(await page.inputValue('#gf_gasto'), 'Luz'); assert.equal(await page.inputValue('#gf_vence'), '2026-11-18');
-  assert.match(await page.locator('#gf_dif').innerText(), /Tenías \$ 180\.000 → pasa a \$ 207\.000 \(\+15,0%\)\. Se aplica en el mes\./);
+  assert.match(await page.locator('#gf_dif').innerText(), /Tenías \$ 180\.000 → pasa a \$ 207\.000 \(\+15,0%\)\. Se aplica en este mes\./);
   assert.ok(await page.locator('#gf_iva').isChecked());
   await page.click('#gf_ok');
   await page.locator('#gfac .pos').waitFor();

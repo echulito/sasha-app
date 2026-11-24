@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=192;
+var APP_V=193;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -914,6 +914,26 @@ function pgHist(){
     .catch(function(e){box.innerHTML=err(e)});
 }
 document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-pagar]');if(b){ev.preventDefault();pgAbrir(b.getAttribute('data-pagar'))}});
+// v193: "Pagar ahora" con Mercado Pago. Mercado Pago no deja abrir el pago ya cargado desde otra app: se copia el código
+// (o el alias) y se abre la app de Mercado Pago; ahí se pega. ECHU nunca paga ni mueve plata (Mercado Pago es solo lectura).
+document.addEventListener('click',function(ev){var b=ev.target&&ev.target.closest&&ev.target.closest('[data-mp-pagar]');if(!b)return;ev.preventDefault();var o={};try{o=JSON.parse(b.getAttribute('data-mp-pagar'))}catch(e){}mpPagar(o)});
+function mpAbrirApp(){var web='https://www.mercadopago.com.ar/';
+  if(/android/i.test(navigator.userAgent))location.href='intent://home#Intent;scheme=mercadopago;package=com.mercadopago.wallet;S.browser_fallback_url='+encodeURIComponent(web)+';end';
+  else if(/iphone|ipad|ipod/i.test(navigator.userAgent)){var t=setTimeout(function(){location.href=web},1500);location.href='mercadopago://';window.addEventListener('pagehide',function(){clearTimeout(t)},{once:true})}
+  else window.open(web,'_blank','noopener')}
+function mpPagar(o){var v=$('mpPagarBox');if(!v){v=document.createElement('div');v.id='mpPagarBox';v.className='modal';document.body.appendChild(v)}
+  var cod=String(o.c||''),alias=String(o.a||''),dato=cod||alias;
+  var pasos=cod?'En Mercado Pago: <b>Pagar servicios</b> › buscá la empresa › <b>Ingresar código</b> y pegalo (o escaneá el código de barras de la factura).':
+    alias?'En Mercado Pago: <b>Transferir</b> › pegá el alias o CVU › poné '+pesos(o.m)+'.':'En Mercado Pago: <b>Pagar servicios</b> › buscá la empresa y pagá '+pesos(o.m)+'. (Si cargás la factura con su código, la próxima vez se copia solo.)';
+  v.innerHTML='<div class="card" style="max-width:420px;margin:12vh auto 0"><h2 style="margin-top:0">Pagar '+esc(o.n||'')+'</h2><div class="rowb"><span>Importe</span><b>'+pesos(o.m||0)+'</b></div>'+
+    (dato?'<label>'+(cod?'Código de pago':'Alias / CVU')+'</label><input id="mp_dato" readonly value="'+esc(dato)+'" style="font-family:monospace">':'')+
+    '<div class="note">'+pasos+'</div><div class="btns"><button class="btn" id="mp_ir">'+(dato?'Copiar y abrir Mercado Pago':'Abrir Mercado Pago')+'</button><button class="btn sec" id="mp_no">Cerrar</button></div><div class="note" id="mp_msg"></div></div>';
+  v.classList.remove('oculto');v.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;overflow:auto;padding:0 16px';
+  $('mp_no').onclick=function(){v.classList.add('oculto');v.style.display='none'};
+  $('mp_ir').onclick=function(){var ir=function(){$('mp_msg').textContent=dato?'Copiado. Abriendo Mercado Pago…':'Abriendo Mercado Pago…';mpAbrirApp()};
+    if(!dato)return ir();
+    var copiar=navigator.clipboard&&navigator.clipboard.writeText?navigator.clipboard.writeText(dato):Promise.reject();
+    copiar.then(ir,function(){var i=$('mp_dato');i.select();try{document.execCommand('copy')}catch(e){}ir()})}}
 function pintarPlata(){
   var el=$('caja-plata');if(!el)return;
   if(INI_ERR){el.innerHTML='<div class="card"><b class="neg">No se pudo traer la plata.</b> <span class="note">'+esc(INI_ERR)+'</span></div>';return}
@@ -933,7 +953,10 @@ function pintarPlata(){
   pg.items.forEach(function(x){var p=plParte(x),med=[p.ef>0?'efectivo '+pesos(p.ef):'',p.mp>0?'MP '+pesos(p.mp):'',p.cual>0?'cualquiera '+pesos(p.cual):''].filter(Boolean).join(' + ');
     // v189: los sueldos van juntos (total a pagar); se pagan desde Sueldos, con los recibos.
     h+='<div class="row"><span>'+(x.vencido?'<b class="neg">Venció</b> ':'')+esc(x.nombre)+' · '+esc(x.vence)+(x.dias===0&&!x.vencido?' (hoy)':'')+(x.detalle?'<br><span class="rk">'+esc(x.detalle)+'</span>':'')+'<br><span class="rk">'+med+'</span></span><span style="text-align:right">'+pesos(x.monto)+
-      '<br>'+(x.ir==='sueldos'?'<button class="btn sec" style="padding:4px 12px;font-size:13px;margin-top:4px" onclick="iniIr(\'sueldos\')">Ir a Sueldos</button>':'<button class="btn sec" style="padding:4px 12px;font-size:13px;margin-top:4px" data-pagar="'+esc(x.nombre)+'">Pagar</button>')+'</span></div>'});
+      '<br>'+(x.ir==='sueldos'?'<button class="btn sec" style="padding:4px 12px;font-size:13px;margin-top:4px" onclick="iniIr(\'sueldos\')">Ir a Sueldos</button>':
+        // v193: Pagar ahora (Mercado Pago) si no va en efectivo; "Ya lo pagué" registra el pago con su comprobante.
+        ((p.mp+p.cual)>0?'<button class="btn" style="padding:4px 12px;font-size:13px;margin-top:4px" data-mp-pagar="'+esc(JSON.stringify({n:x.nombre,m:Math.round(p.mp+p.cual),c:x.codigoPago||''}))+'">Pagar ahora</button><br>':'')+
+        '<button class="btn sec" style="padding:4px 12px;font-size:13px;margin-top:4px" data-pagar="'+esc(x.nombre)+'">'+((p.mp+p.cual)>0?'Ya lo pagué':'Pagar')+'</button>')+'</span></div>'});
   h+='</div><div class="note">Los saldos y los vencimientos se cargan en ECHU › ADMINISTRACION › Reparto de la plata. Los pagos, desde acá abajo con su comprobante.</div>';
   el.innerHTML=h;
 }
@@ -3408,7 +3431,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=192');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=193');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -3961,6 +3984,7 @@ function sEmpForm(id){
     '<label id="se_pnetolbl"></label><input id="se_pneto" data-pesos inputmode="decimal" value="'+(pg.neto?'$ '+cNum(pg.neto):'')+'" placeholder="Vacío = el Sueldo de ADMINISTRACION">'+
     // v114: mixto: cuánto por Mercado Pago y cuánto en efectivo (por defecto, lo del recibo por MP; se puede cambiar)
     '<div id="se_mix" class="g2"><div><label>Por Mercado Pago</label><input id="se_pmp" data-pesos inputmode="decimal"></div><div><label>En efectivo</label><input id="se_pef" data-pesos inputmode="decimal"></div></div>'+
+    '<label>Alias o CVU para pagarle por Mercado Pago</label><input id="se_alias" autocapitalize="off" value="'+esc(e.alias||'')+'" placeholder="Ej.: vanesa.sasha.mp">'+
     '<div class="note" id="se_mixnota"></div>'+
     (id?'<div class="g2"><div><label>Fecha de egreso (si dejó)</label><input id="se_egr" type="date" value="'+esc(e.egreso||'')+'"></div><div></div></div>':'')+
     '<div class="btns"><button class="btn" id="se_ok">Guardar</button><button class="btn sec" onclick="$(\'sform\').classList.add(\'oculto\')">Cancelar</button>'+(id?'<button class="btn sec" style="color:var(--rojo)" id="se_del">Borrar empleado</button>':'')+'</div><div class="note" id="se_msg"></div>';
@@ -3982,7 +4006,7 @@ function sEmpForm(id){
     if(m&&!(cuota>0)){$('se_msg').innerHTML='<span class="neg">Poné la cuota del monotributo.</span>';return}
     $('se_msg').textContent='Guardando…';
     // monotributo: la categoría de Comercio no se usa (ECHU la pide igual: queda la que tenía).
-    var emp={id:id||'',nombre:$('se_nom').value,cuil:$('se_cuil').value,ingreso:$('se_ing').value,categoria:m&&SU.D.cats.indexOf(e.categoria)<0?SU.D.cats[0]:m?e.categoria:$('se_cat').value,jornada:m?100:Number($('se_pct').value)||100,afiliado:m?false:$('se_afi').checked,egreso:$('se_egr')?$('se_egr').value:'',activo:!($('se_egr')&&$('se_egr').value),
+    var emp={id:id||'',nombre:$('se_nom').value,cuil:$('se_cuil').value,ingreso:$('se_ing').value,categoria:m&&SU.D.cats.indexOf(e.categoria)<0?SU.D.cats[0]:m?e.categoria:$('se_cat').value,jornada:m?100:Number($('se_pct').value)||100,afiliado:m?false:$('se_afi').checked,egreso:$('se_egr')?$('se_egr').value:'',activo:!($('se_egr')&&$('se_egr').value),alias:$('se_alias').value.trim(),
       pago:{tipo:$('se_ptipo').value,medio:$('se_pmed').value,neto:parsePesos($('se_pneto').value),mp:sMixMpGuardar()}};
     api('sue_empleado',{datos:JSON.stringify(emp)}).then(function(r){var L=SU.D.empleados||[],i=L.findIndex(function(x){return x.id===r.id});if(i>=0)L[i]=r;else L.push(r);SU.D.empleados=L;
       // v136: la cuota del monotributo se guarda desde este mes (los meses siguientes siguen con esa hasta que cambie).
@@ -4079,6 +4103,8 @@ function sPagoHtml(){
     var cuota=p.tipo==='monotributo'&&p.cuota>0;
     return '<div class="sp"><div class="rowb" style="border:0;padding:0"><span><b>'+esc(e.nombre.split(' ')[0])+'</b> '+sDocChip(e,p,dd)+'</span><b>'+(p.total?pesos(p.total):'—')+'</b></div>'+
       '<div class="rk">'+(p.total?'Mercado Pago '+pesos(p.mp)+(cuota?' (incluye monotributo '+pesos(p.cuota)+')':'')+' · Efectivo '+pesos(p.ef):'Cargá el neto en los datos del empleado o esperá el recibo')+'</div>'+
+      // v193: la parte de Mercado Pago, con su alias/CVU (la de efectivo se paga en mano).
+      (p.total&&p.mp>0&&!d.pagado?'<div style="margin-top:4px"><button class="btn" style="padding:4px 12px;font-size:13px" data-mp-pagar="'+esc(JSON.stringify({n:e.nombre.split(' ')[0]+' (Mercado Pago)',m:Math.round(p.mp),a:e.alias||''}))+'">Pagar ahora '+pesos(p.mp)+'</button>'+(e.alias?'':' <span class="rk">· cargá su alias en <button class="lnk" onclick="sEmpForm(\''+e.id+'\')">sus datos</button></span>')+'</div>':'')+
       (p.tipo==='monotributo'&&!p.cuotaDelMes?'<div class="rk" style="margin-top:3px">Monotributo de '+cMesTxt(d.periodo)+': '+(p.cuota?'¿sigue en '+pesos(p.cuota)+'? <button class="lnk" onclick="sCuota(\''+e.id+'\','+p.cuota+')">Sí, igual</button> · ':'')+'<button class="lnk" onclick="sCuotaForm(\''+e.id+'\')">'+(p.cuota?'Aumentó':'Cargar')+'</button></div>':'')+
       '</div>'}).join('');
   du.forEach(function(x){tDu+=Number(x.monto)||0});
@@ -4457,28 +4483,38 @@ function gFacForm(){
   $('gfac').innerHTML=(r.aviso?'<div class="note warn">'+esc(r.aviso)+'</div>':'')+
     '<div class="rk" style="margin-top:8px">'+(GA.fac.mime==='application/pdf'?'📄 ':'📷 ')+'<b>'+esc(c.nombre||'Proveedor sin leer')+'</b>'+(c.cuit?' · CUIT '+cuitTextoJS(c.cuit):'')+(c.periodoFacturado?' · '+esc(c.periodoFacturado):'')+'</div>'+
     '<label>Va al gasto</label><select id="gf_gasto">'+ops+'</select><div id="gf_nuevo" class="oculto"><label>Nombre del gasto nuevo</label><input id="gf_nom" placeholder="Ej.: Alarma"></div>'+
-    '<div class="g2"><div><label>Importe de la factura</label><input id="gf_monto" data-pesos inputmode="decimal" value="'+(c.total?'$ '+cNum(c.total):'')+'"></div><div><label>Vence</label><input id="gf_vence" type="date" value="'+esc(c.vencimiento||'')+'"></div></div>'+
+    '<div class="g2"><div><label>Importe (1er vencimiento)</label><input id="gf_monto" data-pesos inputmode="decimal" value="'+(c.total?'$ '+cNum(c.total):'')+'"></div><div><label>Vence</label><input id="gf_vence" type="date" value="'+esc(c.vencimiento||'')+'"></div></div>'+
+    // v193: el 2do vencimiento (con recargo) aparte; el mes en que se aplica (por defecto el del vencimiento) y el código para pagar.
+    (c.importe2?'<div class="rk">2do vencimiento'+(c.vencimiento2?' ('+esc(c.vencimiento2.split('-').reverse().join('/'))+')':'')+': '+pesos(c.importe2)+' con recargo. Se carga el del 1ro.</div>':'')+
+    '<label>Se aplica en el mes</label><select id="gf_mes">'+gMesesOp(c.mes||(c.vencimiento||'').slice(0,7))+'</select>'+
+    '<div class="g2"><div style="grid-column:1/-1"><label>Código para pagar (el número debajo del código de barras)</label><input id="gf_cod" inputmode="numeric" value="'+esc(c.codigoPago||'')+'" placeholder="Opcional: sirve para Pagar ahora con Mercado Pago"></div></div>'+
     '<div class="note" id="gf_dif"></div>'+
     '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="gf_iva" style="width:auto"'+(c.cuit&&['B','C','X'].indexOf(c.letra)<0?' checked':'')+'> Cargarla también en IVA Compras (para la contadora)</label>'+(['B','C'].indexOf(c.letra)>=0?'<div class="note">Es factura '+esc(c.letra)+': no da crédito de IVA, no hace falta mandarla a la contadora.</div>':'')+
     '<div class="btns"><button class="btn" id="gf_ok">Guardar</button><button class="btn sec" onclick="GA.fac=null;$(\'gfac\').innerHTML=\'\'">Cancelar</button></div><div class="note" id="gf_msg"></div>';
   pesosEnVivo($('gf_monto'));
   var dif=function(){var g=$('gf_gasto').value,m=parsePesos($('gf_monto').value),op=$('gf_gasto').selectedOptions[0],x=op&&op.dataset.i!=null?gs[Number(op.dataset.i)]:null;
     $('gf_nuevo').classList.toggle('oculto',g!=='__nuevo');
-    $('gf_dif').innerHTML=x&&x.valor&&m?(Math.abs(m-x.valor)<1?'Igual que el mes que tenías cargado.':'Tenías '+pesos(x.valor)+' → pasa a '+pesos(m)+' <b class="'+(m>x.valor?'neg':'pos')+'">('+(m>x.valor?'+':'')+pct(m/x.valor-1)+')</b>. Se aplica en el mes.'):''};
+    $('gf_dif').innerHTML=x&&x.valor&&m?(Math.abs(m-x.valor)<1?'Igual que el mes que tenías cargado.':'Tenías '+pesos(x.valor)+' → pasa a '+pesos(m)+' <b class="'+(m>x.valor?'neg':'pos')+'">('+(m>x.valor?'+':'')+pct(m/x.valor-1)+')</b>. '+($('gf_mes')&&$('gf_mes').selectedOptions[0]&&/desde/.test($('gf_mes').selectedOptions[0].text)?'Cambia desde '+cMesTxt($('gf_mes').value).toLowerCase()+' (este mes queda igual).':'Se aplica en este mes.')):''};
   $('gf_gasto').onchange=dif;$('gf_monto').addEventListener('input',dif);dif();
+  $('gf_mes').onchange=function(){this.dataset.tocado='1';dif()};dif();
+  $('gf_vence').addEventListener('change',function(){var m=this.value.slice(0,7);if(m&&!$('gf_mes').dataset.tocado){$('gf_mes').innerHTML=gMesesOp(m)}});
   $('gf_ok').onclick=function(){var b=this,g=$('gf_gasto').value,m=parsePesos($('gf_monto').value),v=$('gf_vence').value,nom=$('gf_nom').value.trim();
     if(!g||(g==='__nuevo'&&!nom)){$('gf_msg').innerHTML='<span class="neg">Elegí a qué gasto va.</span>';return}
     if(!(m>0)){$('gf_msg').innerHTML='<span class="neg">Poné el importe.</span>';return}
     if(!v){$('gf_msg').innerHTML='<span class="neg">Poné cuándo vence.</span>';return}
     b.disabled=true;b.textContent='Guardando…';
     var op=$('gf_gasto').selectedOptions[0],gi=op&&op.dataset.i!=null?gs[Number(op.dataset.i)]:null;
-    var datos={gasto:g==='__nuevo'?'':g,fila:gi&&gi.fila||'',nuevo:g==='__nuevo'?nom:'',monto:m,vence:v,iva:$('gf_iva').checked,comprobante:Object.assign({},c,{total:m,hash:GA.fac.hash||''})};
+    var datos={gasto:g==='__nuevo'?'':g,fila:gi&&gi.fila||'',nuevo:g==='__nuevo'?nom:'',monto:m,vence:v,mes:$('gf_mes').value,codigoPago:$('gf_cod').value.replace(/\D/g,''),iva:$('gf_iva').checked,comprobante:Object.assign({},c,{total:m,hash:GA.fac.hash||''})};
     lPost('gastos_factura_guardar',{datos:JSON.stringify(datos),imagen:$('gf_iva').checked?GA.fac.data:'',mime:GA.fac.mime}).then(function(r2){
       GA.fac={listo:r2};GA.D=r2.gastos;INI=null;try{cargarInicio()}catch(e){}gPintar();
     }).catch(function(e){b.disabled=false;b.textContent='Guardar';$('gf_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'})};
 }
+// v193: meses para aplicar la factura (el anterior, este y los dos que vienen; el elegido siempre está).
+function gMesesOp(sel){var d=new Date(),L=[];for(var i=-1;i<=2;i++){var x=new Date(d.getFullYear(),d.getMonth()+i,1);L.push(x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0'))}
+  if(sel&&L.indexOf(sel)<0)L.push(sel);L.sort();var hoy=L[1];if(!sel)sel=hoy;
+  return L.map(function(m){return '<option value="'+m+'"'+(m===sel?' selected':'')+'>'+cMesTxt(m)+(m===hoy?' (este mes)':m>hoy?' (desde ese mes)':'')+'</option>'}).join('')}
 function gFacListo(){var r=GA.fac.listo;GA.fac=null;
-  $('gfac').innerHTML='<div class="note pos" style="font-weight:600">Listo: '+esc(r.gasto)+' '+pesos(r.monto)+(r.antes&&Math.abs(r.antes-r.monto)>=1?' (tenías '+pesos(r.antes)+')':'')+', vence el '+esc(r.vence.split('-').reverse().join('/'))+
+  $('gfac').innerHTML='<div class="note pos" style="font-weight:600">Listo: '+esc(r.gasto)+' '+pesos(r.monto)+(r.programado?' desde '+esc(cMesTxt(r.mes).toLowerCase()):'')+(r.antes&&Math.abs(r.antes-r.monto)>=1?' (tenías '+pesos(r.antes)+')':'')+', vence el '+esc(r.vence.split('-').reverse().join('/'))+
     (r.comprobante?(r.duplicado?' · esa factura ya estaba en IVA Compras':' · quedó en IVA Compras'):'')+'.</div>';
 }
 function gEditor(k){
