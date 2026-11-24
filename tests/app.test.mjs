@@ -253,7 +253,12 @@ test('gastos › inflación: muestra qué pasó en el mes, los meses anteriores 
   await irAGastos(page);
   await page.getByText('Inflación de octubre').waitFor();
   assert.match(await page.locator('#c-gas').innerText(), /Tus precios de venta\s*\+3,1%\s*▲ 0,4 sobre la inflación/);
-  assert.match(await page.locator('#c-gas').innerText(), /Ventas sin inflación\s*−2,0%/);
+  // v200: rentabilidad del mes (costos +4,0% contra precios +3,1%, con margen 42%: 0,58 − 0,58 × 1,04 / 1,031 = −0,5 puntos), en rojo
+  assert.match(await page.locator('#c-gas').innerText(), /Tu rentabilidad \(margen\)\s*los costos subieron más que los precios\s*−0,5 puntos/);
+  assert.equal(await page.locator('#c-gas .cmpx', {hasText: 'Tu rentabilidad'}).locator('b.neg').count(), 1);
+  assert.match(await page.locator('#c-gas').innerText(), /Cuánto vendiste, sin inflación\s*es cantidad, no ganancia\s*−2,0%/);
+  assert.equal(await page.locator('#c-gas .cmpx', {hasText: 'Cuánto vendiste'}).locator('b.pos, b.neg').count(), 0, 'sin verde ni rojo');
+  assert.match(await page.locator('#c-gas table').innerText(), /MARGEN/i);
   await page.click('#c-gas tr[data-m="2026-09"]');
   await page.getByText('Inflación de septiembre').waitFor();
   await page.fill('#gi_v', '2,9'); await page.click('#gi_ok');

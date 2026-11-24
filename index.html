@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=199;
+var APP_V=200;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -3434,7 +3434,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=199');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=200');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -4587,16 +4587,34 @@ function gInflacion(){
     return '<div class="cmpx"><span>'+n+'</span><span><b>'+gPct1(v)+'</b>'+d+'</span></div>'};
   var h='<div class="card" style="margin-top:8px"><h2>Inflación de '+nom.toLowerCase()+(r.enCurso?' (en curso)':'')+'</h2>'+
     '<div class="ifl-in"><span style="flex:1;color:var(--gris)">Inflación general (INDEC)</span><input id="gi_v" inputmode="decimal" placeholder="—"'+(esConsulta()?' readonly':'')+' value="'+(I===null?'':String(Math.round(I*1000)/10).replace('.',','))+'"><b>%</b>'+(esConsulta()?'':'<button class="btn" id="gi_ok" onclick="gGuardarInf(this)">Guardar</button>')+'</div>'+
-    fila('Tus precios de venta',r.precios,false)+fila('Tus costos de mercadería',r.costos,true)+fila('Tus gastos fijos',r.gastos,true)+
-    (r.enCurso?'':'<div class="cmpx"><span>Ventas sin inflación</span>'+(r.ventasReales===null?'<span class="rk" style="margin:0">'+(I===null?'cargá la inflación':'sin datos')+'</span>':'<b class="'+(r.ventasReales>=0?'pos':'neg')+'">'+gPct1(r.ventasReales)+'</b>')+'</div>')+
+    fila('Tus precios de venta',r.precios,false)+fila('Tus costos de mercadería',r.costos,true)+gRentFila(r)+(r.gastos===null||r.gastos===undefined?'':fila('Tus gastos fijos',r.gastos,true))+
+    // v200: lo vendido sin inflación es cantidad, no ganancia: sin verde ni rojo (la ganancia es la fila de rentabilidad).
+    (r.enCurso?'':'<div class="cmpx"><span>Cuánto vendiste, sin inflación<br><span class="mini">es cantidad, no ganancia</span></span>'+(r.ventasReales===null?'<span class="rk" style="margin:0">'+(I===null?'cargá la inflación':'sin datos')+'</span>':'<b>'+gPct1(r.ventasReales)+'</b>')+'</div>')+
     (r.texto?'<div class="note">'+esc(r.texto)+'</div>':'')+
     (r.enCurso?'<div class="note">Lo de '+nom.toLowerCase()+' es hasta hoy. La inflación del mes se carga cuando sale.</div>':'');
   var col=function(v,menosEsMejor,i){if(v===null||v===undefined)return '<td class="rk">—</td>';var c='';if(i!==null){var df=v-i;c=Math.abs(df)<0.0005?'':((menosEsMejor?df<0:df>0)?'pos':'neg')}return '<td'+(c?' class="'+c+'"':'')+'>'+gPct1(v)+'</td>'};
-  h+='<table class="tbl"><tr><th>Mes</th><th>Inflación</th><th>Precios</th><th>Costos</th><th>Gastos</th></tr>'+L.slice(0,12).map(function(x){var i=x.inflacion;
+  var conGastos=L.slice(0,12).some(function(x){return x.gastos!==null&&x.gastos!==undefined});
+  h+='<table class="tbl"><tr><th>Mes</th><th>Inflación</th><th>Precios</th><th>Costos</th><th>Margen</th>'+(conGastos?'<th>Gastos</th>':'')+'</tr>'+L.slice(0,12).map(function(x){var i=x.inflacion,rt=gRent(x);
     return '<tr data-m="'+x.mes+'"'+(x.mes===GA.mesInf?' class="sel"':'')+' onclick="GA.mesInf=\''+x.mes+'\';gPintar()"><td>'+(x.mes===GA.mesInf?'<b>':'')+LMESES[Number(x.mes.slice(5,7))-1].slice(0,3).toLowerCase()+(x.enCurso?' (va)':'')+(x.mes===GA.mesInf?'</b>':'')+'</td>'+
-      '<td>'+(i===null?'<span class="rk">—</span>':gPct1(i).replace('+',''))+'</td>'+col(x.precios,false,i)+col(x.costos,true,i)+col(x.gastos,true,i)+'</tr>'}).join('')+'</table>'+
+      '<td>'+(i===null?'<span class="rk">—</span>':gPct1(i).replace('+',''))+'</td>'+col(x.precios,false,i)+col(x.costos,true,i)+(rt===null?'<td class="rk">—</td>':'<td class="'+(rt.pts<-0.0005?'neg':rt.pts>0.0005?'pos':'')+'">'+gPts(rt.pts,true)+'</td>')+(conGastos?col(x.gastos,true,i):'')+'</tr>'}).join('')+'</table>'+
     '<div class="note">Tocá un mes para ver qué pasó. Verde = mejor que la inflación para vos · rojo = peor.</div></div>';
   return h;
+}
+// v200: cuánta rentabilidad se ganó o perdió en el mes por cómo subieron los costos contra los precios de venta.
+// Con el margen del mes anterior m: margen nuevo = 1 − (1 − m) × (1 + costos) / (1 + precios). La diferencia, en puntos y en pesos.
+function gMesAnt(mes){var y=Number(mes.slice(0,4)),m=Number(mes.slice(5,7))-1;if(!m){y--;m=12}return y+'-'+String(m).padStart(2,'0')}
+function gRent(x){
+  if(x.precios===null||x.precios===undefined||x.costos===null||x.costos===undefined)return null;
+  var M=GA.D.meses||[],ant=M.filter(function(z){return z.mes===gMesAnt(x.mes)})[0],este=M.filter(function(z){return z.mes===x.mes})[0];
+  var m=ant&&ant.margen!=null?ant.margen:(GA.D.resultado&&GA.D.resultado.actual)||0.4;
+  var pts=(1-m)-(1-m)*(1+x.costos)/(1+x.precios);
+  return {pts:pts,m:m,pesos:este&&este.fact?este.fact*pts:0};
+}
+function gPts(p,corto){var v=Math.round(Math.abs(p)*1000)/10;return (p<-0.0005?'−':p>0.0005?'+':'')+String(v).replace('.',',')+(corto?'':' puntos')}
+function gRentFila(r){var x=gRent(r);if(!x)return '';
+  var mal=x.pts<-0.0005,bien=x.pts>0.0005;
+  return '<div class="cmpx"><span>Tu rentabilidad (margen)<br><span class="mini">'+(mal?'los costos subieron más que los precios':bien?'los precios subieron más que los costos':'precios y costos subieron parejo')+'</span></span>'+
+    '<span><b class="'+(mal?'neg':bien?'pos':'')+'">'+gPts(x.pts)+'</b>'+(x.pesos&&Math.abs(x.pesos)>=1?'<b class="'+(mal?'neg':'pos')+'"><span class="dif">≈ '+pesos(Math.abs(x.pesos))+(mal?' menos':' más')+' de ganancia'+(r.enCurso?' hasta hoy':' en el mes')+'</span></b>':'')+'</span></div>';
 }
 function gGuardarInf(b){
   var t=$('gi_v').value.trim(),v=t===''?'':Math.round(gPctTxt(t)*100)/10000;
