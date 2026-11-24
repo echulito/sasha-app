@@ -65,8 +65,11 @@ test('v180: un PDF ya tomado que no quedó cargado (el lector no podía) se vuel
     await page.goto(web.url + 'cajas/index.html');
     await page.waitForFunction(() => /importado de Drive/.test(document.getElementById('message')?.textContent || ''), null, {timeout: 20000});
     assert.ok(echu.pedidos.some(p => /cajas_pdf_nuevos/.test(p.url + (p.cuerpo || '')) && /todos/.test(p.url + (p.cuerpo || ''))), 'pide también los ya tomados');
-    const guardados = echu.pedidos.filter(p => /"accion":"cajas_guardar"/.test(p.cuerpo || '')).map(p => JSON.parse(JSON.parse(p.cuerpo).datos));
-    assert.ok(guardados.some(g => g.state.reports.some(r => r.type === 'turnClose' && r.rows[0].batch === '2522' && r.rows[0].remainder === 0)), 'el cierre sin "Resto en Caja" quedó cargado');
+    // El aviso puede salir antes de que llegue el guardado a ECHU: se espera hasta 10 s.
+    const cargado = () => echu.pedidos.filter(p => /"accion":"cajas_guardar"/.test(p.cuerpo || '')).map(p => JSON.parse(JSON.parse(p.cuerpo).datos))
+      .some(g => g.state.reports.some(r => r.type === 'turnClose' && r.rows[0].batch === '2522' && r.rows[0].remainder === 0));
+    for (let i = 0; i < 100 && !cargado(); i++) await page.waitForTimeout(100);
+    assert.ok(cargado(), 'el cierre sin "Resto en Caja" quedó cargado');
     assert.deepEqual(hechos, [], 'ya estaba tomado: no se vuelve a marcar');
     assert.deepEqual(bajados, ['PDF_CIERRE_2522']);
     assert.deepEqual(errores, []);
