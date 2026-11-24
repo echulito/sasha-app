@@ -218,7 +218,20 @@ test('gastos v188: cada gasto en su categoría (el desglose con su gasto), total
     assert.match(t, /Seguridad y seguros\s*\$ 154/);
     assert.doesNotMatch(t, /Marketing y venta online/, 'las categorías sin gastos no aparecen');
     await page.locator('#c-gas .cmp', {hasText: 'Sueldos y cargas sociales'}).locator('.t').click();
-    const sue = await page.locator('#c-gas .cmp', {hasText: 'Sueldos y cargas sociales'}).innerText();
+    // v196: el desglose se abre de a un nivel
+    const caja = page.locator('#c-gas .cmp', {hasText: 'Sueldos y cargas sociales'});
+    let sue = await caja.innerText();
+    assert.match(sue, /▸\s*Sueldos\s*ver desglose/); assert.doesNotMatch(sue, /Sueldos empleados|Adrián/);
+    await caja.locator('span[title] b', {hasText: /^Sueldos$/}).click();
+    sue = await caja.innerText();
+    assert.match(sue, /▸\s*Sueldos empleados\s*ver desglose\s*\$ 2\.000/); assert.match(sue, /Ezequiel \(dueño\)/); assert.doesNotMatch(sue, /Adrián/);
+    await caja.locator('span[title] b', {hasText: /^Sueldos empleados$/}).click();
+    sue = await caja.innerText();
+    assert.match(sue, /Adrián\s*ver desglose\s*\$ 1\.500/); assert.match(sue, /Vanesa\s*ver desglose\s*\$ 500/); assert.doesNotMatch(sue, /Cargas sociales/);
+    await caja.locator('span[title] b', {hasText: /^Adrián$/}).click();
+    await caja.locator('span[title] b', {hasText: /^Vanesa$/}).click();
+    sue = await caja.innerText();
+    assert.match(sue, /Cargas sociales \(mitad\)/);
     assert.doesNotMatch(sue, /Medina|Verisure/, 'la seguridad no va en sueldos');
     assert.equal(await page.locator('#c-gas [data-gf]').count(), 4, 'se editan Sueldo, Cargas, Sueldo y Ezequiel; las sumas no');
     const inputs = page.locator('#c-gas [data-gf]');
