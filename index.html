@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=194;
+var APP_V=195;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -156,6 +156,8 @@ html.cajfija,html.cajfija body{overflow:hidden;overscroll-behavior:none}
 #bnav button b{display:block;font-size:19px;font-weight:400;line-height:22px;margin-bottom:1px}
 #bnav button.on{color:var(--azul2);font-weight:700}
 body.consulta #bnav .solo-completo{display:none}
+/* v195: con el PIN de consulta, de Administración se ve solo Gastos (sin cambiar nada) */
+body.consulta #admsec,body.consulta #csub{display:none!important}
 .ikp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px}.ikp .card{padding:12px;cursor:pointer}.ikp .lbl{font-size:12px;color:var(--gris)}.ikp .big{font-size:22px;margin-top:2px}.ikp .chico{font-size:11px;color:var(--gris);margin-top:2px}
 .itit{font-size:13px;color:var(--gris);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px;font-weight:600}
 .iav{display:flex;gap:10px;margin-bottom:8px}.iav .ic{width:30px;height:30px;border-radius:50%;flex:0 0 30px;display:flex;align-items:center;justify-content:center;font-weight:700}
@@ -263,7 +265,7 @@ body.consulta #bnav .solo-completo{display:none}
     <div id="caja-pagos" class="oculto"></div>
   </section>
   <section id="mas" class="oculto mas">
-    <div class="card" data-ir="conta"><div><b>Contabilidad</b><small>Facturas e IVA, sueldos y gastos</small></div><b style="color:var(--azul2)">›</b></div>
+    <div class="card" data-ir="conta"><div><b>Administración</b><small>Facturas e IVA, sueldos y gastos</small></div><b style="color:var(--azul2)">›</b></div>
     <div class="card" data-ir="limpieza"><div><b>Limpieza</b><small>Recibos de limpieza</small></div><b style="color:var(--azul2)">›</b></div>
     <div class="card" data-ir="ajustes"><div><b>Ajustes</b><small>Actualizar ECHU, PIN y la app en el celular</small></div><b style="color:var(--azul2)">›</b></div>
     <div class="card" data-ir="agentes"><div><b>Agentes automáticos</b><small>Civil: reportes, PDF de cajas, ofertas y precios</small></div><b style="color:var(--azul2)">›</b></div>
@@ -478,7 +480,7 @@ body.consulta #bnav .solo-completo{display:none}
   </section>
   <!-- v76: Administración › Limpieza (la app Sasha Limpieza, ahora dentro de Sasha). Solo con tu PIN. -->
   <section id="admin" class="oculto">
-    <div class="seg" style="margin-top:0" id="admsec"><button class="on" data-s="limpieza">Limpieza</button><button data-s="conta">Contabilidad</button><button data-s="cajeras" style="display:none">Cajeras</button></div>
+    <div class="seg" style="margin-top:0" id="admsec"><button class="on" data-s="limpieza">Limpieza</button><button data-s="conta">Administración</button><button data-s="cajeras" style="display:none">Cajeras</button></div>
     <div id="a-limpieza">
     <div class="seg" style="margin-top:0" id="lsub"><button class="on" data-s="nuevo">Nuevo recibo</button><button data-s="registro">Registro</button><button data-s="config">Configuración</button></div>
     <div id="l-nuevo">
@@ -549,7 +551,7 @@ body.consulta #bnav .solo-completo{display:none}
     </div>
   </section>
 </main>
-<div id="bnav"><button data-b="inicio" class="on solo-completo"><b>⌂</b>Inicio</button><button data-b="resumen"><b>↗</b>Ventas</button><button data-b="caja" class="solo-completo"><b>$</b>Caja y plata</button><button data-b="productos"><b>▦</b>Compras</button><button data-b="mas" class="solo-completo"><b>≡</b>Más</button></div>
+<div id="bnav"><button data-b="inicio" class="on solo-completo"><b>⌂</b>Inicio</button><button data-b="resumen"><b>↗</b>Ventas</button><button data-b="caja" class="solo-completo"><b>$</b>Caja y plata</button><button data-b="productos"><b>▦</b>Compras</button><button data-b="mas" class="solo-completo"><b>≡</b>Más</button><button data-b="admin" class="solo-consulta"><b>$</b>Gastos</button></div>
 </div>
 
 <script>
@@ -563,7 +565,7 @@ function esConsulta(){return CFG.modo==='consulta'||/[?&]consulta\b/.test(locati
 // v61: ícono propio de la versión de consulta (flor naranja sobre blanco). Se elige al agregarla a la pantalla de inicio.
 function aplicarIconos(){var c=esConsulta()||/[?&]consulta\b/.test(location.search),p=c?'consulta-':'';var s=function(id,h){var e=$(id);if(e&&e.getAttribute('href')!==h)e.setAttribute('href',h)};s('ltouch',p+'apple-touch-icon.png');s('lfav',p+'icon-192.png');s('lmanif',c?'manifest-consulta.webmanifest':'manifest.webmanifest');var t=$('mtema');if(t)t.setAttribute('content',c?'#F49820':'#1f3a5f')}
 try{document.addEventListener('DOMContentLoaded',function(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta())})}catch(e){}
-function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&['ajustes','admin','inicio','caja','mas'].some(function(t){return !$(t).classList.contains('oculto')}))irA('resumen')}
+function aplicarModo(){aplicarIconos();document.body.classList.toggle('consulta',esConsulta());if(esConsulta()&&['ajustes','inicio','caja','mas'].some(function(t){return !$(t).classList.contains('oculto')}))irA('resumen');else if(esConsulta()&&!$('admin').classList.contains('oculto'))irA('admin')}
 function jsonp(url){
   return new Promise(function(ok,mal){
     var nombre='echu_cb_'+Date.now()+'_'+Math.floor(Math.random()*1e6);
@@ -699,7 +701,7 @@ document.querySelectorAll('nav button').forEach(function(b){b.onclick=function()
 }});
 // v107: botones de abajo. Ventas = Resumen; Compras = Productos y Simular; Más = Contabilidad, Limpieza y Ajustes.
 var BNAV_DE={inicio:'inicio',resumen:'resumen',caja:'caja',productos:'productos',simulador:'productos',mas:'mas',admin:'mas',ajustes:'mas'};
-function marcarBnav(tab){var k=BNAV_DE[tab]||tab;document.querySelectorAll('#bnav button').forEach(function(x){x.classList.toggle('on',x.dataset.b===k)})}
+function marcarBnav(tab){var k=esConsulta()&&tab==='admin'?'admin':(BNAV_DE[tab]||tab);document.querySelectorAll('#bnav button').forEach(function(x){x.classList.toggle('on',x.dataset.b===k)})}
 document.querySelectorAll('#bnav button').forEach(function(b){b.onclick=function(){
   var t=b.dataset.b;
   if(t==='productos'){var u='productos';try{u=localStorage.getItem('sasha_compras')||'productos'}catch(e){}t=u==='simulador'?'simulador':'productos'}
@@ -3410,7 +3412,7 @@ $('limpbtn').onclick=function(){
   lPost('limpieza_importar',{datos:t}).then(function(r){LMP.recs=null;$('limptxt').value='';$('limpmsg').innerHTML='<span class="pos">Listo: se trajeron '+r.importados+' recibos'+(r.total>r.importados?' (los otros '+(r.total-r.importados)+' ya estaban)':'')+'.</span>'})
     .catch(function(e){$('limpmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 };
-document.querySelector('nav button[data-tab="admin"]').addEventListener('click',function(){if(esConsulta()){irA('resumen');return}var s='conta';try{s=localStorage.getItem('sasha_admsec')||'conta'}catch(e){}if(s==='cajeras')s='conta';admSec(s)});
+document.querySelector('nav button[data-tab="admin"]').addEventListener('click',function(){if(esConsulta()){$('a-limpieza').classList.add('oculto');$('a-cajeras').classList.add('oculto');$('a-conta').classList.remove('oculto');contaSub('gas');return}var s='conta';try{s=localStorage.getItem('sasha_admsec')||'conta'}catch(e){}if(s==='cajeras')s='conta';admSec(s)});
 /* ---------------- v77: ADMINISTRACIÓN › CONTABILIDAD (1ª parte: IVA, facturas, cierres Z y remitos) ---------------- */
 var CT={per:'',mes:null,seg:'compras',form:null,foto:'',mime:'',hash:'',cargando:false};
 var CTIPOS={factura:'Factura',nota_credito:'Nota de crédito',nota_debito:'Nota de débito',remito:'Remito',cierre_z:'Cierre Z',otro:'Otro'};
@@ -3431,7 +3433,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=194');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=195');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -4444,6 +4446,7 @@ function gPintar(){
     h+='<div class="cmp" style="margin-top:8px;cursor:default"><div class="t" style="cursor:pointer" onclick="GA.abierto=GA.abierto===\''+c.k+'\'?\'\':\''+c.k+'\';gPintar()"><b>'+c.n+'</b><b>'+monto+' <span class="rk">'+(abierto?'▲':'▼')+'</span></b></div>'+
       (abierto?gEditor(c.k):'<div class="s">'+esc(sub||'sin cargar')+'</div>')+'</div>';
   });
+  if(esConsulta()){$('c-gas').innerHTML=h+'<div class="note">Solo para ver: los cambios se hacen con el PIN completo.</div>';return}
   h+='<div class="btns"><button class="btn sec" onclick="gNuevo()">+ Otro gasto</button></div><div id="gnuevo"></div>'+
     // v140: gasto con factura (foto o factura electrónica en PDF)
     '<div class="card" style="margin-top:8px"><h2>Cargar la factura de un gasto</h2><div class="note" style="margin-top:0">Luz, agua, alarma, internet… El importe de la factura pasa a ser el del mes y su vencimiento cuenta para la plata.</div>'+
@@ -4521,7 +4524,7 @@ function gFacListo(){var r=GA.fac.listo;GA.fac=null;
 }
 function gEditor(k){
   var d=GA.D,h='<div style="margin-top:6px">';
-  if(k==='pv'){d.pct.forEach(function(x,i){h+='<div class="gr"><span>'+esc(x.label)+'</span><input data-gp="'+i+'" inputmode="decimal" value="'+(x.pct?String(Math.round(x.pct*1000)/10).replace('.',','):'')+'" placeholder="0 %"></div>'})}
+  if(k==='pv'){d.pct.forEach(function(x,i){h+='<div class="gr"><span>'+esc(x.label)+'</span><input data-gp="'+i+'"'+(esConsulta()?' readonly':'')+' inputmode="decimal" value="'+(x.pct?String(Math.round(x.pct*1000)/10).replace('.',','):'')+'" placeholder="0 %"></div>'})}
   else{
     // v98: monto y aumento (%): escribís uno y se calcula el otro. El % es contra el mes anterior.
     h+='<div class="gr2"><span class="mini">Gasto</span><span class="mini" style="text-align:right">Monto</span><span class="mini" style="text-align:right">Aumento</span></div>';
@@ -4531,22 +4534,25 @@ function gEditor(k){
     // v188: con ECHU 6.90, el gasto y su desglose en orden, con sangría; las sumas se ven pero no se editan.
     if(arbol&&(f.formula||f.total)){h+='<div class="gr2" style="padding-left:'+(f.nivel*14)+'px"><span><b>'+esc(f.label)+'</b>'+(f.nivel===0?gCatSel(f):'')+'</span><b style="text-align:right">'+pesos(Number(f.valor)||0)+'</b><span class="mini" style="text-align:right">suma</span></div>';return}
     if(!arbol&&f.total)return;
-    var a=f.auto,ro=a&&f.autoOn,ant=Number(f.antes)>0?Number(f.antes):0,v=f.valor===''?0:Number(f.valor)||0;
+    var a=f.auto,ro=a&&f.autoOn||esConsulta(),ant=Number(f.antes)>0?Number(f.antes):0,v=f.valor===''?0:Number(f.valor)||0;
     var pc=ant&&v?Math.round((v/ant-1)*1000)/10:null;
     h+='<div class="gr2"'+(arbol&&f.nivel?' style="padding-left:'+(f.nivel*14)+'px"':'')+'><span>'+(!arbol&&f.grupo?'<span class="rk">'+esc(f.grupo)+' › </span>':'')+esc(f.label)+(arbol&&f.nivel===0?gCatSel(f):'')+(a?' <span class="chip c" style="font-size:11px">de '+a.fuente+'</span>':'')+
       (ant?'<br><span class="mini">'+(d.mesAnterior?LMESES[Number(d.mesAnterior.slice(5,7))-1].toLowerCase():'mes anterior')+': '+pesos(ant)+'</span>':'')+
-      (a?'<br><button class="lnk" style="font-size:12px" onclick="gAuto('+i+','+(!f.autoOn)+')">'+(f.autoOn?'cargarlo a mano':'que se complete solo')+'</button>':'')+'</span>'+
-      '<input data-gf="'+i+'" inputmode="decimal" value="'+(f.valor===''?'':cNum(f.valor))+'" placeholder="$ 0"'+(ro?' readonly title="'+esc(a.detalle)+'"':' oninput="gDeMonto('+i+')"')+'>'+
+      (a&&!esConsulta()?'<br><button class="lnk" style="font-size:12px" onclick="gAuto('+i+','+(!f.autoOn)+')">'+(f.autoOn?'cargarlo a mano':'que se complete solo')+'</button>':'')+
+      // v195: "¿Pagado este mes?" también desde la app (lo mismo que la casilla de ADMINISTRACION).
+      (f.pagable?'<br><label class="mini" style="display:inline-flex;gap:6px;align-items:center;margin-top:2px"><input type="checkbox" style="width:auto;margin:0" data-gpag="'+i+'"'+(f.pagado?' checked':'')+(esConsulta()?' disabled':' onchange="gPagado('+i+',this)"')+'> '+(f.pagado?'<b class="pos">pagado este mes</b>':'pagado este mes')+(f.dia?' · vence el '+f.dia:'')+'</label>':'')+'</span>'+
+      '<input data-gf="'+i+'" inputmode="decimal" value="'+(f.valor===''?'':cNum(f.valor))+'" placeholder="$ 0"'+(ro?' readonly'+(a?' title="'+esc(a.detalle)+'"':''):' oninput="gDeMonto('+i+')"')+'>'+
       '<input data-ga="'+i+'" inputmode="decimal" value="'+(pc===null||pc===0?'':String(pc).replace('.',','))+'" placeholder="%"'+(ro?' readonly':' oninput="gDePct('+i+')"')+'></div>';
-    if(ro)h+='<div class="note" style="margin:0 0 4px">'+esc(a.detalle)+'</div>';
+    if(ro&&a)h+='<div class="note" style="margin:0 0 4px">'+esc(a.detalle)+'</div>';
     });
-    h+='<div class="note" style="margin-top:4px">Poné el aumento en % y el monto se calcula solo, o al revés.</div>';
+    if(!esConsulta())h+='<div class="note" style="margin-top:4px">Poné el aumento en % y el monto se calcula solo, o al revés.</div>';
   }
+  if(esConsulta())return h+'</div>';
   return h+'<div class="btns"><button class="btn" onclick="gGuardar(this)">Guardar</button></div><div class="note" id="gmsg"></div></div>';
 }
 // v98: aumento de cada gasto, en los dos sentidos (base: el mes anterior; si no hay, lo que estaba cargado).
 // v188: cambiar la categoría de un gasto (queda guardada en ECHU; su desglose se mueve con él).
-function gCatSel(f){var L=GA.D.categorias||[];if(!L.length)return '';
+function gCatSel(f){var L=GA.D.categorias||[];if(!L.length||esConsulta())return '';
   return '<br><select class="mini" style="width:auto;padding:2px 4px;margin-top:2px" aria-label="Categoría de '+esc(f.label)+'" onchange="gMoverCat(this,'+JSON.stringify(f.label).replace(/"/g,'&quot;')+')">'+L.map(function(c){return '<option value="'+c.k+'"'+(c.k===f.cat?' selected':'')+'>'+esc(c.n)+'</option>'}).join('')+'</select>'}
 function gMoverCat(sel,label){var o={};o[label]=sel.value;sel.disabled=true;
   lPost('gastos_guardar',{datos:JSON.stringify({categorias:o})}).then(function(r){GA.D=r;GA.abierto=sel.value;gPintar()}).catch(function(e){sel.disabled=false;alert(e.message)})}
@@ -4566,7 +4572,7 @@ function gInflacion(){
     var d='';if(I!==null){var df=v-I,bien=menosEsMejor?df<=0:df>=0;d='<b class="'+(bien?'pos':'neg')+'"><span class="dif">'+(Math.abs(df)<0.0005?'= inflación':(df>0?'▲ ':'▼ ')+String((Math.abs(df)*100).toFixed(1)).replace('.',',')+(df>0?' sobre la inflación':' debajo'))+'</span></b>'}
     return '<div class="cmpx"><span>'+n+'</span><span><b>'+gPct1(v)+'</b>'+d+'</span></div>'};
   var h='<div class="card" style="margin-top:8px"><h2>Inflación de '+nom.toLowerCase()+(r.enCurso?' (en curso)':'')+'</h2>'+
-    '<div class="ifl-in"><span style="flex:1;color:var(--gris)">Inflación general (INDEC)</span><input id="gi_v" inputmode="decimal" placeholder="—" value="'+(I===null?'':String(Math.round(I*1000)/10).replace('.',','))+'"><b>%</b><button class="btn" id="gi_ok" onclick="gGuardarInf(this)">Guardar</button></div>'+
+    '<div class="ifl-in"><span style="flex:1;color:var(--gris)">Inflación general (INDEC)</span><input id="gi_v" inputmode="decimal" placeholder="—"'+(esConsulta()?' readonly':'')+' value="'+(I===null?'':String(Math.round(I*1000)/10).replace('.',','))+'"><b>%</b>'+(esConsulta()?'':'<button class="btn" id="gi_ok" onclick="gGuardarInf(this)">Guardar</button>')+'</div>'+
     fila('Tus precios de venta',r.precios,false)+fila('Tus costos de mercadería',r.costos,true)+fila('Tus gastos fijos',r.gastos,true)+
     (r.enCurso?'':'<div class="cmpx"><span>Ventas sin inflación</span>'+(r.ventasReales===null?'<span class="rk" style="margin:0">'+(I===null?'cargá la inflación':'sin datos')+'</span>':'<b class="'+(r.ventasReales>=0?'pos':'neg')+'">'+gPct1(r.ventasReales)+'</b>')+'</div>')+
     (r.texto?'<div class="note">'+esc(r.texto)+'</div>':'')+
@@ -4590,6 +4596,9 @@ function gGuardar(b){
   if(!valores.length&&!pc.length){$('gmsg').textContent='No cambiaste nada.';return}
   b.disabled=true;b.textContent='Guardando…';
   lPost('gastos_guardar',{datos:JSON.stringify({valores:valores,pct:pc})}).then(function(r){GA.D=r;gPintar()}).catch(function(e){b.disabled=false;b.textContent='Guardar';$('gmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
+}
+function gPagado(i,el){var f=GA.D.filas[i];el.disabled=true;
+  lPost('gasto_pagado',{datos:JSON.stringify({fila:f.fila,label:f.label,pagado:el.checked})}).then(function(r){GA.D=r;INI=null;gPintar()}).catch(function(e){el.disabled=false;el.checked=!el.checked;alert(e.message)});
 }
 function gAuto(i,on){
   var f=GA.D.filas[i],o={};o[f.label]=on;

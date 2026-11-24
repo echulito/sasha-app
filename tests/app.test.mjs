@@ -278,19 +278,73 @@ test('recorre todas las pestañas sin errores ni bloqueos de seguridad', async (
   await ctx.close();
 });
 
-test('versión de consulta: es la misma app (Resumen, Productos y Simular) sin Administración ni Ajustes', async () => {
+test('versión de consulta: es la misma app (Resumen, Productos y Simular) sin Ajustes; de Administración ve solo Gastos (v195)', async () => {
   const {ctx, page, echu, errores} = await abrir({consulta: true, ruta: '?consulta'});
   await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
   assert.equal(await page.evaluate(() => document.body.classList.contains('consulta')), true);
   const visibles = await page.$$eval('#bnav button', bs => bs.filter(b => b.offsetParent).map(b => b.dataset.b));
-  assert.deepEqual(visibles, ['resumen', 'productos']);
-  for (const t of visibles) { await page.click('#bnav button[data-b="' + t + '"]'); await page.waitForTimeout(300); }
+  assert.deepEqual(visibles, ['resumen', 'productos', 'admin']);
+  for (const t of visibles.filter(x => x !== 'admin')) { await page.click('#bnav button[data-b="' + t + '"]'); await page.waitForTimeout(300); }
   await page.click('#productos .bcomp button[data-t="simulador"]'); await page.waitForTimeout(300);
   // Con el PIN de consulta no se pide el Inicio (muestra plata y cajas).
   assert.ok(!echu.pedidos.some(p => /"accion":"inicio"|accion=inicio/.test((p.cuerpo || '') + p.url)));
   assert.ok(echu.pedidos.every(p => p.metodo !== 'POST' || /[?&]h=/.test(p.url)));
   assert.deepEqual(errores, []);
   await ctx.close();
+});
+
+test('v195: con el PIN de consulta se ven los gastos de Administración, sin poder cambiar nada', async () => {
+  const antes = DATOS.gastos_datos;
+  DATOS.gastos_datos = Object.assign({}, antes, {filas: [{fila: 61, label: 'Alquiler', nivel: 0, valor: 1481000, cat: 'alq', col: 2, pagable: true, pagado: false, dia: 9},
+    {fila: 62, label: 'Agua - AySA', nivel: 0, valor: 45022, cat: 'srv', col: 2, pagable: true, pagado: true, dia: 10}],
+    categorias: [{k: 'alq', n: 'Alquiler'}, {k: 'srv', n: 'Servicios (luz, agua, internet)'}]});
+  const {ctx, page, echu, errores} = await abrir({consulta: true, ruta: '?consulta'});
+  try {
+    await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+    await page.click('#bnav button[data-b="admin"]');
+    await page.locator('#c-gas .cmp').first().waitFor();
+    assert.equal(await page.locator('#bnav button[data-b="admin"]').getAttribute('class'), 'solo-consulta on');
+    assert.equal(await page.locator('#admsec').isVisible(), false, 'ni Limpieza ni las otras partes');
+    assert.equal(await page.locator('#csub').isVisible(), false);
+    await page.waitForTimeout(500);
+    await page.locator('#c-gas .cmp > .t', {hasText: 'Servicios'}).click();
+    await page.waitForTimeout(300);
+    await page.locator('#c-gas [data-gpag]').first().waitFor();
+    const t = await page.locator('#c-gas').innerText();
+    assert.match(t, /Agua - AySA/); assert.match(t, /pagado este mes\s*·\s*vence el 10/); assert.match(t, /Solo para ver/);
+    assert.equal(await page.locator('#c-gas [data-gpag]').first().isDisabled(), true);
+    assert.equal(await page.locator('#c-gas button', {hasText: 'Guardar'}).count(), 0);
+    assert.equal(await page.locator('#c-gas [data-gf]:not([readonly])').count(), 0);
+    assert.equal(await page.locator('#gfcam').count(), 0, 'no se cargan facturas');
+    assert.ok(!echu.pedidos.some(p => /gastos_guardar|gasto_pagado/.test(p.cuerpo || '')));
+    assert.deepEqual(errores, []);
+  } finally { DATOS.gastos_datos = antes; await ctx.close(); }
+});
+
+test('v195: "¿Pagado este mes?" se tilda desde Gastos y Más dice Administración', async () => {
+  const antes = DATOS.gastos_datos, pedidos = [];
+  const datos = Object.assign({}, antes, {filas: [{fila: 62, label: 'Agua - AySA', nivel: 0, valor: 45022, cat: 'srv', col: 2, pagable: true, pagado: false, dia: 10},
+    {fila: 63, label: 'Marketing', nivel: 0, valor: 5000, cat: 'srv', col: 2}], categorias: [{k: 'srv', n: 'Servicios (luz, agua, internet)'}]});
+  DATOS.gastos_datos = datos;
+  DATOS.gasto_pagado = p => { const d = JSON.parse(p.datos); pedidos.push(d); datos.filas[0] = Object.assign({}, datos.filas[0], {pagado: d.pagado}); return datos; };
+  const {ctx, page, errores} = await abrir();
+  try {
+    await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+    await page.click('#bnav button[data-b="mas"]');
+    assert.match(await page.locator('#mas [data-ir="conta"]').innerText(), /^Administración/);
+    await page.click('#mas [data-ir="conta"]');
+    assert.equal(await page.locator('#admsec button[data-s="conta"]').innerText(), 'Administración');
+    await page.click('#csub button[data-s="gas"]'); await page.locator('#c-gas .cmp').first().waitFor();
+    await page.locator('#c-gas .cmp > .t', {hasText: 'Servicios'}).click();
+    assert.equal(await page.locator('#c-gas [data-gpag]').count(), 1, 'solo los que tienen vencimiento');
+    await page.locator('#c-gas [data-gpag]').check();
+    await page.locator('#c-gas label b.pos', {hasText: 'pagado este mes'}).waitFor();
+    assert.deepEqual(pedidos, [{fila: 62, label: 'Agua - AySA', pagado: true}]);
+    await page.locator('#c-gas [data-gpag]').uncheck();
+    await page.waitForFunction(() => !document.querySelector('#c-gas label b.pos'));
+    assert.deepEqual(pedidos[1], {fila: 62, label: 'Agua - AySA', pagado: false});
+    assert.deepEqual(errores, []);
+  } finally { DATOS.gastos_datos = antes; delete DATOS.gasto_pagado; await ctx.close(); }
 });
 
 test('link de cajeras: abre sin errores', async () => {
