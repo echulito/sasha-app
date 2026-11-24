@@ -215,6 +215,8 @@ test('gastos v188: cada gasto en su categoría (el desglose con su gasto), total
     await irAGastos(page);
     const t = await page.locator('#c-gas').innerText();
     assert.match(t, /Sueldos y cargas sociales\s*\$ 3\.000/, 'solo el primer nivel: 3.000 (no 3.000 + 2.000 + 1.500…)');
+    // v199: el total arriba de todo, antes del desglose
+    assert.match(t, /Total de gastos fijos del mes\s*\$ [\d.]+[\s\S]*Sueldos y cargas sociales/i);
     assert.match(t, /Seguridad y seguros\s*\$ 154/);
     assert.doesNotMatch(t, /Marketing y venta online/, 'las categorías sin gastos no aparecen');
     await page.locator('#c-gas .cmp', {hasText: 'Sueldos y cargas sociales'}).locator('.t').click();
