@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=189;
+var APP_V=190;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -3408,7 +3408,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=189');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=190');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -4448,7 +4448,7 @@ function gFacArchivo(input){
 }
 function gFacForm(){
   var r=GA.fac.r,c=r.comprobante||{},gs=r.gastos||[],sel=r.sugerido||'';
-  var ops='<option value="">Elegí el gasto…</option>'+gs.map(function(g){return '<option value="'+esc(g.label)+'"'+(g.label===sel?' selected':'')+'>'+esc(g.label)+(g.valor?' · hoy '+pesos(g.valor):'')+'</option>'}).join('')+'<option value="__nuevo">+ Gasto nuevo…</option>';
+  var ops='<option value="">Elegí el gasto…</option>'+gs.map(function(g,i){return '<option value="'+esc(g.label)+'" data-i="'+i+'"'+(g.label===sel?' selected':'')+'>'+esc(g.label)+(g.grupo?' ('+esc(g.grupo)+')':'')+(g.valor?' · hoy '+pesos(g.valor):'')+'</option>'}).join('')+'<option value="__nuevo">+ Gasto nuevo…</option>';
   $('gfac').innerHTML=(r.aviso?'<div class="note warn">'+esc(r.aviso)+'</div>':'')+
     '<div class="rk" style="margin-top:8px">'+(GA.fac.mime==='application/pdf'?'📄 ':'📷 ')+'<b>'+esc(c.nombre||'Proveedor sin leer')+'</b>'+(c.cuit?' · CUIT '+cuitTextoJS(c.cuit):'')+(c.periodoFacturado?' · '+esc(c.periodoFacturado):'')+'</div>'+
     '<label>Va al gasto</label><select id="gf_gasto">'+ops+'</select><div id="gf_nuevo" class="oculto"><label>Nombre del gasto nuevo</label><input id="gf_nom" placeholder="Ej.: Alarma"></div>'+
@@ -4457,7 +4457,7 @@ function gFacForm(){
     '<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="gf_iva" style="width:auto"'+(c.cuit&&['B','C','X'].indexOf(c.letra)<0?' checked':'')+'> Cargarla también en IVA Compras (para la contadora)</label>'+(['B','C'].indexOf(c.letra)>=0?'<div class="note">Es factura '+esc(c.letra)+': no da crédito de IVA, no hace falta mandarla a la contadora.</div>':'')+
     '<div class="btns"><button class="btn" id="gf_ok">Guardar</button><button class="btn sec" onclick="GA.fac=null;$(\'gfac\').innerHTML=\'\'">Cancelar</button></div><div class="note" id="gf_msg"></div>';
   pesosEnVivo($('gf_monto'));
-  var dif=function(){var g=$('gf_gasto').value,m=parsePesos($('gf_monto').value),x=gs.filter(function(y){return y.label===g})[0];
+  var dif=function(){var g=$('gf_gasto').value,m=parsePesos($('gf_monto').value),op=$('gf_gasto').selectedOptions[0],x=op&&op.dataset.i!=null?gs[Number(op.dataset.i)]:null;
     $('gf_nuevo').classList.toggle('oculto',g!=='__nuevo');
     $('gf_dif').innerHTML=x&&x.valor&&m?(Math.abs(m-x.valor)<1?'Igual que el mes que tenías cargado.':'Tenías '+pesos(x.valor)+' → pasa a '+pesos(m)+' <b class="'+(m>x.valor?'neg':'pos')+'">('+(m>x.valor?'+':'')+pct(m/x.valor-1)+')</b>. Se aplica en el mes.'):''};
   $('gf_gasto').onchange=dif;$('gf_monto').addEventListener('input',dif);dif();
@@ -4466,7 +4466,8 @@ function gFacForm(){
     if(!(m>0)){$('gf_msg').innerHTML='<span class="neg">Poné el importe.</span>';return}
     if(!v){$('gf_msg').innerHTML='<span class="neg">Poné cuándo vence.</span>';return}
     b.disabled=true;b.textContent='Guardando…';
-    var datos={gasto:g==='__nuevo'?'':g,nuevo:g==='__nuevo'?nom:'',monto:m,vence:v,iva:$('gf_iva').checked,comprobante:Object.assign({},c,{total:m,hash:GA.fac.hash||''})};
+    var op=$('gf_gasto').selectedOptions[0],gi=op&&op.dataset.i!=null?gs[Number(op.dataset.i)]:null;
+    var datos={gasto:g==='__nuevo'?'':g,fila:gi&&gi.fila||'',nuevo:g==='__nuevo'?nom:'',monto:m,vence:v,iva:$('gf_iva').checked,comprobante:Object.assign({},c,{total:m,hash:GA.fac.hash||''})};
     lPost('gastos_factura_guardar',{datos:JSON.stringify(datos),imagen:$('gf_iva').checked?GA.fac.data:'',mime:GA.fac.mime}).then(function(r2){
       GA.fac={listo:r2};GA.D=r2.gastos;INI=null;try{cargarInicio()}catch(e){}gPintar();
     }).catch(function(e){b.disabled=false;b.textContent='Guardar';$('gf_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'})};
