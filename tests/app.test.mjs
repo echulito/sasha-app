@@ -1388,6 +1388,38 @@ test('v174: bajar solo algunos reportes; la lista muestra solo lo pedido', async
   } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_crear_orden: antes.c}); }
 });
 
+test('v202: desde Gastos se paga un gasto con la fecha y el comprobante; las sumas muestran el aumento contra el mes anterior', async () => {
+  const antes = {h: DATOS.pagos_historial, r: DATOS.pago_registrar, g: DATOS.gastos_datos};
+  const enviados = [];
+  DATOS.gastos_datos = Object.assign({}, antes.g, {filas: [{fila: 62, label: 'Agua - AySA', nivel: 0, valor: 45022, cat: 'srv', col: 2, pagable: true, pagado: false, dia: 10},
+    {fila: 70, label: 'Seguridad', nivel: 0, valor: 154435, cat: 'srv', col: 0, total: true, formula: true, antes: 118418}, {fila: 71, label: 'Medina', nivel: 1, valor: 80000, cat: 'srv', col: 3}],
+    categorias: [{k: 'srv', n: 'Servicios (luz, agua, internet)'}]});
+  DATOS.pagos_historial = {gastos: [{label: 'Agua - AySA', monto: 45022, dia: 10, medio: 'MERCADO PAGO', pagado: false}], medios: ['EFECTIVO', 'MERCADO PAGO', 'TRANSFERENCIA', 'DÉBITO AUTOMÁTICO', 'OTRO'], pagos: []};
+  DATOS.pago_registrar = p => { const d = JSON.parse(p.datos); enviados.push({d, mime: p.mime, archivo: p.archivo});
+    return {gasto: d.gasto, monto: d.monto, antes: 45022, aumento: '', aplicado: false, tildado: true, comprobante: 'https://drive.google.com/file/d/PRUEBA/view', historial: DATOS.pagos_historial}; };
+  const {ctx, page, errores} = await abrir();
+  try {
+    await irAGastos(page);
+    await page.locator('#c-gas .cmp > .t', {hasText: 'Servicios'}).click();
+    assert.match(await page.locator('#c-gas .cmp', {hasText: 'Servicios'}).innerText(), /Seguridad[\s\S]*\$ 154\.435\s*\+30,4%/);
+    await page.click('#c-gas button:has-text("Pagar: fecha y comprobante")');
+    await page.locator('#c-gas #pg_gasto').waitFor();
+    assert.equal(await page.inputValue('#pg_gasto'), 'Agua - AySA');
+    await page.fill('#pg_fecha', '2026-11-20');
+    await page.setInputFiles('#pg_adj', {name: 'comprobante.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF\n')});
+    await page.locator('#pg_arch', {hasText: 'comprobante.pdf'}).waitFor();
+    await page.click('#pg_ok');
+    await page.locator('#c-gas', {hasText: 'Listo: Agua - AySA $ 45.022 pagado.'}).waitFor();
+    assert.equal(enviados.length, 1);
+    assert.deepEqual([enviados[0].d.gasto, enviados[0].d.fecha, enviados[0].d.monto], ['Agua - AySA', '2026-11-20', 45022]);
+    assert.equal(await page.locator('#c-gas [data-gpag]').isChecked(), true, 'queda tildado como pagado');
+    assert.deepEqual(errores, []);
+  } finally {
+    await ctx.close();
+    for (const [k, v] of [['pagos_historial', antes.h], ['pago_registrar', antes.r], ['gastos_datos', antes.g]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
+  }
+});
+
 test('v169: pagar un gasto desde la app con el comprobante (foto o PDF) y anotar el aumento', async () => {
   const antes = {h: DATOS.pagos_historial, r: DATOS.pago_registrar};
   const enviados = [];

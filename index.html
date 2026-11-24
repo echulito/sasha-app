@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=201;
+var APP_V=202;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -849,13 +849,15 @@ function pgPintar(){
       '<div class="btns"><button class="btn sec" id="pg_nuevo">+ Cargar un pago</button><button class="btn sec" id="pg_ver">Ver pagos hechos</button></div><div id="pgform"></div><div id="pghist"></div></div>';
     $('pg_nuevo').onclick=function(){pgAbrir('')};$('pg_ver').onclick=function(){PG.hist=!PG.hist;pgHist()};}
 }
-function pgAbrir(nombre){
-  pgPintar();var box=$('pgform');PG.form={gasto:nombre,archivo:null};PG.listo=null;
+// v202: el mismo formulario también se abre adentro de Gastos (box).
+function pgBox(){return PG.box&&document.body.contains(PG.box)?PG.box:$('pgform')}
+function pgAbrir(nombre,donde){
+  PG.box=donde||null;if(!donde)pgPintar();var box=pgBox();PG.form={gasto:nombre,archivo:null};PG.listo=null;
   box.innerHTML='<div class="cargando">Cargando los gastos…</div>';box.scrollIntoView({behavior:'smooth',block:'center'});
   (PG.D?Promise.resolve(PG.D):pgCargar()).then(pgForm).catch(function(e){box.innerHTML=err(e)});
 }
 function pgForm(){
-  var box=$('pgform'),gs=(PG.D&&PG.D.gastos)||[],sel=PG.form.gasto,g0=gs.filter(function(g){return g.label===sel})[0];
+  var box=pgBox(),gs=(PG.D&&PG.D.gastos)||[],sel=PG.form.gasto,g0=gs.filter(function(g){return g.label===sel})[0];
   var hoy=new Date(),f=hoy.getFullYear()+'-'+('0'+(hoy.getMonth()+1)).slice(-2)+'-'+('0'+hoy.getDate()).slice(-2);
   var medios=(PG.D&&PG.D.medios)||['EFECTIVO','MERCADO PAGO','TRANSFERENCIA','DÉBITO AUTOMÁTICO','OTRO'];
   var med0=g0&&g0.medio==='EFECTIVO'?'EFECTIVO':g0&&g0.medio==='MERCADO PAGO'?'MERCADO PAGO':'';
@@ -875,7 +877,7 @@ function pgForm(){
   $('pg_gasto').onchange=function(){var g=gs.filter(function(y){return y.label===$('pg_gasto').value})[0];if(g&&g.monto)$('pg_monto').value='$ '+cNum(g.monto);if(g&&(g.medio==='EFECTIVO'||g.medio==='MERCADO PAGO'))$('pg_medio').value=g.medio;dif()};
   $('pg_monto').addEventListener('input',dif);dif();
   $('pg_cam').onchange=function(){pgArchivo(this)};$('pg_adj').onchange=function(){pgArchivo(this)};
-  $('pg_no').onclick=function(){PG.form=null;$('pgform').innerHTML=''};
+  $('pg_no').onclick=function(){PG.form=null;pgBox().innerHTML=''};
   $('pg_ok').onclick=pgGuardar;
 }
 function pgArchivo(input){
@@ -901,7 +903,8 @@ function pgGuardar(){
   b.disabled=true;msg.innerHTML='<div class="note">Guardando'+(PG.form.archivo?' y subiendo el comprobante':'')+'…</div>';
   lPost('pago_registrar',{datos:JSON.stringify(datos),archivo:PG.form.archivo?PG.form.archivo.data:'',mime:PG.form.archivo?PG.form.archivo.mime:''}).then(function(r){
     PG.D=Object.assign({},PG.D||{},r.historial||{});PG.form=null;
-    $('pgform').innerHTML='<div class="card" style="margin-top:8px"><b class="pos">Listo: '+esc(r.gasto)+' '+pesos(r.monto)+' pagado.</b>'+
+    if(PG.box&&GA.D)GA.D.filas.forEach(function(x,j){if(x.label===r.gasto&&r.tildado){x.pagado=true;var c=document.querySelector('#c-gas [data-gpag="'+j+'"]');if(c)c.checked=true}});INI=null;
+    pgBox().innerHTML='<div class="card" style="margin-top:8px"><b class="pos">Listo: '+esc(r.gasto)+' '+pesos(r.monto)+' pagado.</b>'+
       (r.aumento?'<div class="note">Figuraba '+pesos(r.antes)+' ('+esc(r.aumento)+')'+(r.aplicado?': quedó como el importe nuevo del gasto.':'.')+'</div>':'')+
       '<div class="note">'+(r.tildado?'Tildado como pagado este mes. ':'')+(r.comprobante?'<a href="'+esc(r.comprobante)+'" target="_blank" rel="noopener">Ver el comprobante en Drive</a>':'Sin comprobante.')+'</div></div>';
     INI=null;try{cargarInicio()}catch(e){}if(PG.hist)pgHist();
@@ -3434,7 +3437,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=201');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=202');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -4590,7 +4593,7 @@ function gEditor(k){
     // v188: con ECHU 6.90, el gasto y su desglose en orden, con sangría; las sumas se ven pero no se editan.
     var flecha=kids[i]?'<span class="rk" style="display:inline-block;width:14px">'+(GA.exp[f.fila]?'▾':'▸')+'</span>':'';
     var abrir=kids[i]?' style="cursor:pointer" onclick="if(!/SELECT|OPTION|INPUT|BUTTON|LABEL/.test(event.target.tagName))gDesglose('+f.fila+')" title="Tocá para ver el desglose"':'';
-    if(arbol&&(f.formula||f.total)){h+='<div class="gr2" style="padding-left:'+(f.nivel*14)+'px"><span'+abrir+'>'+flecha+'<b>'+esc(f.label)+'</b>'+(kids[i]&&!GA.exp[f.fila]?' <span class="mini">ver desglose</span>':'')+'</span><b style="text-align:right'+(kids[i]?';cursor:pointer" onclick="gDesglose('+f.fila+')':'')+'">'+pesos(Number(f.valor)||0)+'</b><span class="mini" style="text-align:right">suma</span></div>';return}
+    if(arbol&&(f.formula||f.total)){h+='<div class="gr2" style="padding-left:'+(f.nivel*14)+'px"><span'+abrir+'>'+flecha+'<b>'+esc(f.label)+'</b>'+(kids[i]&&!GA.exp[f.fila]?' <span class="mini">ver desglose</span>':'')+'</span><b style="text-align:right'+(kids[i]?';cursor:pointer" onclick="gDesglose('+f.fila+')':'')+'">'+pesos(Number(f.valor)||0)+'</b>'+gSumaPct(f)+'</div>';return}
     if(!arbol&&f.total)return;
     var a=f.auto,ro=a&&f.autoOn,ant=Number(f.antes)>0?Number(f.antes):0,v=f.valor===''?0:Number(f.valor)||0;
     var pc=ant&&v?Math.round((v/ant-1)*1000)/10:null;
@@ -4598,10 +4601,11 @@ function gEditor(k){
       (ant?'<br><span class="mini">'+(d.mesAnterior?LMESES[Number(d.mesAnterior.slice(5,7))-1].toLowerCase():'mes anterior')+': '+pesos(ant)+'</span>':'')+
       (a&&!esConsulta()?'<br><button class="lnk" style="font-size:12px" onclick="gAuto('+i+','+(!f.autoOn)+')">'+(f.autoOn?'cargarlo a mano':'que se complete solo')+'</button>':'')+
       // v195: "¿Pagado este mes?" también desde la app (lo mismo que la casilla de ADMINISTRACION).
-      gPend('monto',f.label,f.fila)+(f.pagable?'<br><label class="mini" style="display:inline-flex;gap:6px;align-items:center;margin-top:2px"><input type="checkbox" style="width:auto;margin:0" data-gpag="'+i+'"'+(f.pagado?' checked':'')+(esConsulta()?' disabled':' onchange="gPagado('+i+',this)"')+'> '+(f.pagado?'<b class="pos">pagado este mes</b>':'pagado este mes')+(f.dia?' · vence el '+f.dia:'')+'</label>':'')+'</span>'+
+      gPend('monto',f.label,f.fila)+(!esConsulta()&&!f.formula&&!f.total&&f.cat!=='sue'&&Number(f.valor)>0?'<br><button class="lnk" style="font-size:12px" onclick="gPagar('+i+')">💳 Pagar: fecha y comprobante</button>':'')+(f.pagable?'<br><label class="mini" style="display:inline-flex;gap:6px;align-items:center;margin-top:2px"><input type="checkbox" style="width:auto;margin:0" data-gpag="'+i+'"'+(f.pagado?' checked':'')+(esConsulta()?' disabled':' onchange="gPagado('+i+',this)"')+'> '+(f.pagado?'<b class="pos">pagado este mes</b>':'pagado este mes')+(f.dia?' · vence el '+f.dia:'')+'</label>':'')+'</span>'+
       '<input data-gf="'+i+'" inputmode="decimal" value="'+(f.valor===''?'':cNum(f.valor))+'" placeholder="$ 0"'+(ro?' readonly'+(a?' title="'+esc(a.detalle)+'"':''):' oninput="gDeMonto('+i+')"')+'>'+
       '<input data-ga="'+i+'" inputmode="decimal" value="'+(pc===null||pc===0?'':String(pc).replace('.',','))+'" placeholder="%"'+(ro?' readonly':' oninput="gDePct('+i+')"')+'></div>';
     if(ro&&a)h+='<div class="note" style="margin:0 0 4px">'+esc(a.detalle)+'</div>';
+    h+='<div id="gpg'+i+'"></div>';
     });
     h+='<div class="note" style="margin-top:4px">Poné el aumento en % y el monto se calcula solo, o al revés.</div>';
   }
@@ -4611,6 +4615,9 @@ function gEditor(k){
 }
 // v98: aumento de cada gasto, en los dos sentidos (base: el mes anterior; si no hay, lo que estaba cargado).
 // v188: cambiar la categoría de un gasto (queda guardada en ECHU; su desglose se mueve con él).
+function gSumaPct(f){var a=Number(f.antes)||0,v=Number(f.valor)||0;if(!(a>0&&v>0)||Math.abs(v/a-1)<0.0005)return '<span class="mini" style="text-align:right">suma</span>';
+  var p=v/a-1;return '<span class="mini '+(p>0?'neg':'pos')+'" style="text-align:right" title="contra el mes anterior ('+pesos(a)+')">'+gPct1(p)+'</span>'}
+function gPagar(i){var f=GA.D.filas[i];document.querySelectorAll('#c-gas [id^="gpg"]').forEach(function(x){x.innerHTML=''});pgAbrir(f.label,$('gpg'+i))}
 function gDesglose(fila){GA.exp=GA.exp||{};GA.exp[fila]=!GA.exp[fila];gPintar()}
 function gCatSel(f){var L=GA.D.categorias||[];if(!L.length||esConsulta())return '';
   return '<br><select class="mini" style="width:auto;padding:2px 4px;margin-top:2px" aria-label="Categoría de '+esc(f.label)+'" onchange="gMoverCat(this,'+JSON.stringify(f.label).replace(/"/g,'&quot;')+')">'+L.map(function(c){return '<option value="'+c.k+'"'+(c.k===f.cat?' selected':'')+'>'+esc(c.n)+'</option>'}).join('')+'</select>'}
