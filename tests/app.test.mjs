@@ -306,32 +306,60 @@ test('versión de consulta: es la misma app (Resumen, Productos y Simular) sin A
   await ctx.close();
 });
 
-test('v195: con el PIN de consulta se ven los gastos de Administración, sin poder cambiar nada', async () => {
-  const antes = DATOS.gastos_datos;
-  DATOS.gastos_datos = Object.assign({}, antes, {filas: [{fila: 61, label: 'Alquiler', nivel: 0, valor: 1481000, cat: 'alq', col: 2, pagable: true, pagado: false, dia: 9},
+test('v197: la app de consultas ve los gastos y pide cambios de importes: quedan pendientes de aprobación y se aprueban desde la app con el PIN completo', async () => {
+  const antes = DATOS.gastos_datos, pedidos = [];
+  const datos = Object.assign({}, antes, {filas: [{fila: 61, label: 'Alquiler', nivel: 0, valor: 1481000, cat: 'alq', col: 2, pagable: true, pagado: false, dia: 9},
     {fila: 62, label: 'Agua - AySA', nivel: 0, valor: 45022, cat: 'srv', col: 2, pagable: true, pagado: true, dia: 10}],
-    categorias: [{k: 'alq', n: 'Alquiler'}, {k: 'srv', n: 'Servicios (luz, agua, internet)'}]});
+    categorias: [{k: 'alq', n: 'Alquiler'}, {k: 'srv', n: 'Servicios (luz, agua, internet)'}], solicitudes: []});
+  DATOS.gastos_datos = datos;
+  DATOS.gastos_solicitar = p => { const d = JSON.parse(p.datos); pedidos.push(d);
+    datos.solicitudes = [{id: 'S1', fecha: '2026-11-24 17:40', estado: 'pendiente', desde: 'consulta', nota: '', cambios: d.valores.map(v => ({tipo: 'monto', fila: v.fila, label: v.label, antes: 45022, valor: v.valor}))}];
+    return datos; };
   const {ctx, page, echu, errores} = await abrir({consulta: true, ruta: '?consulta'});
   try {
     await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
     await page.click('#bnav button[data-b="admin"]');
     await page.locator('#c-gas .cmp').first().waitFor();
+    await page.waitForTimeout(300);
     assert.equal(await page.locator('#bnav button[data-b="admin"]').getAttribute('class'), 'solo-consulta on');
     assert.equal(await page.locator('#admsec').isVisible(), false, 'ni Limpieza ni las otras partes');
     assert.equal(await page.locator('#csub').isVisible(), false);
-    await page.waitForTimeout(500);
     await page.locator('#c-gas .cmp > .t', {hasText: 'Servicios'}).click();
-    await page.waitForTimeout(300);
     await page.locator('#c-gas [data-gpag]').first().waitFor();
     const t = await page.locator('#c-gas').innerText();
-    assert.match(t, /Agua - AySA/); assert.match(t, /pagado este mes\s*·\s*vence el 10/); assert.match(t, /Solo para ver/);
-    assert.equal(await page.locator('#c-gas [data-gpag]').first().isDisabled(), true);
-    assert.equal(await page.locator('#c-gas button', {hasText: 'Guardar'}).count(), 0);
-    assert.equal(await page.locator('#c-gas [data-gf]:not([readonly])').count(), 0);
+    assert.match(t, /Agua - AySA/); assert.match(t, /pagado este mes\s*·\s*vence el 10/);
+    assert.equal(await page.locator('#c-gas [data-gpag]').first().isDisabled(), true, 'el pagado no lo cambia');
+    assert.equal(await page.locator('#c-gas button', {hasText: /^Guardar$/}).count(), 0);
     assert.equal(await page.locator('#gfcam').count(), 0, 'no se cargan facturas');
-    assert.ok(!echu.pedidos.some(p => /gastos_guardar|gasto_pagado/.test(p.cuerpo || '')));
+    await page.locator('#c-gas [data-gf]').first().fill('50.000');
+    await page.click('#c-gas button:has-text("Pedir el cambio")');
+    await page.locator('#c-gas', {hasText: /Tus pedidos de cambio/i}).waitFor();
+    assert.deepEqual(pedidos, [{valores: [{fila: 62, label: 'Agua - AySA', valor: 50000}], pct: []}]);
+    const t2 = await page.locator('#c-gas').innerText();
+    assert.match(t2, /Tus pedidos de cambio[\s\S]*pendiente de aprobación[\s\S]*Agua - AySA: \$ 45\.022 → \$ 50\.000/i);
+    assert.ok(!echu.pedidos.some(p => /gastos_guardar|gasto_pagado|gastos_solicitud"/.test(p.cuerpo || '')));
     assert.deepEqual(errores, []);
-  } finally { DATOS.gastos_datos = antes; await ctx.close(); }
+  } finally { DATOS.gastos_datos = antes; delete DATOS.gastos_solicitar; await ctx.close(); }
+});
+
+test('v197: el pedido de la app de consultas se aprueba (o rechaza) desde Gastos', async () => {
+  const antes = DATOS.gastos_datos, resueltos = [];
+  const datos = Object.assign({}, antes, {filas: [{fila: 62, label: 'Agua - AySA', nivel: 0, valor: 45022, cat: 'srv', col: 2}], categorias: [{k: 'srv', n: 'Servicios (luz, agua, internet)'}],
+    solicitudes: [{id: 'S1', fecha: '2026-11-24 17:40', estado: 'pendiente', desde: 'consulta', nota: 'vino la factura', cambios: [{tipo: 'monto', fila: 62, label: 'Agua - AySA', antes: 45022, valor: 50000}]}]});
+  DATOS.gastos_datos = datos;
+  DATOS.gastos_solicitud = p => { const d = JSON.parse(p.datos); resueltos.push(d); datos.solicitudes = [Object.assign({}, datos.solicitudes[0], {estado: 'aprobado'})]; datos.filas[0] = Object.assign({}, datos.filas[0], {valor: 50000}); return datos; };
+  const {ctx, page, errores} = await abrir();
+  try {
+    await irAGastos(page);
+    const t = await page.locator('#c-gas').innerText();
+    assert.match(t, /Cambios pedidos desde la app de consultas[\s\S]*Agua - AySA: \$ 45\.022 → \$ 50\.000[\s\S]*vino la factura/i);
+    await page.locator('#c-gas .cmp > .t', {hasText: 'Servicios'}).click();
+    assert.match(await page.locator('#c-gas .cmp', {hasText: 'Servicios'}).innerText(), /pendiente de aprobación: \$ 50\.000/);
+    await page.click('#c-gas button:has-text("Aprobar")');
+    await page.waitForFunction(() => !/Cambios pedidos desde/i.test(document.getElementById('c-gas').innerText));
+    assert.deepEqual(resueltos, [{id: 'S1', aprobar: true}]);
+    assert.deepEqual(errores, []);
+  } finally { DATOS.gastos_datos = antes; delete DATOS.gastos_solicitud; await ctx.close(); }
 });
 
 test('v195: "¿Pagado este mes?" se tilda desde Gastos y Más dice Administración', async () => {

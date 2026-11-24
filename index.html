@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=196;
+var APP_V=197;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -757,7 +757,7 @@ function iniDatosAlDia(){
   return '<div class="idat"><i style="background:'+col+'"></i>'+esc(txt)+'</div>';
 }
 function iniBoton(a){
-  var t={caja:['Resolver',''],pagos:['Ver pagos','sec'],pedido:['Armar pedido','sec'],tareas:['Ver tareas','sec'],costos:['Cambiar precios','']}[a.ir]||['Ver','sec'];
+  var t={caja:['Resolver',''],pagos:['Ver pagos','sec'],pedido:['Armar pedido','sec'],tareas:['Ver tareas','sec'],costos:['Cambiar precios',''],gastos:['Ver y aprobar','']}[a.ir]||['Ver','sec'];
   return '<button class="btn '+t[1]+'" data-ir="'+esc(a.ir)+'">'+t[0]+'</button>';
 }
 function pintarInicio(){
@@ -806,6 +806,7 @@ function iniIr(ir){
   if(ir==='pedido'){try{localStorage.setItem('sasha_compras','simulador')}catch(e){}irA('simulador');var b=document.querySelector('#simmodo button[data-m="ped"]');if(b)b.click();return}
   if(ir==='contadora'){irA('admin');admSec('conta');contaSub('cdor');return}
   if(ir==='sueldos'){irA('admin');admSec('conta');contaSub('sue');return}
+  if(ir==='gastos'){irA('admin');admSec('conta');contaSub('gas');return}
   if(ir==='tareas'){if(INI&&INI.tareasUrl)window.open(INI.tareasUrl,'_blank','noopener');return}
   // v170: los cambios de costo los carga el agente en Civil (Más › Agentes automáticos › Cambiar precios).
   if(ir==='costos'){irA('mas');agAbrir();setTimeout(function(){var c=$('agcostos');if(c&&c.scrollIntoView)c.scrollIntoView({block:'start'})},60);return}
@@ -3433,7 +3434,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=196');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=197');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -4416,7 +4417,7 @@ function gCat(f){
 function gCuenta(f){return f.nivel===undefined?!f.total:f.nivel===0}
 function gCargar(){return api('gastos_datos').then(function(d){GA.D=d;gPintar()}).catch(function(e){$('c-gas').innerHTML=err(e)})}
 function gPintar(){
-  var d=GA.D,R=d.resultado,u=d.ultimo,h='';
+  var d=GA.D,R=d.resultado,u=d.ultimo,h=esConsulta()?'':gSolicitudes();
   // B: el resultado
   if(u){var gano=u.ganancia>=0;
     h+='<div class="card"><h2>'+cMesTxt(u.mes)+'</h2><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700">'+(gano?'Ganaste':'Perdiste')+'</span><b style="font-size:26px" class="'+(gano?'pos':'neg')+'">'+pesos(Math.abs(u.ganancia))+'</b></div>'+
@@ -4446,7 +4447,7 @@ function gPintar(){
     h+='<div class="cmp" style="margin-top:8px;cursor:default"><div class="t" style="cursor:pointer" onclick="GA.abierto=GA.abierto===\''+c.k+'\'?\'\':\''+c.k+'\';gPintar()"><b>'+c.n+'</b><b>'+monto+' <span class="rk">'+(abierto?'▲':'▼')+'</span></b></div>'+
       (abierto?gEditor(c.k):'<div class="s">'+esc(sub||'sin cargar')+'</div>')+'</div>';
   });
-  if(esConsulta()){$('c-gas').innerHTML=h+'<div class="note">Solo para ver: los cambios se hacen con el PIN completo.</div>';return}
+  if(esConsulta()){$('c-gas').innerHTML=h+gSolicitudes();return}
   h+='<div class="btns"><button class="btn sec" onclick="gNuevo()">+ Otro gasto</button></div><div id="gnuevo"></div>'+
     // v140: gasto con factura (foto o factura electrónica en PDF)
     '<div class="card" style="margin-top:8px"><h2>Cargar la factura de un gasto</h2><div class="note" style="margin-top:0">Luz, agua, alarma, internet… El importe de la factura pasa a ser el del mes y su vencimiento cuenta para la plata.</div>'+
@@ -4524,7 +4525,7 @@ function gFacListo(){var r=GA.fac.listo;GA.fac=null;
 }
 function gEditor(k){
   var d=GA.D,h='<div style="margin-top:6px">';
-  if(k==='pv'){d.pct.forEach(function(x,i){h+='<div class="gr"><span>'+esc(x.label)+'</span><input data-gp="'+i+'"'+(esConsulta()?' readonly':'')+' inputmode="decimal" value="'+(x.pct?String(Math.round(x.pct*1000)/10).replace('.',','):'')+'" placeholder="0 %"></div>'})}
+  if(k==='pv'){d.pct.forEach(function(x,i){h+='<div class="gr"><span>'+esc(x.label)+gPend('pct',x.label)+'</span><input data-gp="'+i+'" inputmode="decimal" value="'+(x.pct?String(Math.round(x.pct*1000)/10).replace('.',','):'')+'" placeholder="0 %"></div>'})}
   else{
     // v98: monto y aumento (%): escribís uno y se calcula el otro. El % es contra el mes anterior.
     h+='<div class="gr2"><span class="mini">Gasto</span><span class="mini" style="text-align:right">Monto</span><span class="mini" style="text-align:right">Aumento</span></div>';
@@ -4541,20 +4542,21 @@ function gEditor(k){
     var abrir=kids[i]?' style="cursor:pointer" onclick="if(!/SELECT|OPTION|INPUT|BUTTON|LABEL/.test(event.target.tagName))gDesglose('+f.fila+')" title="Tocá para ver el desglose"':'';
     if(arbol&&(f.formula||f.total)){h+='<div class="gr2" style="padding-left:'+(f.nivel*14)+'px"><span'+abrir+'>'+flecha+'<b>'+esc(f.label)+'</b>'+(kids[i]&&!GA.exp[f.fila]?' <span class="mini">ver desglose</span>':'')+(f.nivel===0?gCatSel(f):'')+'</span><b style="text-align:right'+(kids[i]?';cursor:pointer" onclick="gDesglose('+f.fila+')':'')+'">'+pesos(Number(f.valor)||0)+'</b><span class="mini" style="text-align:right">suma</span></div>';return}
     if(!arbol&&f.total)return;
-    var a=f.auto,ro=a&&f.autoOn||esConsulta(),ant=Number(f.antes)>0?Number(f.antes):0,v=f.valor===''?0:Number(f.valor)||0;
+    var a=f.auto,ro=a&&f.autoOn,ant=Number(f.antes)>0?Number(f.antes):0,v=f.valor===''?0:Number(f.valor)||0;
     var pc=ant&&v?Math.round((v/ant-1)*1000)/10:null;
     h+='<div class="gr2"'+(arbol&&f.nivel?' style="padding-left:'+(f.nivel*14)+'px"':'')+'><span'+abrir+'>'+flecha+(!arbol&&f.grupo?'<span class="rk">'+esc(f.grupo)+' › </span>':'')+esc(f.label)+(arbol&&f.nivel===0?gCatSel(f):'')+(a?' <span class="chip c" style="font-size:11px">de '+a.fuente+'</span>':'')+
       (ant?'<br><span class="mini">'+(d.mesAnterior?LMESES[Number(d.mesAnterior.slice(5,7))-1].toLowerCase():'mes anterior')+': '+pesos(ant)+'</span>':'')+
       (a&&!esConsulta()?'<br><button class="lnk" style="font-size:12px" onclick="gAuto('+i+','+(!f.autoOn)+')">'+(f.autoOn?'cargarlo a mano':'que se complete solo')+'</button>':'')+
       // v195: "¿Pagado este mes?" también desde la app (lo mismo que la casilla de ADMINISTRACION).
-      (f.pagable?'<br><label class="mini" style="display:inline-flex;gap:6px;align-items:center;margin-top:2px"><input type="checkbox" style="width:auto;margin:0" data-gpag="'+i+'"'+(f.pagado?' checked':'')+(esConsulta()?' disabled':' onchange="gPagado('+i+',this)"')+'> '+(f.pagado?'<b class="pos">pagado este mes</b>':'pagado este mes')+(f.dia?' · vence el '+f.dia:'')+'</label>':'')+'</span>'+
+      gPend('monto',f.label,f.fila)+(f.pagable?'<br><label class="mini" style="display:inline-flex;gap:6px;align-items:center;margin-top:2px"><input type="checkbox" style="width:auto;margin:0" data-gpag="'+i+'"'+(f.pagado?' checked':'')+(esConsulta()?' disabled':' onchange="gPagado('+i+',this)"')+'> '+(f.pagado?'<b class="pos">pagado este mes</b>':'pagado este mes')+(f.dia?' · vence el '+f.dia:'')+'</label>':'')+'</span>'+
       '<input data-gf="'+i+'" inputmode="decimal" value="'+(f.valor===''?'':cNum(f.valor))+'" placeholder="$ 0"'+(ro?' readonly'+(a?' title="'+esc(a.detalle)+'"':''):' oninput="gDeMonto('+i+')"')+'>'+
       '<input data-ga="'+i+'" inputmode="decimal" value="'+(pc===null||pc===0?'':String(pc).replace('.',','))+'" placeholder="%"'+(ro?' readonly':' oninput="gDePct('+i+')"')+'></div>';
     if(ro&&a)h+='<div class="note" style="margin:0 0 4px">'+esc(a.detalle)+'</div>';
     });
-    if(!esConsulta())h+='<div class="note" style="margin-top:4px">Poné el aumento en % y el monto se calcula solo, o al revés.</div>';
+    h+='<div class="note" style="margin-top:4px">Poné el aumento en % y el monto se calcula solo, o al revés.</div>';
   }
-  if(esConsulta())return h+'</div>';
+  // v197: con el PIN de consulta los importes no se guardan: se pide el cambio y queda pendiente de aprobación.
+  if(esConsulta())return h+'<div class="btns"><button class="btn" onclick="gSolicitar(this)">Pedir el cambio</button></div><div class="note" id="gmsg">Queda pendiente de aprobación: se cambia cuando lo aprueben.</div></div>';
   return h+'<div class="btns"><button class="btn" onclick="gGuardar(this)">Guardar</button></div><div class="note" id="gmsg"></div></div>';
 }
 // v98: aumento de cada gasto, en los dos sentidos (base: el mes anterior; si no hay, lo que estaba cargado).
@@ -4596,6 +4598,37 @@ function gGuardarInf(b){
   var t=$('gi_v').value.trim(),v=t===''?'':Math.round(gPctTxt(t)*100)/10000;
   b.disabled=true;b.textContent='…';
   lPost('gastos_guardar',{datos:JSON.stringify({inflacion:{mes:GA.mesInf,valor:v}})}).then(function(r){GA.D=r;gPintar()}).catch(function(e){b.disabled=false;b.textContent='Guardar';alert(e.message)});
+}
+// v197: los cambios pedidos desde la app de consultas (pendientes, aprobados o rechazados).
+function gPendientes(){return (GA.D.solicitudes||[]).filter(function(x){return x.estado==='pendiente'})}
+function gPend(tipo,label,fila){var v=null;gPendientes().forEach(function(s){s.cambios.forEach(function(c){if(c.tipo===tipo&&c.label===label&&(fila==null||c.fila===fila))v=c})});
+  if(!v)return '';return '<br><span class="chip a" style="font-size:11px">pendiente de aprobación: '+(tipo==='pct'?pct(v.valor):(v.valor===''?'vacío':pesos(v.valor)))+'</span>'}
+function gCambioTxt(c){return '<b>'+esc(c.label)+'</b>: '+(c.tipo==='pct'?pct(c.antes)+' → '+pct(c.valor):(c.antes===''?'vacío':pesos(c.antes))+' → '+(c.valor===''?'vacío':pesos(c.valor)))}
+function gSolicitudes(){
+  var L=GA.D.solicitudes||[],con=esConsulta();
+  if(!con)L=L.filter(function(x){return x.estado==='pendiente'});
+  if(!L.length)return '';
+  var est={pendiente:['a','pendiente de aprobación'],aprobado:['v','aprobado'],rechazado:['r','rechazado']};
+  return '<div class="card" style="margin-bottom:8px"><h2>'+(con?'Tus pedidos de cambio':'Cambios pedidos desde la app de consultas')+'</h2>'+L.slice(0,con?8:20).map(function(x){var e=est[x.estado]||['a',x.estado];
+    return '<div class="rowb" style="display:block;padding:6px 0;border-bottom:1px solid #eee"><div style="display:flex;justify-content:space-between;gap:8px"><span class="rk" style="margin:0">'+esc(x.fecha.slice(8,10)+'/'+x.fecha.slice(5,7)+' '+x.fecha.slice(11))+'</span><span class="chip '+e[0]+'">'+e[1]+'</span></div>'+
+      x.cambios.map(function(c){return '<div>'+gCambioTxt(c)+'</div>'}).join('')+(x.nota?'<div class="rk" style="margin:0">'+esc(x.nota)+'</div>':'')+
+      (!con&&x.estado==='pendiente'?'<div class="btns"><button class="btn" onclick="gResolver(\''+x.id+'\',true,this)">Aprobar</button><button class="btn sec" onclick="gResolver(\''+x.id+'\',false,this)">Rechazar</button></div>':'')+'</div>'}).join('')+
+    (con?'':'<div class="note">Si lo aprobás, se cambia en ADMINISTRACION igual que si lo guardaras vos.</div>')+'</div>';
+}
+function gResolver(id,ok,b){b.disabled=true;
+  api('gastos_solicitud',{datos:JSON.stringify({id:id,aprobar:ok})}).then(function(r){GA.D=r;INI=null;gPintar()}).catch(function(e){b.disabled=false;alert(e.message)});
+}
+function gCambios(){
+  var d=GA.D,valores=[],pc=[];
+  document.querySelectorAll('#c-gas [data-gf]').forEach(function(i){if(i.readOnly)return;var f=d.filas[Number(i.dataset.gf)],v=i.value.trim()===''?'':parsePesos(i.value);if(String(v)!==String(f.valor))valores.push({fila:f.fila,label:f.label,valor:v})});
+  document.querySelectorAll('#c-gas [data-gp]').forEach(function(i){var x=d.pct[Number(i.dataset.gp)],v=parsePesos(i.value)/100;if(Math.abs(v-x.pct)>1e-6)pc.push({label:x.label,pct:v})});
+  return {valores:valores,pct:pc};
+}
+function gSolicitar(b){
+  var c=gCambios();if(!c.valores.length&&!c.pct.length){$('gmsg').textContent='No cambiaste nada.';return}
+  b.disabled=true;b.textContent='Enviando…';
+  api('gastos_solicitar',{datos:JSON.stringify(c)}).then(function(r){GA.D=r;gPintar();var m=$('c-gas');if(m)m.scrollIntoView({behavior:'smooth',block:'start'})})
+    .catch(function(e){b.disabled=false;b.textContent='Pedir el cambio';$('gmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
 function gGuardar(b){
   var d=GA.D,valores=[],pc=[];
