@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=193;
+var APP_V=194;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -3431,7 +3431,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=193');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=194');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -4485,7 +4485,9 @@ function gFacForm(){
     '<label>Va al gasto</label><select id="gf_gasto">'+ops+'</select><div id="gf_nuevo" class="oculto"><label>Nombre del gasto nuevo</label><input id="gf_nom" placeholder="Ej.: Alarma"></div>'+
     '<div class="g2"><div><label>Importe (1er vencimiento)</label><input id="gf_monto" data-pesos inputmode="decimal" value="'+(c.total?'$ '+cNum(c.total):'')+'"></div><div><label>Vence</label><input id="gf_vence" type="date" value="'+esc(c.vencimiento||'')+'"></div></div>'+
     // v193: el 2do vencimiento (con recargo) aparte; el mes en que se aplica (por defecto el del vencimiento) y el código para pagar.
-    (c.importe2?'<div class="rk">2do vencimiento'+(c.vencimiento2?' ('+esc(c.vencimiento2.split('-').reverse().join('/'))+')':'')+': '+pesos(c.importe2)+' con recargo. Se carga el del 1ro.</div>':'')+
+    // v194: el 2do vencimiento se guarda: si pasa el 1ro sin pagar, ECHU cambia solo al importe y la fecha del 2do.
+    '<div class="g2"><div><label>2do vencimiento (con recargo)</label><input id="gf_m2" data-pesos inputmode="decimal" value="'+(c.importe2?'$ '+cNum(c.importe2):'')+'" placeholder="Opcional"></div><div><label>Vence el 2do</label><input id="gf_v2" type="date" value="'+esc(c.vencimiento2||'')+'"></div></div>'+
+    '<div class="rk">Se carga el del 1ro. Si pasa el 1er vencimiento y no está pagado, cambia solo al 2do.</div>'+
     '<label>Se aplica en el mes</label><select id="gf_mes">'+gMesesOp(c.mes||(c.vencimiento||'').slice(0,7))+'</select>'+
     '<div class="g2"><div style="grid-column:1/-1"><label>Código para pagar (el número debajo del código de barras)</label><input id="gf_cod" inputmode="numeric" value="'+esc(c.codigoPago||'')+'" placeholder="Opcional: sirve para Pagar ahora con Mercado Pago"></div></div>'+
     '<div class="note" id="gf_dif"></div>'+
@@ -4504,7 +4506,7 @@ function gFacForm(){
     if(!v){$('gf_msg').innerHTML='<span class="neg">Poné cuándo vence.</span>';return}
     b.disabled=true;b.textContent='Guardando…';
     var op=$('gf_gasto').selectedOptions[0],gi=op&&op.dataset.i!=null?gs[Number(op.dataset.i)]:null;
-    var datos={gasto:g==='__nuevo'?'':g,fila:gi&&gi.fila||'',nuevo:g==='__nuevo'?nom:'',monto:m,vence:v,mes:$('gf_mes').value,codigoPago:$('gf_cod').value.replace(/\D/g,''),iva:$('gf_iva').checked,comprobante:Object.assign({},c,{total:m,hash:GA.fac.hash||''})};
+    var datos={gasto:g==='__nuevo'?'':g,fila:gi&&gi.fila||'',nuevo:g==='__nuevo'?nom:'',monto:m,vence:v,mes:$('gf_mes').value,codigoPago:$('gf_cod').value.replace(/\D/g,''),importe2:parsePesos($('gf_m2').value)||0,vence2:$('gf_v2').value,iva:$('gf_iva').checked,comprobante:Object.assign({},c,{total:m,hash:GA.fac.hash||''})};
     lPost('gastos_factura_guardar',{datos:JSON.stringify(datos),imagen:$('gf_iva').checked?GA.fac.data:'',mime:GA.fac.mime}).then(function(r2){
       GA.fac={listo:r2};GA.D=r2.gastos;INI=null;try{cargarInicio()}catch(e){}gPintar();
     }).catch(function(e){b.disabled=false;b.textContent='Guardar';$('gf_msg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'})};

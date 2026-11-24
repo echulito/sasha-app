@@ -159,12 +159,15 @@ test('gastos v193: factura de servicio con 1er y 2do vencimiento, mes en que se 
     await page.setInputFiles('#gfadj', {name: 'f.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64')});
     await page.locator('#gf_mes').waitFor();
     assert.equal(await page.inputValue('#gf_monto'), '$ 46.897,39', 'el del 1er vencimiento');
-    assert.match(await page.locator('#gfac').innerText(), /2do vencimiento \(28\/\d\d\/\d{4}\): \$ 48\.105 con recargo/);
+    assert.equal(await page.inputValue('#gf_m2'), '$ 48.104,61', 'v194: el 2do vencimiento se puede corregir y se guarda');
+    assert.match(await page.inputValue('#gf_v2'), /^\d{4}-\d\d-28$/);
+    assert.match(await page.locator('#gfac').innerText(), /Si pasa el 1er vencimiento y no está pagado, cambia solo al 2do/);
     assert.equal(await page.inputValue('#gf_mes'), mm(prox), 'por defecto, el mes del vencimiento');
     assert.equal(await page.inputValue('#gf_cod'), '30411134946946261210000046897392500012072210');
     await page.click('#gf_ok');
     await page.waitForFunction(() => /desde/.test(document.getElementById('gfac').innerText));
     assert.deepEqual([enviados[0].mes, enviados[0].codigoPago, enviados[0].monto], [mm(prox), '30411134946946261210000046897392500012072210', 46897.39]);
+    assert.equal(enviados[0].importe2, 48104.61); assert.match(enviados[0].vence2, /-28$/);
     assert.deepEqual(errores, []);
   } finally { DATOS.gastos_factura_leer = antesL; delete DATOS.gastos_factura_guardar; await ctx.close(); }
 });
