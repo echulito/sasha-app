@@ -239,12 +239,9 @@ test('gastos v188: cada gasto en su categoría (el desglose con su gasto), total
     await page.locator('#c-gas .cmp', {hasText: 'Sueldos y cargas sociales'}).locator('button.btn', {hasText: 'Guardar'}).click();
     await page.waitForTimeout(300);
     assert.deepEqual(guardados[0].valores, [{fila: 51, label: 'Sueldo', valor: 650}], 'el Sueldo de Vanesa, por renglón');
-    // ALSMI pasa a Otros
+    // v198: sin el selector de categoría en cada gasto (confundía)
     await page.locator('#c-gas .cmp > .t', {hasText: 'Impuestos y tasas'}).click();
-    await page.selectOption('#c-gas select[aria-label="Categoría de ALSMI"]', 'otr');
-    await page.locator('#c-gas .cmp > .t', {hasText: 'Otros e imprevistos'}).waitFor();
-    assert.deepEqual(guardados[guardados.length - 1], {categorias: {ALSMI: 'otr'}});
-    assert.equal(await page.locator('#c-gas .cmp > .t', {hasText: 'Impuestos y tasas'}).count(), 0);
+    assert.equal(await page.locator('#c-gas select').count(), 0);
     assert.deepEqual(errores, []);
   } finally { DATOS.gastos_datos = antes; delete DATOS.gastos_guardar; await ctx.close(); }
 });
