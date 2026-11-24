@@ -473,7 +473,7 @@ let DRIVE_ULTIMO=0;
 const LECTOR_V=180,FALLOS_K='cajas_pdf_fallos';
 function fallos(){try{return JSON.parse(localStorage.getItem(FALLOS_K)||'{}')||{};}catch{return {};}}
 function anotarFallo(id){try{const f=fallos();f[id]=LECTOR_V;const k=Object.keys(f);if(k.length>200)delete f[k[0]];localStorage.setItem(FALLOS_K,JSON.stringify(f));}catch{}}
-export async function importarDrive(){if(!online||busy||Date.now()-DRIVE_ULTIMO<300000)return;DRIVE_ULTIMO=Date.now();let lista;try{lista=(await echu('cajas_pdf_nuevos',undefined,{todos:'1'})).archivos||[];}catch{return;}
+export async function importarDrive(){if(busy&&online&&Date.now()-DRIVE_ULTIMO>=300000){setTimeout(importarDrive,1500);return;}if(!online||busy||Date.now()-DRIVE_ULTIMO<300000)return;DRIVE_ULTIMO=Date.now();let lista;try{lista=(await echu('cajas_pdf_nuevos',undefined,{todos:'1'})).archivos||[];}catch{return;}
  const yaFallo=fallos(),cargados=new Set(state.reports.map(r=>r.filename).filter(Boolean));lista=lista.filter(a=>!(a.hecho&&(cargados.has(a.nombre)||yaFallo[a.id]===LECTOR_V)));if(!lista.length)return;
  busy=true;const hechos=[],avisos=[];let nuevos=0;msg('Trayendo '+lista.length+' PDF de Drive…',true);
  try{for(const a of lista){try{const d=await echu('cajas_pdf_bajar',undefined,{id:a.id}),bin=atob(d.data),buf=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
