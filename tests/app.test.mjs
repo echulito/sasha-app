@@ -128,6 +128,25 @@ test('Plata v189: los sueldos van juntos en un renglón con el total y llevan a 
   } finally { DATOS.inicio = antes; await ctx.close(); }
 });
 
+test('gastos v191: si la factura no se pudo leer (sin saldo), se carga igual a mano con la lista de gastos sin sumas ni sueldos', async () => {
+  const antes = DATOS.gastos_datos, antesL = DATOS.gastos_factura_leer;
+  DATOS.gastos_datos = Object.assign({}, antes, {filas: [
+    {fila: 44, label: 'Sueldos', nivel: 0, col: 0, total: true, formula: true, cat: 'sue', valor: 3000}, {fila: 47, label: 'Sueldo', nivel: 1, col: 3, formula: false, cat: 'sue', valor: 1100},
+    {fila: 71, label: 'Seguridad', nivel: 0, col: 0, total: true, formula: true, cat: 'seg', valor: 154}, {fila: 73, label: 'Verisure', nivel: 1, col: 3, formula: false, raiz: 'Seguridad', cat: 'seg', valor: 74},
+    {fila: 66, label: 'Luz - Edenor', nivel: 0, col: 2, formula: false, cat: 'srv', valor: 300}]});
+  DATOS.gastos_factura_leer = () => ({ok: false, error: 'LECTURA', mensaje: 'No se pudo leer: OpenAI se quedó sin saldo. Configurá la clave GRATIS de Gemini. Mientras tanto, cargalo a mano abajo.'});
+  const {ctx, page, errores} = await abrir();
+  try {
+    await irAGastos(page);
+    await page.setInputFiles('#gfadj', {name: 'f.jpg', mimeType: 'image/jpeg', buffer: Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64')});
+    await page.locator('#gf_gasto').waitFor();
+    assert.match(await page.locator('#gfac').innerText(), /OpenAI se quedó sin saldo/);
+    const ops = await page.locator('#gf_gasto option').allInnerTexts();
+    assert.deepEqual(ops.map(o => o.replace(/ · hoy.*/, '')), ['Elegí el gasto…', 'Verisure (Seguridad)', 'Luz - Edenor', '+ Gasto nuevo…']);
+    assert.deepEqual(errores, []);
+  } finally { DATOS.gastos_datos = antes; DATOS.gastos_factura_leer = antesL; await ctx.close(); }
+});
+
 test('gastos v188: cada gasto en su categoría (el desglose con su gasto), totales sin contar dos veces y se cambia la categoría', async () => {
   const antes = DATOS.gastos_datos, guardados = [];
   const F = (fila, label, nivel, valor, cat, o) => Object.assign({fila, label, nivel, valor, cat, col: nivel ? 3 : 2, formula: false, hijos: false, raiz: '', padre: ''}, o || {});

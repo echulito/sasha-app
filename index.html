@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=190;
+var APP_V=191;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -3408,7 +3408,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=190');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=191');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -4443,8 +4443,13 @@ function gFacArchivo(input){
   var t0=Date.now();$('gfac').innerHTML='<div class="note">Leyendo la factura… <b id="gf_seg">0 s</b></div>';$('gfac').scrollIntoView({behavior:'smooth',block:'center'});
   var reloj=setInterval(function(){var e=$('gf_seg');if(!e){clearInterval(reloj);return}e.textContent=Math.round((Date.now()-t0)/1000)+' s'},1000);
   datos.then(function(u){GA.fac.data=u;return lPost('gastos_factura_leer',{imagen:u,mime:GA.fac.mime})}).then(function(r){clearInterval(reloj);
-    GA.fac.r=r&&r.ok?r:{comprobante:{tipo:'factura',lado:'compra'},gastos:(GA.D.filas||[]).filter(function(x){return x.col}).map(function(x){return {label:x.label,valor:Number(x.valor)||0}}),sugerido:'',aviso:(r&&r.mensaje)||'No se pudo leer: completalo a mano.'};gFacForm()})
-    .catch(function(e){clearInterval(reloj);$('gfac').innerHTML='<div class="note neg">'+esc(e.message)+'</div>'});
+    GA.fac.r=r&&r.ok?r:gFacManual((r&&r.mensaje)||'No se pudo leer: completalo a mano.');gFacForm()})
+    // v191: si no se pudo leer (sin saldo, sin conexión…), igual se carga a mano.
+    .catch(function(e){clearInterval(reloj);if(!GA.fac.data){$('gfac').innerHTML='<div class="note neg">'+esc(e.message)+'</div>';return}GA.fac.r=gFacManual(e.message+' Cargala a mano abajo.');gFacForm()});
+}
+function gFacManual(aviso){
+  return {comprobante:{tipo:'factura',lado:'compra'},sugerido:'',aviso:aviso,
+    gastos:(GA.D.filas||[]).filter(function(x){return x.col&&!x.formula&&x.cat!=='sue'}).map(function(x){return {label:x.label,fila:x.fila,valor:Number(x.valor)||0,grupo:x.nivel?(x.raiz||x.grupo||''):(x.grupo||'')}})};
 }
 function gFacForm(){
   var r=GA.fac.r,c=r.comprobante||{},gs=r.gastos||[],sel=r.sugerido||'';
