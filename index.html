@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=200;
+var APP_V=201;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -3434,7 +3434,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=200');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=201');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -4415,9 +4415,55 @@ function gCat(f){
 }
 // v188: con ECHU 6.90 se suma solo el primer nivel (columna B = el TOTAL de la planilla); el desglose es detalle.
 function gCuenta(f){return f.nivel===undefined?!f.total:f.nivel===0}
-function gCargar(){return api('gastos_datos').then(function(d){GA.D=d;gPintar()}).catch(function(e){$('c-gas').innerHTML=err(e)})}
+function gCargar(){GA.mes='';GA.M=null;return api('gastos_datos').then(function(d){GA.D=d;gPintar()}).catch(function(e){$('c-gas').innerHTML=err(e)})}
+// v201: elegir el mes: el en curso (por defecto), los anteriores (se corrigen) o la proyección del que viene.
+function gSumMes(m,n){var y=Number(m.slice(0,4)),k=Number(m.slice(5,7))-1+n;y+=Math.floor(k/12);k=((k%12)+12)%12;return y+'-'+String(k+1).padStart(2,'0')}
+function gSelMes(){var hoy=GA.D.mes,sel=GA.mes||hoy,o=[];
+  for(var i=-12;i<=1;i++){var m=gSumMes(hoy,i);o.push('<option value="'+m+'"'+(m===sel?' selected':'')+'>'+cMesTxt(m)+(i===0?' (en curso)':i===1?' (proyección)':'')+'</option>')}
+  return '<div class="card" style="margin-bottom:8px;display:flex;align-items:center;gap:10px"><b style="white-space:nowrap">Gastos de</b><select id="gmes" onchange="gElegirMes(this.value)" style="flex:1">'+o.reverse().join('')+'</select></div>'}
+function gElegirMes(m){GA.mes=m===GA.D.mes?'':m;GA.M=null;GA.abierto='';if(!GA.mes)return gPintar();
+  $('c-gas').innerHTML=gSelMes()+'<div class="cargando">Cargando '+cMesTxt(m).toLowerCase()+'…</div>';
+  api('gastos_mes',{mes:m}).then(function(r){if(GA.mes!==m)return;GA.M=r;gPintarMes()}).catch(function(e){$('c-gas').innerHTML=gSelMes()+err(e)})}
+function gPintarMes(){
+  var M=GA.M,pro=M.tipo==='proyeccion',CATS=gCats().filter(function(c){return c.k!=='pv'}),h=gSelMes(),tot=0,ant=0;
+  M.filas.forEach(function(f){tot+=Number(f.valor)||0;ant+=Number(f.actual)||0});
+  if(!M.filas.length){$('c-gas').innerHTML=h+'<div class="card"><div class="note" style="margin-top:0">No hay gastos guardados de '+cMesTxt(M.mes).toLowerCase()+'. ECHU guarda los gastos de cada mes desde que se empezó a usar Administración.</div></div>';return}
+  h+='<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>'+(pro?'Gastos fijos proyectados':'Total de gastos fijos')+' de '+cMesTxt(M.mes).toLowerCase()+'</b><b style="font-size:22px;white-space:nowrap">'+pesos(tot)+'</b></div>'+
+    (pro&&ant?'<div class="rowb"><span>Contra este mes ('+pesos(ant)+')</span><b class="'+(tot>ant?'neg':'')+'">'+(tot>ant?'+':'')+pesos(tot-ant)+(ant?' ('+gPct1(tot/ant-1)+')':'')+'</b></div>':'')+
+    '<div class="note" style="margin-top:4px">'+(pro?'Cada gasto sigue igual salvo que tenga un aumento programado o una factura cargada para ese mes. '+(esConsulta()?'':'Tocá «Aumento» para programar cuándo y cuánto aumenta (ej.: alquiler cada 3 meses).'):
+      (esConsulta()?'Lo que quedó guardado de ese mes.':'Lo que quedó guardado de ese mes. Si algo estaba mal, corregilo y tocá Guardar.'))+'</div></div>';
+  CATS.concat([{k:'otr',n:'Otros'}]).filter(function(c,i,a){return a.findIndex(function(z){return z.k===c.k})===i}).forEach(function(c){
+    var fs=M.filas.map(function(f,i){return [f,i]}).filter(function(x){return (x[0].cat||'otr')===c.k});if(!fs.length)return;
+    var st=fs.reduce(function(a,x){return a+(Number(x[0].valor)||0)},0),ab=GA.abierto===c.k;
+    h+='<div class="cmp" style="margin-top:8px;cursor:default"><div class="t" style="cursor:pointer" onclick="GA.abierto=GA.abierto===\''+c.k+'\'?\'\':\''+c.k+'\';gPintarMes()"><b>'+c.n+'</b><b>'+pesos(st)+' <span class="rk">'+(ab?'▲':'▼')+'</span></b></div>';
+    if(!ab){h+='<div class="s">'+esc(fs.map(function(x){return x[0].label}).join(', '))+'</div></div>';return}
+    h+='<div style="margin-top:6px">'+fs.map(function(x){var f=x[0],i=x[1];
+      if(pro)return '<div class="rowb" style="display:block;padding:6px 0"><div style="display:flex;justify-content:space-between;gap:8px"><span>'+esc(f.label)+'</span><b>'+pesos(f.valor)+'</b></div>'+
+        (f.motivo?'<div class="mini neg">'+(f.valor>f.actual?'+'+pesos(f.valor-f.actual)+' · ':'')+esc(f.motivo)+'</div>':'<div class="mini">igual que este mes</div>')+
+        (f.aumentoTxt?'<div class="mini">Aumento: '+esc(f.aumentoTxt)+'</div>':'')+
+        (esConsulta()?'':'<button class="lnk" style="font-size:12px" onclick="gAumForm('+i+')">'+(f.aumento?'Cambiar el aumento':'Aumento')+'</button><div id="gaum'+i+'"></div>')+'</div>';
+      return '<div class="gr2"><span>'+esc(f.label)+'</span>'+(esConsulta()?'<b style="text-align:right">'+pesos(f.valor)+'</b>':'<input data-gm="'+i+'" inputmode="decimal" value="'+cNum(f.valor)+'">')+'<span></span></div>'}).join('')+
+      (!pro&&!esConsulta()?'<div class="btns"><button class="btn" onclick="gGuardarMes(this)">Guardar</button></div><div class="note" id="gmmsg"></div>':'')+'</div></div>';
+  });
+  $('c-gas').innerHTML=h;
+}
+function gGuardarMes(b){var M=GA.M,v=[];
+  document.querySelectorAll('#c-gas [data-gm]').forEach(function(i){var f=M.filas[Number(i.dataset.gm)],x=i.value.trim()===''?'':parsePesos(i.value);if(String(x)!==String(f.valor))v.push({label:f.label,valor:x})});
+  if(!v.length){$('gmmsg').textContent='No cambiaste nada.';return}
+  b.disabled=true;b.textContent='Guardando…';
+  lPost('gastos_mes_guardar',{datos:JSON.stringify({mes:M.mes,valores:v})}).then(function(r){GA.M=r;gPintarMes();var n=$('gmmsg');if(n)n.innerHTML='<span class="pos">Corregido. El resultado de ese mes se recalcula en el próximo Actualizar.</span>'})
+    .catch(function(e){b.disabled=false;b.textContent='Guardar';$('gmmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'})}
+function gAumForm(i){var f=GA.M.filas[i],a=f.aumento||{},cada=a.cada||1;
+  $('gaum'+i).innerHTML='<div class="g2" style="margin-top:6px"><div><label>Aumenta</label><select id="ga_c'+i+'">'+[1,2,3,4,6,12].map(function(n){return '<option value="'+n+'"'+(n===cada?' selected':'')+'>'+(n===1?'todos los meses':'cada '+n+' meses')+'</option>'}).join('')+'</select></div>'+
+    '<div><label>Cuánto (%)</label><input id="ga_p'+i+'" inputmode="decimal" value="'+(a.pct?String(Math.round(a.pct*1000)/10).replace('.',','):'')+'" placeholder="Ej.: 8"></div></div>'+
+    '<label>Próximo aumento</label><input id="ga_d'+i+'" type="month" value="'+(a.desde||GA.M.mes)+'">'+
+    '<div class="btns"><button class="btn" onclick="gAumGuardar('+i+',this)">Guardar</button>'+(f.aumento?'<button class="btn sec" onclick="gAumGuardar('+i+',this,true)">Sin aumento</button>':'')+'</div><div class="note" id="ga_m'+i+'"></div>'}
+function gAumGuardar(i,b,borrar){var f=GA.M.filas[i];b.disabled=true;
+  var d=borrar?{label:f.label,borrar:true,mes:GA.M.mes}:{label:f.label,cada:Number($('ga_c'+i).value),pct:gPctTxt($('ga_p'+i).value),desde:$('ga_d'+i).value,mes:GA.M.mes};
+  lPost('gastos_aumento',{datos:JSON.stringify(d)}).then(function(r){GA.M=r;gPintarMes()}).catch(function(e){b.disabled=false;$('ga_m'+i).innerHTML='<span class="neg">'+esc(e.message)+'</span>'})}
 function gPintar(){
-  var d=GA.D,R=d.resultado,u=d.ultimo,h=esConsulta()?'':gSolicitudes();
+  if(GA.mes&&GA.M){return gPintarMes()}
+  var d=GA.D,R=d.resultado,u=d.ultimo,h=gSelMes()+(esConsulta()?'':gSolicitudes());
   // B: el resultado
   if(u){var gano=u.ganancia>=0;
     h+='<div class="card"><h2>'+cMesTxt(u.mes)+'</h2><div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-weight:700">'+(gano?'Ganaste':'Perdiste')+'</span><b style="font-size:26px" class="'+(gano?'pos':'neg')+'">'+pesos(Math.abs(u.ganancia))+'</b></div>'+

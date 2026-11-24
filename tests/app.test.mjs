@@ -243,7 +243,7 @@ test('gastos v188: cada gasto en su categoría (el desglose con su gasto), total
     assert.deepEqual(guardados[0].valores, [{fila: 51, label: 'Sueldo', valor: 650}], 'el Sueldo de Vanesa, por renglón');
     // v198: sin el selector de categoría en cada gasto (confundía)
     await page.locator('#c-gas .cmp > .t', {hasText: 'Impuestos y tasas'}).click();
-    assert.equal(await page.locator('#c-gas select').count(), 0);
+    assert.equal(await page.locator('#c-gas .cmp select').count(), 0);
     assert.deepEqual(errores, []);
   } finally { DATOS.gastos_datos = antes; delete DATOS.gastos_guardar; await ctx.close(); }
 });
@@ -344,6 +344,44 @@ test('v197: la app de consultas ve los gastos y pide cambios de importes: quedan
     assert.ok(!echu.pedidos.some(p => /gastos_guardar|gasto_pagado|gastos_solicitud"/.test(p.cuerpo || '')));
     assert.deepEqual(errores, []);
   } finally { DATOS.gastos_datos = antes; delete DATOS.gastos_solicitar; await ctx.close(); }
+});
+
+test('v201: Gastos por mes: por defecto el en curso; los anteriores se ven y se corrigen; la proyección del que viene con aumentos programados', async () => {
+  const antes = DATOS.gastos_datos, guardados = [], aumentos = [];
+  DATOS.gastos_datos = Object.assign({}, antes, {mes: '2026-11', filas: [{fila: 61, label: 'Alquiler', nivel: 0, valor: 1481000, cat: 'alq', col: 2}],
+    categorias: [{k: 'alq', n: 'Alquiler'}, {k: 'srv', n: 'Servicios (luz, agua, internet)'}]});
+  const pasado = {mes: '2026-10', tipo: 'pasado', meses: ['2026-09', '2026-10'], filas: [{label: 'Alquiler', valor: 1400000, cat: 'alq'}, {label: 'Luz - Edenor', valor: 280000, cat: 'srv'}]};
+  const proy = r => ({mes: '2026-12', tipo: 'proyeccion', meses: [], filas: [{label: 'Alquiler', cat: 'alq', actual: 1481000, valor: r ? 1599480 : 1481000, motivo: r ? 'aumento programado +8% cada 3 meses' : '',
+    aumento: r || null, aumentoTxt: r ? '+8% cada 3 meses (próximo: dic 2026)' : ''}]});
+  DATOS.gastos_mes = p => p.mes === '2026-10' ? pasado : proy(null);
+  DATOS.gastos_mes_guardar = p => { guardados.push(JSON.parse(p.datos)); return Object.assign({}, pasado, {filas: [pasado.filas[0], Object.assign({}, pasado.filas[1], {valor: 290000})]}); };
+  DATOS.gastos_aumento = p => { const d = JSON.parse(p.datos); aumentos.push(d); return proy({cada: d.cada, pct: d.pct / 100, desde: d.desde}); };
+  const {ctx, page, errores} = await abrir();
+  try {
+    await irAGastos(page);
+    assert.equal(await page.inputValue('#gmes'), '2026-11', 'por defecto el mes en curso');
+    await page.selectOption('#gmes', '2026-10');
+    await page.locator('#c-gas', {hasText: /Total de gastos fijos de octubre 2026/i}).waitFor();
+    assert.match(await page.locator('#c-gas').innerText(), /\$ 1\.680\.000/);
+    await page.locator('#c-gas .cmp > .t', {hasText: 'Servicios'}).click();
+    await page.fill('#c-gas [data-gm="1"]', '290.000');
+    await page.click('#c-gas button:has-text("Guardar")');
+    await page.locator('#gmmsg', {hasText: 'Corregido'}).waitFor();
+    assert.deepEqual(guardados, [{mes: '2026-10', valores: [{label: 'Luz - Edenor', valor: 290000}]}]);
+    await page.selectOption('#gmes', '2026-12');
+    await page.locator('#c-gas', {hasText: /Gastos fijos proyectados de diciembre 2026/i}).waitFor();
+    await page.locator('#c-gas .cmp > .t', {hasText: 'Alquiler'}).click();
+    assert.match(await page.locator('#c-gas').innerText(), /igual que este mes/);
+    await page.click('#c-gas button:has-text("Aumento")');
+    await page.selectOption('#ga_c0', '3'); await page.fill('#ga_p0', '8'); await page.fill('#ga_d0', '2026-12');
+    await page.click('#gaum0 button:has-text("Guardar")');
+    await page.locator('#c-gas', {hasText: 'aumento programado +8% cada 3 meses'}).waitFor();
+    assert.deepEqual(aumentos, [{label: 'Alquiler', cada: 3, pct: 8, desde: '2026-12', mes: '2026-12'}]);
+    assert.match(await page.locator('#c-gas').innerText(), /\$ 1\.599\.480[\s\S]*\+\$ 118\.480 · aumento programado/);
+    await page.selectOption('#gmes', '2026-11');
+    await page.locator('#c-gas', {hasText: /Total de gastos fijos del mes/i}).waitFor();
+    assert.deepEqual(errores, []);
+  } finally { DATOS.gastos_datos = antes; ['gastos_mes', 'gastos_mes_guardar', 'gastos_aumento'].forEach(k => delete DATOS[k]); await ctx.close(); }
 });
 
 test('v197: el pedido de la app de consultas se aprueba (o rechaza) desde Gastos', async () => {
