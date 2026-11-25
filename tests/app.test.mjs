@@ -878,6 +878,9 @@ test('Facturas v185: la letra se elige (A, B o C); una B de compra se carga solo
   // sin letra leída: hay que elegirla
   await page.evaluate(() => { CT.form = {nuevo: true, datos: {tipo: 'factura', letra: '', lado: 'compra', fecha: '2026-11-20', nombre: 'INC SA', total: 86352.01}}; cForm(); });
   assert.equal(await page.inputValue('#cf_letra'), '');
+  // v206: punto de venta a 5 cifras y número a 8 al pasar al campo siguiente
+  await page.fill('#cf_pv', '54'); await page.fill('#cf_num', '1234'); await page.focus('#cf_prov');
+  assert.deepEqual([await page.inputValue('#cf_pv'), await page.inputValue('#cf_num')], ['00054', '00001234']);
   await page.fill('#cf_prov', 'INC SA'); await page.click('#cf_guardar');
   assert.match(await page.locator('#cf_msg').innerText(), /Elegí la letra de la factura/);
   assert.equal(echu.pedidos.filter(x => /conta_guardar/.test(x.cuerpo || '')).length, 0);
