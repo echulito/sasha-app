@@ -78,3 +78,41 @@ test('v180: un PDF ya tomado que no quedó cargado (el lector no podía) se vuel
     DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
   }
 });
+
+test('v207: si el agente sube un cierre mientras se importaba, se vuelve a mirar Drive a los 90 s y entra solo', async () => {
+  const cierre = (vuelco, cajera, ap, ci, t1, t2) => pdfDeLineas(['*** C I E R R E D E C A J A ***', 'Vuelco: ' + vuelco + ' - Miercoles', 'Sucursal: GON-1970 Caja: 0003', 'Cajero/a: ' + cajera,
+    'Fecha Cierre: 25/11/2026 ' + ci, 'Apertura: 25/11/2026 ' + ap, 'Tickets: ' + t1 + ' al ' + t2, 'Cantidad de Operaciones: 12',
+    'Saldo Inicial Efectivo $ 50950.00', 'Saldo Inicial [TC=1.00] 50950.00', 'Ing. x Venta Efectivo $ 114467.00', 'Ing. x Venta [TC=1.00] 114467.00',
+    'Movimientos Efectivo $ 0.00', 'Saldo Final Efectivo $ 165417.00', 'Saldo Final [TC=1.00] 165417.00', 'TOTAL Declarado Efectivo $ 165500.00',
+    'T0TAL Declarado [TC=1.00] 165500.00', 'Diferencia Efectivo $ -83.00', 'Diferencia [TC=1.00] -83.00', 'RETIRO EFECTIVO X CIERRE -120000.00', 'Resto en Caja Efectivo $ 45500.00']);
+  const pdfs = {A: await cierre('2398', 'VANESA', '09:22', '15:32', '00094534', '00094567'), B: await cierre('2399', 'FERNANDA ITA MAIDANA', '15:33', '19:34', '00094568', '00094579')};
+  const antes = {e: DATOS.cajas_estado, n: DATOS.cajas_pdf_nuevos, b: DATOS.cajas_pdf_bajar, h: DATOS.cajas_pdf_hechos};
+  DATOS.cajas_estado = {state: {reports: [], manual: []}, revision: 1, sheetUrl: ''};
+  const lista = [{id: 'A', nombre: 'cierre caja 0003 vuelco 2398 25.11.26.pdf', fecha: '2026-11-25', tam: 3274}];
+  DATOS.cajas_pdf_nuevos = () => ({archivos: lista.slice()});
+  DATOS.cajas_pdf_bajar = p => ({id: p.id, nombre: 'x.pdf', data: pdfs[p.id]});
+  DATOS.cajas_pdf_hechos = p => ({hechos: JSON.parse(p.datos).length});
+  const b = await chromium.launch(), web = await servir();
+  try {
+    const ctx = await b.newContext({viewport: {width: 390, height: 844}, serviceWorkers: 'block', locale: 'es-AR', timezoneId: 'America/Argentina/Buenos_Aires'});
+    const echu = crearECHU(); await ctx.route(URL_ECHU + '**', r => echu.manejar(r));
+    await ctx.addInitScript(([u, t]) => { localStorage.setItem('echu_url', u); localStorage.setItem('echu_token', t); }, [URL_ECHU, TOKEN]);
+    const page = await ctx.newPage(); const errores = []; page.on('pageerror', e => errores.push(e.message));
+    await page.clock.install();
+    await page.goto(web.url + 'cajas/index.html');
+    await page.clock.runFor(3000);
+    await page.waitForFunction(() => /importado de Drive/.test(document.getElementById('message')?.textContent || ''), null, {timeout: 20000});
+    lista.push({id: 'B', nombre: 'cierre caja 0003 vuelco 2399 25.11.26.pdf', fecha: '2026-11-25', tam: 3136});   // llega mientras tanto
+    const tiene = () => echu.pedidos.filter(p => /"accion":"cajas_guardar"/.test(p.cuerpo || '')).map(p => JSON.parse(JSON.parse(p.cuerpo).datos))
+      .some(g => g.state.reports.some(r => r.type === 'turnClose' && r.rows[0].batch === '2399'));
+    await page.clock.runFor(60000);
+    assert.ok(!tiene(), 'antes de los 90 s todavía no se volvió a mirar');
+    await page.clock.runFor(35000);
+    for (let i = 0; i < 100 && !tiene(); i++) { await page.clock.runFor(500); await page.waitForTimeout(50); }
+    assert.ok(tiene(), 'el cierre de Fernanda (vuelco 2399) entró solo sin cerrar la app');
+    assert.deepEqual(errores, []);
+  } finally {
+    await b.close(); web.cerrar();
+    DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
+  }
+});
