@@ -290,7 +290,7 @@ test('recorre todas las pestañas sin errores ni bloqueos de seguridad', async (
   for (const b of ['resumen', 'caja', 'productos', 'mas', 'inicio']) { await page.click('#bnav button[data-b="' + b + '"]'); await page.waitForTimeout(400); }
   await page.click('#bnav button[data-b="productos"]'); await page.click('#productos .bcomp button[data-t="simulador"]'); await page.waitForTimeout(400);
   await page.click('#bnav button[data-b="caja"]'); await page.click('#cajsec button[data-s="plata"]'); await page.waitForTimeout(300);
-  for (const d of ['conta', 'limpieza', 'ajustes']) { await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="' + d + '"]'); await page.waitForTimeout(400); }
+  for (const d of ['conta', 'ajustes']) { await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="' + d + '"]'); await page.waitForTimeout(400); }
   assert.deepEqual(errores, []);
   await ctx.close();
 });
@@ -415,6 +415,7 @@ test('v195: "¿Pagado este mes?" se tilda desde Gastos y Más dice Administraci�
     await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
     await page.click('#bnav button[data-b="mas"]');
     assert.match(await page.locator('#mas [data-ir="conta"]').innerText(), /^Administración/);
+    assert.equal(await page.locator('#mas [data-ir="limpieza"]').count(), 0, 'v204: Limpieza está adentro de Administración');
     await page.click('#mas [data-ir="conta"]');
     // v203: arriba ya no está Limpieza | Administración: Limpieza es la última pestaña de Administración
     assert.equal(await page.locator('#admsec').isVisible(), false);
@@ -789,7 +790,7 @@ test('pantallas iguales a las aprobadas (regresión visual)', {skip: !CON_CAPTUR
   const cambios = [];
   const IR = {inicio: ['#bnav button[data-b="inicio"]'], resumen: ['#bnav button[data-b="resumen"]'], cajas: ['#bnav button[data-b="caja"]', '#cajsec button[data-s="cajas"]'], plata: ['#bnav button[data-b="caja"]', '#cajsec button[data-s="plata"]'],
     productos: ['#bnav button[data-b="productos"]', '#productos .bcomp button[data-t="productos"]'], simulador: ['#bnav button[data-b="productos"]', '#productos .bcomp button[data-t="simulador"]'],
-    mas: ['#bnav button[data-b="mas"]'], admin: ['#bnav button[data-b="mas"]', '#mas [data-ir="limpieza"]'], ajustes: ['#bnav button[data-b="mas"]', '#mas [data-ir="ajustes"]']};
+    mas: ['#bnav button[data-b="mas"]'], admin: ['#bnav button[data-b="mas"]', '#mas [data-ir="conta"]', '#csub button[data-s="lim"]'], ajustes: ['#bnav button[data-b="mas"]', '#mas [data-ir="ajustes"]']};
   for (const t of Object.keys(IR)) {
     for (const sel of IR[t]) { if (await page.locator(sel).isVisible()) await page.click(sel); }
     await page.waitForTimeout(600);
