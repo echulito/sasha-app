@@ -1098,6 +1098,31 @@ test('simular compra: ofertas por cantidad (2x1, 3x2, 2da unidad al 80%)', async
   await ctx.close();
 });
 
+test('v205: descargar reportes sin actualizar ECHU después', async () => {
+  const antes = {e: DATOS.agente_estado, c: DATOS.agente_crear_orden};
+  const {ctx, page, errores} = await abrir();
+  const base = {tieneClave: true, agente: {disponible: true, hace: 5, civil: true, sesion: 'desconectada'}, activa: null, ultima: null, historial: [],
+    prog: {activo: true, hora: '23:00', horaAct: '00:00'}, proximo: '', tipos: ['STOCK', 'REPORTES'], ahora: '2026-11-25 12:00:00', ayer: '2026-11-24'};
+  const pedidos = [];
+  const orden = {id: 'A9', tipo: 'REPORTES', fecha: '2026-11-20', pedida: '2026-11-25 12:01:00', estado: 'COMPLETADO', fin: '2026-11-25 12:30:00', detalle: 'Los archivos ya están en Drive. ECHU no se actualizó (así lo pediste).',
+    archivo: 'Reportes del 20/11/2026', error: '', origen: 'APP',
+    pasos: {pantalla: {e: 'OK', h: '12:01'}, civil: {e: 'OK', h: '12:02'}, stock: {e: 'COPIADO', drive: '12:10'}, echu: {e: 'NO_PEDIDO', h: '12:30:00'}}};
+  try {
+    DATOS.agente_estado = () => base;
+    DATOS.agente_crear_orden = p => { pedidos.push(p); base.activa = null; base.ultima = orden; base.historial = [orden]; return base; };
+    await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+    await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="agentes"]');
+    await page.locator('#agestado', {hasText: 'Disponible'}).waitFor();
+    await page.fill('#agfecha', '2026-11-20');
+    await page.uncheck('#agactualizar');
+    await page.click('#agrep');
+    await page.locator('#agorden', {hasText: 'Sin actualizar ECHU (así lo pediste)'}).waitFor();
+    assert.equal(pedidos[0].actualizar, '0');
+    assert.doesNotMatch(await page.locator('#agorden').innerText(), /ECHU actualizado/);
+    assert.deepEqual(errores, []);
+  } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_crear_orden: antes.c}); await ctx.close(); }
+});
+
 // v159: Más › Agentes automáticos › Civil Systems.
 test('agentes automáticos v164: reportes de un día con la lista que se tilda en vivo, y horarios configurables', async () => {
   const {ctx, page, errores} = await abrir();
@@ -1109,7 +1134,7 @@ test('agentes automáticos v164: reportes de un día con la lista que se tilda e
     archivo: 'Reportes del 14/11/2026', error: '', origen: 'APP', fin: '',
     pasos: {pantalla: {e: 'PENDIENTE'}, civil: {e: 'PENDIENTE'}, stock: {e: 'PENDIENTE', d: 'stock 14.11.26.xlsx'}, productos: {e: 'PENDIENTE', d: 'productos 14.11.26.xlsx'}, movimientos: {e: 'PENDIENTE', d: 'movimientos 14.11.26.xlsx'}}};
   DATOS.agente_estado = () => base;
-  DATOS.agente_crear_orden = p => { pedidas.push(p.tipo + ' ' + p.fecha); base.activa = orden; base.historial = [orden]; return base; };
+  DATOS.agente_crear_orden = p => { pedidas.push(p.tipo + ' ' + p.fecha + (p.actualizar === '0' ? ' sin actualizar' : '')); base.activa = orden; base.historial = [orden]; return base; };
   DATOS.agente_programar = p => { base.prog = {activo: p.activo === '1', hora: p.hora, horaAct: p.horaAct}; base.proximo = '16/11 a las ' + p.hora; return base; };
   await page.click('#bnav button[data-b="mas"]');
   await page.click('#mas [data-ir="agentes"]');
@@ -1120,6 +1145,11 @@ test('agentes automáticos v164: reportes de un día con la lista que se tilda e
   // ya viene programada a las 23:00 y ECHU actualiza a las 00:00
   assert.match(await page.locator('#agprogmsg').innerText(), /todos los días a las 23:00 baja stock, productos, movimientos, los PDF de cajas y las ofertas de ese mismo día, y ECHU los toma a las 00:00/);
   await page.fill('#agfecha', '2026-11-14');
+  // v205: elegir si ECHU se actualiza después
+  assert.equal(await page.isChecked('#agactualizar'), true, 'por defecto se actualiza');
+  await page.uncheck('#agactualizar');
+  assert.match(await page.locator('#agactnota').innerText(), /ECHU los toma en el próximo Actualizar/);
+  await page.check('#agactualizar');
   await page.click('#agrep');
   await page.locator('#agorden', {hasText: 'Reportes del 14/11/2026'}).waitFor();
   assert.deepEqual(pedidas, ['REPORTES 2026-11-14']);

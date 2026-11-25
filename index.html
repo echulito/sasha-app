@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=204;
+var APP_V=205;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -277,6 +277,9 @@ body.consulta #admsec,body.consulta #csub{display:none!important}
         <input id="agfecha" type="date">
         <label>Qué bajar</label>
         <div id="agque" class="agtipos"><label class="on"><input type="checkbox" data-k="stock" checked>Stock</label><label class="on"><input type="checkbox" data-k="productos" checked>Productos</label><label class="on"><input type="checkbox" data-k="movimientos" checked>Movimientos</label><label class="on"><input type="checkbox" data-k="cajas" checked>PDF de cajas</label><label class="on"><input type="checkbox" data-k="ofertas" checked>Ofertas</label></div>
+        <label>Después de bajarlos</label>
+        <div id="agact" class="agtipos"><label class="on"><input type="checkbox" id="agactualizar" checked>Actualizar ECHU</label></div>
+        <div class="note" id="agactnota" style="margin-top:4px">Con los archivos en Drive, ECHU se actualiza solo.</div>
         <div class="btns"><button class="btn" id="agrep">Descargar reportes, PDF de cajas y ofertas</button></div>
         <div id="agorden"></div>
       </div>
@@ -1013,7 +1016,8 @@ function agLista(o){
     else h+=agFila(o.estado==='ERROR'?'mal':'pend',a[1],'','');
   });
   var e=p.echu||{};
-  if(o.estado==='COMPLETADO')h+=agFila('ok','ECHU actualizado','',e.h||String(o.fin||'').slice(11,16));
+  if(e.e==='NO_PEDIDO')h+=agFila(o.estado==='COMPLETADO'?'ok':'pend','Sin actualizar ECHU (así lo pediste)','Los toma en el próximo Actualizar',o.estado==='COMPLETADO'?e.h:'');
+  else if(o.estado==='COMPLETADO')h+=agFila('ok','ECHU actualizado','',e.h||String(o.fin||'').slice(11,16));
   else if(o.estado==='ACTUALIZANDO_ECHU')h+=agFila('curso','ECHU está actualizando','',e.h);
   else if(o.estado==='ESPERANDO_HORARIO')h+=e.h==='YA'?agFila('curso','ECHU se actualiza en un minuto','Los archivos ya están en Drive',''):agFila('curso','ECHU actualiza a las '+(e.h||'00:00'),'O antes, si tocás Actualizar','');
   else h+=agFila(o.estado==='ERROR'?'mal':'pend','ECHU actualizado','','');
@@ -1089,13 +1093,15 @@ function agCancelar(id,estado){
   api('agente_cancelar',{id:id}).then(agPintar).catch(function(e){if(b){b.disabled=false;b.textContent='Cancelar descarga'}$('agorden').insertAdjacentHTML('beforeend','<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>')});
 }
 $('agvolver').onclick=agCerrar;
+// v205: elegir si ECHU se actualiza después de bajar los reportes.
+$('agactualizar').onchange=function(){this.parentNode.classList.toggle('on',this.checked);$('agactnota').textContent=this.checked?'Con los archivos en Drive, ECHU se actualiza solo.':'Solo se bajan a Drive: ECHU los toma en el próximo Actualizar (el automático de la noche o cuando toques Actualizar).'};
 $('agrep').onclick=function(){
   var b=$('agrep');if(b.disabled)return;
   var f=$('agfecha').value;if(!f){$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">Elegí el día.</div>';return}
   var solo=[].map.call(document.querySelectorAll('#agque input:checked'),function(x){return x.dataset.k});
   if(!solo.length){$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">Elegí al menos un reporte.</div>';return}
   b.disabled=true;b.textContent='Preparando la descarga…';
-  api('agente_crear_orden',{tipo:'REPORTES',fecha:f,solo:solo.length===5?'':solo.join(',')}).then(function(d){agPintar(d);agCargar()}).catch(function(e){b.disabled=false;b.textContent='Descargar reportes, PDF de cajas y ofertas';$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>'});
+  api('agente_crear_orden',{tipo:'REPORTES',fecha:f,solo:solo.length===5?'':solo.join(','),actualizar:$('agactualizar').checked?'1':'0'}).then(function(d){agPintar(d);agCargar()}).catch(function(e){b.disabled=false;b.textContent='Descargar reportes, PDF de cajas y ofertas';$('agorden').innerHTML='<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>'});
 };
 function agProgramar(activo){
   api('agente_programar',{activo:activo?'1':'0',hora:$('aghora').value||'23:00',horaAct:(AG.d&&AG.d.prog&&AG.d.prog.horaAct==='YA')?'':($('aghoraact').value||'00:00')}).then(function(d){agPintar(d);$('agprogmsg').insertAdjacentHTML('afterbegin','<b>Guardado.</b> ')}).catch(function(e){$('agprogmsg').innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
@@ -3439,7 +3445,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=204');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=205');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
