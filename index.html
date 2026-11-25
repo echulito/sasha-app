@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=202;
+var APP_V=203;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -480,7 +480,7 @@ body.consulta #admsec,body.consulta #csub{display:none!important}
   </section>
   <!-- v76: Administración › Limpieza (la app Sasha Limpieza, ahora dentro de Sasha). Solo con tu PIN. -->
   <section id="admin" class="oculto">
-    <div class="seg" style="margin-top:0" id="admsec"><button class="on" data-s="limpieza">Limpieza</button><button data-s="conta">Administración</button><button data-s="cajeras" style="display:none">Cajeras</button></div>
+    <div class="seg" style="margin-top:0;display:none" id="admsec"><button class="on" data-s="limpieza">Limpieza</button><button data-s="conta">Administración</button><button data-s="cajeras" style="display:none">Cajeras</button></div>
     <div id="a-limpieza">
     <div class="seg" style="margin-top:0" id="lsub"><button class="on" data-s="nuevo">Nuevo recibo</button><button data-s="registro">Registro</button><button data-s="config">Configuración</button></div>
     <div id="l-nuevo">
@@ -522,7 +522,7 @@ body.consulta #admsec,body.consulta #csub{display:none!important}
     <div id="a-cajeras" class="oculto"><iframe id="cajframe" title="Cajeras" style="width:100%;border:0;display:block;background:transparent"></iframe></div>
     <!-- v77: Administración › Contabilidad (modelo C): IVA del mes, facturas, cierres Z y remitos por foto. -->
     <div id="a-conta" class="oculto">
-      <div class="seg" style="margin-top:0" id="csub"><button class="on" data-s="iva">IVA</button><button data-s="sue">Sueldos</button><button data-s="gas">Gastos</button><button data-s="cdor">Contadora</button></div>
+      <div class="seg" style="margin-top:0" id="csub"><button class="on" data-s="iva">IVA</button><button data-s="sue">Sueldos</button><button data-s="gas">Gastos</button><button data-s="cdor">Contadora</button><button data-s="lim">Limpieza</button></div>
       <div id="c-cdor" class="oculto"></div>
       <div id="c-iva">
       <div class="mes" id="cmes"></div>
@@ -3427,17 +3427,20 @@ function cTitulo(o){return o.tipo==='cierre_z'?'Cierre Z N° '+(o.numero||'?'):(
 function cFecha(f){return f?f.slice(8,10)+'/'+f.slice(5,7):'sin fecha'}
 function cMesCorto(m){m=String(m||'');var p=m.split(' ');return p.length>1?p[0].slice(0,3).toLowerCase()+' '+p[p.length-1]:m}
 function cNum(n){n=Math.round((Number(n)||0)*100)/100;return n?n.toLocaleString('es-AR',{minimumFractionDigits:Number.isInteger(n)?0:2,maximumFractionDigits:2}):''}
+// v203: Limpieza es una pestaña más de Administración (la última); arriba ya no hay Limpieza | Administración.
+(function(){var l=$('a-limpieza'),c=$('csub');if(l&&c)c.parentNode.insertBefore(l,c.nextSibling)})();
 function admSec(s){
+  var sub=null;if(s==='limpieza'){s='conta';sub='lim'}
   document.querySelectorAll('#admsec button').forEach(function(b){b.classList.toggle('on',b.dataset.s===s)});
-  $('a-limpieza').classList.toggle('oculto',s!=='limpieza');$('a-conta').classList.toggle('oculto',s!=='conta');$('a-cajeras').classList.toggle('oculto',s!=='cajeras');
+  $('a-conta').classList.toggle('oculto',s!=='conta');$('a-cajeras').classList.toggle('oculto',s!=='cajeras');
   try{localStorage.setItem('sasha_admsec',s)}catch(e){}
   if(s==='cajeras'){cajAbrir();return}
-  if(s==='conta'){var cs='iva';try{cs=localStorage.getItem('sasha_csub')||'iva'}catch(e){}contaSub(cs)}else lEntrar();
+  var cs='iva';try{cs=localStorage.getItem('sasha_csub')||'iva'}catch(e){}contaSub(sub||cs);
 }
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=202');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=203');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
@@ -3776,8 +3779,9 @@ var SU={per:'',D:null,emp:'',nov:{},vista:'lista'};
 function contaSub(s){
   document.querySelectorAll('#csub button').forEach(function(b){b.classList.toggle('on',b.dataset.s===s)});
   $('c-iva').classList.toggle('oculto',s!=='iva');$('c-sue').classList.toggle('oculto',s!=='sue');$('c-gas').classList.toggle('oculto',s!=='gas');$('c-cdor').classList.toggle('oculto',s!=='cdor');
+  $('a-limpieza').classList.toggle('oculto',s!=='lim');
   try{localStorage.setItem('sasha_csub',s)}catch(e){}
-  if(s==='sue')sCargar();else if(s==='gas')gCargar();else if(s==='cdor')kCargar();else cCargar();
+  if(s==='lim')lEntrar();else if(s==='sue')sCargar();else if(s==='gas')gCargar();else if(s==='cdor')kCargar();else cCargar();
 }
 document.querySelectorAll('#csub button').forEach(function(b){if(!b.disabled)b.onclick=function(){contaSub(b.dataset.s)}});
 function r2(n){return Math.round((Number(n)||0)*100)/100}

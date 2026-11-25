@@ -416,7 +416,14 @@ test('v195: "¿Pagado este mes?" se tilda desde Gastos y Más dice Administraci�
     await page.click('#bnav button[data-b="mas"]');
     assert.match(await page.locator('#mas [data-ir="conta"]').innerText(), /^Administración/);
     await page.click('#mas [data-ir="conta"]');
-    assert.equal(await page.locator('#admsec button[data-s="conta"]').innerText(), 'Administración');
+    // v203: arriba ya no está Limpieza | Administración: Limpieza es la última pestaña de Administración
+    assert.equal(await page.locator('#admsec').isVisible(), false);
+    assert.deepEqual(await page.locator('#csub button').allInnerTexts(), ['IVA', 'Sueldos', 'Gastos', 'Contadora', 'Limpieza']);
+    await page.click('#csub button[data-s="lim"]');
+    assert.equal(await page.locator('#a-limpieza').isVisible(), true);
+    assert.equal(await page.locator('#c-gas').isVisible(), false, 'con Limpieza se ve solo lo de limpieza');
+    await page.click('#csub button[data-s="gas"]');
+    assert.equal(await page.locator('#a-limpieza').isVisible(), false);
     await page.click('#csub button[data-s="gas"]'); await page.locator('#c-gas .cmp').first().waitFor();
     await page.locator('#c-gas .cmp > .t', {hasText: 'Servicios'}).click();
     assert.equal(await page.locator('#c-gas [data-gpag]').count(), 1, 'solo los que tienen vencimiento');
