@@ -16,16 +16,22 @@ const ECHU={url:'',token:''};try{ECHU.url=localStorage.getItem('echu_url')||'';E
 // v97: huella SHA-256 de ida (ECHU verifica lo que le llegó) y de vuelta (acá se verifica lo que llegó).
 async function huella(t){try{const b=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t)));let s='';for(const x of b)s+=String.fromCharCode(x);return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}catch{return '';}}
 let LLEGO_COMPLETO=false;
+// v209: lo que se guarda en ECHU pesa ~7 MB (el 25/11 dejó de llegar): si ECHU lo entiende (avisa gz en cajas_estado), va comprimido con gzip.
+let GZ_OK=false;
+async function gzip64(t){const buf=await new Response(new Blob([t]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer(),b=new Uint8Array(buf);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s);}
 const horaCorta=()=>{const d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');};
 async function echu(accion,datos,extra){
  if(!ECHU.url||!ECHU.token)throw Object.assign(Error('Entrá a la app Sasha con tu PIN'),{status:401});
- const body=Object.assign({token:ECHU.token,accion},datos===undefined?{}:{datos:typeof datos==='string'?datos:JSON.stringify(datos)},extra||{});
+ const dTxt=datos===undefined?undefined:(typeof datos==='string'?datos:JSON.stringify(datos));let dCampo=dTxt===undefined?{}:{datos:dTxt};
+ if(dTxt&&dTxt.length>300000&&GZ_OK&&typeof CompressionStream==='function'){try{dCampo={gz:await gzip64(dTxt)};}catch{}}
+ const body=Object.assign({token:ECHU.token,accion},dCampo,extra||{});
  const cuerpo=JSON.stringify(body),h=await huella(cuerpo);
  let r;try{r=await window.fetch(ECHU.url+(h?(ECHU.url.includes('?')?'&':'?')+'h='+h:''),{method:'POST',redirect:'follow',cache:'no-store',body:cuerpo});}catch(e){throw Object.assign(Error('Sin conexión con ECHU'),{status:503});}
  let d;try{d=await r.json();}catch{throw Object.assign(Error('ECHU no respondió (HTTP '+r.status+')'),{status:503});}
  if(!d.ok){if(d.error==='PIN')throw Object.assign(Error('Volvé a poner el PIN en la app'),{status:401});throw Object.assign(Error(d.mensaje||'Error de ECHU'),{status:d.status||400});}
  LLEGO_COMPLETO=false;
  if(d.datos===undefined&&/^cajas_(guardar|estado)$/.test(accion))throw Object.assign(Error('ECHU no recibió el envío ('+(cuerpo.length/1e6).toFixed(1)+' MB). Se reintenta solo'),{status:503});
+ if(accion==='cajas_estado'&&d.datos&&d.datos.gz)GZ_OK=true;
  if(d.h&&d.datos!==undefined){const hv=await huella(JSON.stringify(d.datos));if(hv&&hv!==d.h)throw Object.assign(Error('La información llegó incompleta. Probá de nuevo.'),{status:503});LLEGO_COMPLETO=!!hv;}
  return d.datos;
 }

@@ -140,3 +140,40 @@ test('v208: si falla la BAJADA de un PDF de Drive no se marca como tomado ni fal
     DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
   }
 });
+
+test('v209: si ECHU avisa gz, lo que se guarda (grande) viaja comprimido y llega completo', async () => {
+  const zlib = await import('node:zlib');
+  const relleno = Array.from({length: 1500}, (_, i) => ({type: 'turnClose', date: '2026-10-' + String(1 + i % 28).padStart(2, '0'), branch: '01', filename: 'viejo ' + i + '.pdf',
+    rows: [{date: '2026-10-' + String(1 + i % 28).padStart(2, '0'), branch: '01', box: '0001', batch: String(10000 + i), scope: 'Turno PDF', openTime: '09:00', closeTime: '15:00', opening: 100, sales: 200, grossSales: 200, credits: 0, remainder: 100, closingWithdrawal: 0, withdrawals: 0, cash: 300, digital: 0, operations: 3, cashier: 'CAJERA DE PRUEBA', expenses: []}]}));
+  const cierre = await pdfDeLineas(['*** C I E R R E D E C A J A ***', 'Vuelco: 2399 - Miercoles', 'Sucursal: GON-1970 Caja: 0003', 'Cajero/a: FERNANDA',
+    'Fecha Cierre: 25/11/2026 19:34', 'Apertura: 25/11/2026 15:33', 'Tickets: 00094568 al 00094579', 'Cantidad de Operaciones: 12',
+    'Saldo Inicial Efectivo $ 50950.00', 'Saldo Inicial [TC=1.00] 50950.00', 'Ing. x Venta Efectivo $ 114467.00', 'Ing. x Venta [TC=1.00] 114467.00',
+    'Movimientos Efectivo $ 0.00', 'Saldo Final Efectivo $ 165417.00', 'Saldo Final [TC=1.00] 165417.00', 'TOTAL Declarado Efectivo $ 165500.00',
+    'T0TAL Declarado [TC=1.00] 165500.00', 'Diferencia Efectivo $ -83.00', 'Diferencia [TC=1.00] -83.00', 'RETIRO EFECTIVO X CIERRE -120000.00', 'Resto en Caja Efectivo $ 45500.00']);
+  const antes = {e: DATOS.cajas_estado, n: DATOS.cajas_pdf_nuevos, b: DATOS.cajas_pdf_bajar, h: DATOS.cajas_pdf_hechos, g: DATOS.cajas_guardar};
+  const guardados = [];
+  DATOS.cajas_estado = {state: {reports: relleno, manual: []}, revision: 1, gz: 1, sheetUrl: ''};
+  DATOS.cajas_pdf_nuevos = {archivos: [{id: 'PDF_GZ_2399', nombre: 'cierre caja 0003 vuelco 2399 25.11.26.pdf', fecha: '2026-11-25', tam: 3136}]};
+  DATOS.cajas_pdf_bajar = p => ({id: p.id, nombre: 'x.pdf', data: cierre});
+  DATOS.cajas_pdf_hechos = p => ({hechos: 1});
+  DATOS.cajas_guardar = p => { guardados.push(p); return {revision: 2, saved: true}; };
+  const b = await chromium.launch(), web = await servir();
+  try {
+    const ctx = await b.newContext({serviceWorkers: 'block'});
+    const echu = crearECHU(); await ctx.route(URL_ECHU + '**', r => echu.manejar(r));
+    await ctx.addInitScript(([u, t]) => { localStorage.setItem('echu_url', u); localStorage.setItem('echu_token', t); }, [URL_ECHU, TOKEN]);
+    const page = await ctx.newPage(); const errores = []; page.on('pageerror', e => errores.push(e.message));
+    await page.goto(web.url + 'cajas/index.html');
+    for (let i = 0; i < 200 && !guardados.length; i++) await page.waitForTimeout(100);
+    assert.ok(guardados.length, 'se guardó');
+    const g = guardados.at(-1);
+    assert.equal(g.datos, undefined, 'no va el texto sin comprimir'); assert.ok(typeof g.gz === 'string');
+    const texto = zlib.gunzipSync(Buffer.from(g.gz, 'base64')).toString('utf8'), datos = JSON.parse(texto);
+    assert.ok(texto.length > 300000 && g.gz.length < texto.length / 3, 'comprimido bastante');
+    assert.ok(datos.state.reports.some(r => r.filename === 'cierre caja 0003 vuelco 2399 25.11.26.pdf'), 'lleva el cierre nuevo');
+    assert.deepEqual(errores, []);
+  } finally {
+    await b.close(); web.cerrar();
+    DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h], ['cajas_guardar', antes.g]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
+  }
+});
