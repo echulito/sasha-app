@@ -476,15 +476,15 @@ function openSection(id){const target=$(id);if(!target)return;const view=target.
 let DRIVE_ULTIMO=0;
 // v180: también se vuelven a probar los PDF de Drive ya tomados que no quedaron cargados (los que no se pudieron leer):
 // cada lector nuevo los prueba una vez; si sigue sin poder, no insiste hasta la próxima versión.
-// v208: LECTOR_V sube a 208 para que se reintenten una vez los que quedaron marcados como fallidos (el cierre de Fernanda
-// caja 0003 del 25/11 quedó así al bajarlo mientras el agente lo estaba subiendo). Si falla la BAJADA (Drive/ECHU), no se marca.
-const LECTOR_V=208,FALLOS_K='cajas_pdf_fallos';
+// v208: si falla la BAJADA (Drive/ECHU), no se marca. v210: NO se reintentan todos los marcados (la v208 subió LECTOR_V y al abrir
+// volvía a bajar y leer decenas de PDF ya vistos: la app se trababa). Cualquier marca vieja cuenta como ya probado.
+const LECTOR_V=180,FALLOS_K='cajas_pdf_fallos';
 function fallos(){try{return JSON.parse(localStorage.getItem(FALLOS_K)||'{}')||{};}catch{return {};}}
 function anotarFallo(id){try{const f=fallos();f[id]=LECTOR_V;const k=Object.keys(f);if(k.length>200)delete f[k[0]];localStorage.setItem(FALLOS_K,JSON.stringify(f));}catch{}}
 // v207: el agente sube los cierres de a uno (tarda 1-2 min): si una importación trajo PDF nuevos, se vuelve a mirar Drive a los 90 s
 // sin esperar los 5 min, así no queda afuera el último cierre que llegó mientras se importaba.
 export async function importarDrive(forzar){const espera=forzar===true?60000:300000;if(busy&&online&&Date.now()-DRIVE_ULTIMO>=espera){setTimeout(()=>importarDrive(forzar),1500);return;}if(!online||busy||Date.now()-DRIVE_ULTIMO<espera)return;DRIVE_ULTIMO=Date.now();let lista;try{lista=(await echu('cajas_pdf_nuevos',undefined,{todos:'1'})).archivos||[];}catch{return;}
- const yaFallo=fallos(),cargados=new Set(state.reports.map(r=>r.filename).filter(Boolean));lista=lista.filter(a=>!(a.hecho&&(cargados.has(a.nombre)||yaFallo[a.id]===LECTOR_V)));if(!lista.length)return;
+ const yaFallo=fallos(),cargados=new Set(state.reports.map(r=>r.filename).filter(Boolean));lista=lista.filter(a=>!(a.hecho&&(cargados.has(a.nombre)||yaFallo[a.id]>=LECTOR_V)));if(!lista.length)return;
  busy=true;const hechos=[],avisos=[];let nuevos=0;msg('Trayendo '+lista.length+' PDF de Drive…',true);
  try{for(const a of lista){let d;try{d=await echu('cajas_pdf_bajar',undefined,{id:a.id});}catch(e){if(e.status===401||e.status===503)break;avisos.push(a.nombre+': no se pudo bajar ('+e.message+'), se reintenta');continue;}
   try{const bin=atob(d.data),buf=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);

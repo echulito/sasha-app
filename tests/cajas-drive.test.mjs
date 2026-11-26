@@ -177,3 +177,25 @@ test('v209: si ECHU avisa gz, lo que se guarda (grande) viaja comprimido y llega
     DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h], ['cajas_guardar', antes.g]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
   }
 });
+
+test('v210: al abrir no se vuelven a bajar los PDF ya probados (marca vieja o de la v208): la app no se traba', async () => {
+  const bajados = [], antes = {e: DATOS.cajas_estado, n: DATOS.cajas_pdf_nuevos, b: DATOS.cajas_pdf_bajar, h: DATOS.cajas_pdf_hechos};
+  DATOS.cajas_estado = {state: {reports: [], manual: []}, revision: 1, sheetUrl: ''};
+  DATOS.cajas_pdf_nuevos = {archivos: Array.from({length: 40}, (_, i) => ({id: 'PDF_VIEJO_' + String(i).padStart(4, '0'), nombre: 'tickets ' + i + '.pdf', fecha: '2026-11-20', tam: 90000, hecho: 1}))};
+  DATOS.cajas_pdf_bajar = p => { bajados.push(p.id); throw new Error('no debería bajarse'); };
+  DATOS.cajas_pdf_hechos = () => ({hechos: 0});
+  const marcas = Object.fromEntries(DATOS.cajas_pdf_nuevos.archivos.map((a, i) => [a.id, i % 2 ? 180 : 208]));
+  const b = await chromium.launch(), web = await servir();
+  try {
+    const ctx = await b.newContext({serviceWorkers: 'block'});
+    const echu = crearECHU(); await ctx.route(URL_ECHU + '**', r => echu.manejar(r));
+    await ctx.addInitScript(([u, t, m]) => { localStorage.setItem('echu_url', u); localStorage.setItem('echu_token', t); localStorage.setItem('cajas_pdf_fallos', m); }, [URL_ECHU, TOKEN, JSON.stringify(marcas)]);
+    const page = await ctx.newPage();
+    await page.goto(web.url + 'cajas/index.html');
+    await page.waitForTimeout(4000);
+    assert.deepEqual(bajados, [], 'no bajó ninguno');
+  } finally {
+    await b.close(); web.cerrar();
+    DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
+  }
+});
