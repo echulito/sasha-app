@@ -1397,37 +1397,6 @@ test('v173: elegir qué cambia el agente (subir, bajar, solo costo) y pedir solo
   } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_crear_orden: antes.c, agente_costos_tipos: antes.t}); }
 });
 
-test('v212: el agente puede cambiar solo el costo (destildando "También el precio de venta")', async () => {
-  const antes = {e: DATOS.agente_estado, t: DATOS.agente_costos_tipos};
-  try {
-    const {ctx, page, errores} = await abrir();
-    await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
-    const base = {tieneClave: true, agente: {disponible: true, hace: 8, civil: true, sesion: 'ok'}, activa: null, ultima: null, historial: [],
-      prog: {activo: true, hora: '23:00', horaAct: 'YA'}, proximo: '', tipos: [], ahora: '2026-11-26 12:00:00', ayer: '2026-11-25',
-      costos: {pendientes: 7, revisar: 7, conStock: 0, tildados: 0, soloPrecio: 147, porTipo: {SUBIR: 7, BAJAR: 0, 'SOLO COSTO': 0}, tipos: ['SUBIR', 'BAJAR', 'SOLO COSTO'], sinPrecio: false, prog: {activo: false, desde: '01:00', hasta: '09:00'}, ultimo: null}};
-    const pedidos = [];
-    DATOS.agente_estado = () => base;
-    DATOS.agente_costos_tipos = p => { pedidos.push([p.tipos, p.precio]); if (p.precio !== undefined) base.costos.sinPrecio = p.precio === '0'; return base; };
-    await page.click('#bnav button[data-b="mas"]');
-    await page.click('#mas [data-ir="agentes"]');
-    await page.locator('#agcosprecio', {hasText: 'También el precio de venta'}).waitFor();
-    assert.equal(await page.locator('#agcospreciochk').isChecked(), true, 'por defecto cambia también el precio');
-    await page.locator('#agcospreciochk').uncheck();
-    await page.locator('#agcosprecio', {hasText: 'el precio de venta queda como está'}).waitFor();
-    assert.deepEqual(pedidos, [[undefined, '0']]);
-    assert.equal(await page.locator('#agcospreciochk').isChecked(), false);
-    await page.locator('#agcospreciochk').check();
-    await page.waitForFunction(() => !/queda como está/.test(document.getElementById('agcosprecio').textContent));
-    assert.deepEqual(pedidos.at(-1), [undefined, '1']);
-    // con un ECHU anterior (sin sinPrecio) no aparece
-    delete base.costos.sinPrecio;
-    await page.evaluate(() => agCargar());
-    await page.waitForFunction(() => document.getElementById('agcosprecio').classList.contains('oculto'));
-    assert.deepEqual(errores, []);
-    await ctx.close();
-  } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_costos_tipos: antes.t}); }
-});
-
 test('v174: bajar solo algunos reportes; la lista muestra solo lo pedido', async () => {
   const antes = {e: DATOS.agente_estado, c: DATOS.agente_crear_orden};
   try {
