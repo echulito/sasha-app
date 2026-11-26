@@ -116,3 +116,27 @@ test('v207: si el agente sube un cierre mientras se importaba, se vuelve a mirar
     DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
   }
 });
+
+test('v208: si falla la BAJADA de un PDF de Drive no se marca como tomado ni fallido (se reintenta)', async () => {
+  const antes = {e: DATOS.cajas_estado, n: DATOS.cajas_pdf_nuevos, b: DATOS.cajas_pdf_bajar, h: DATOS.cajas_pdf_hechos};
+  const hechos = [];
+  DATOS.cajas_estado = {state: {reports: [], manual: []}, revision: 1, sheetUrl: ''};
+  DATOS.cajas_pdf_nuevos = {archivos: [{id: 'PDF_TARDE_2399', nombre: 'cierre caja 0003 vuelco 2399 25.11.26.pdf', fecha: '2026-11-25', tam: 3136}]};
+  DATOS.cajas_pdf_bajar = () => { throw new Error('Drive todavía no lo tiene completo'); };
+  DATOS.cajas_pdf_hechos = p => { hechos.push(...JSON.parse(p.datos)); return {hechos: 1}; };
+  const b = await chromium.launch(), web = await servir();
+  try {
+    const ctx = await b.newContext({serviceWorkers: 'block'});
+    const echu = crearECHU(); await ctx.route(URL_ECHU + '**', r => echu.manejar(r));
+    await ctx.addInitScript(([u, t]) => { localStorage.setItem('echu_url', u); localStorage.setItem('echu_token', t); }, [URL_ECHU, TOKEN]);
+    const page = await ctx.newPage();
+    await page.goto(web.url + 'cajas/index.html');
+    await page.waitForFunction(() => /se reintenta/.test(document.getElementById('message')?.textContent || ''), null, {timeout: 20000});
+    await page.waitForTimeout(500);
+    assert.deepEqual(hechos, [], 'no quedó marcado como tomado');
+    assert.equal(await page.evaluate(() => localStorage.getItem('cajas_pdf_fallos')), null, 'no quedó como fallido');
+  } finally {
+    await b.close(); web.cerrar();
+    DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
+  }
+});
