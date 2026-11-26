@@ -1397,6 +1397,26 @@ test('v173: elegir qué cambia el agente (subir, bajar, solo costo) y pedir solo
   } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_crear_orden: antes.c, agente_costos_tipos: antes.t}); }
 });
 
+test('v214: con ECHU 7.06 aparece "Solo precio" en qué cambia el agente y no dice "por ahora a mano"', async () => {
+  const antes = {e: DATOS.agente_estado, t: DATOS.agente_costos_tipos};
+  try {
+    const {ctx, page, errores} = await abrir();
+    await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+    const base = {tieneClave: true, agente: {disponible: true, hace: 8, civil: true, sesion: 'ok'}, activa: null, ultima: null, historial: [],
+      prog: {activo: true, hora: '23:00', horaAct: 'YA'}, proximo: '', tipos: [], ahora: '2026-11-26 12:00:00', ayer: '2026-11-25',
+      costos: {pendientes: 154, revisar: 7, conStock: 0, tildados: 0, soloPrecio: 147, porTipo: {SUBIR: 7, BAJAR: 0, 'SOLO COSTO': 0, 'SOLO PRECIO': 147}, tipos: ['SUBIR', 'BAJAR', 'SOLO COSTO', 'SOLO PRECIO'], prog: {activo: false, desde: '01:00', hasta: '09:00'}, ultimo: null}};
+    DATOS.agente_estado = () => base;
+    await page.click('#bnav button[data-b="mas"]');
+    await page.click('#mas [data-ir="agentes"]');
+    await page.locator('#agcosest', {hasText: 'Para cambiar: 154'}).waitFor();
+    assert.match(await page.locator('#agcostipos').innerText(), /Solo precio\s*147/);
+    assert.doesNotMatch(await page.locator('#agcosest').innerText(), /por ahora a mano/);
+    assert.equal(await page.locator('#agcostipos label.on').count(), 4);
+    assert.deepEqual(errores, []);
+    await ctx.close();
+  } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_costos_tipos: antes.t}); }
+});
+
 test('v174: bajar solo algunos reportes; la lista muestra solo lo pedido', async () => {
   const antes = {e: DATOS.agente_estado, c: DATOS.agente_crear_orden};
   try {

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=213;
+var APP_V=214;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1126,7 +1126,8 @@ function agCosPintar(d){
   $('agcoscods').classList.toggle('oculto',!pt);$('agcoscods').previousElementSibling.classList.toggle('oculto',!pt);
   if(pt&&!tp.contains(document.activeElement)){
     var el=c.tipos||[];
-    tp.innerHTML=[['SUBIR','Subir costo y precio'],['BAJAR','Bajar costo y precio'],['SOLO COSTO','Solo costo']].map(function(t){var on=el.indexOf(t[0])>=0;
+    // v214 (ECHU 7.06): también "Solo precio" (el agente entra con F8 al precio de venta).
+    tp.innerHTML=[['SUBIR','Subir costo y precio'],['BAJAR','Bajar costo y precio'],['SOLO COSTO','Solo costo']].concat('SOLO PRECIO' in pt?[['SOLO PRECIO','Solo precio']]:[]).map(function(t){var on=el.indexOf(t[0])>=0;
       return '<label class="'+(on?'on':'')+'"><input type="checkbox" data-t="'+t[0]+'"'+(on?' checked':'')+'>'+t[1]+' <small>'+(pt[t[0]]||0)+'</small></label>'}).join('');
     tp.querySelectorAll('input').forEach(function(x){x.onchange=agCosTipos});
   }
@@ -1139,7 +1140,7 @@ function agCosPintar(d){
       (con?'':'<div class="note" style="margin:4px 0 0">Solo el costo: el precio de venta queda como está y esos productos pasan a <b>solo precio</b> (a mano).</div>');
     $('agcospreciochk').onchange=agCosPrecio;
   }
-  $('agcosest').innerHTML=(c.soloPrecio?'<b>'+c.soloPrecio+'</b> '+(c.soloPrecio===1?'cambio':'cambios')+' de solo precio (el costo ya está bien): por ahora a mano.<br>':'')+(c.conStock?'<b>'+c.conStock+'</b> '+(c.conStock===1?'baja espera':'bajas esperan')+': tienen stock (no se baja precio ni costo hasta que se agoten).<br>':'')+(c.pendientes?'Para cambiar: <b>'+c.pendientes+'</b> '+(c.pendientes===1?'producto':'productos')+(c.revisar?' · '+c.revisar+' para revisar a mano (el agente no los toca)':'')
+  $('agcosest').innerHTML=(c.soloPrecio&&!(pt&&'SOLO PRECIO' in pt)?'<b>'+c.soloPrecio+'</b> '+(c.soloPrecio===1?'cambio':'cambios')+' de solo precio (el costo ya está bien): por ahora a mano.<br>':'')+(c.conStock?'<b>'+c.conStock+'</b> '+(c.conStock===1?'baja espera':'bajas esperan')+': tienen stock (no se baja precio ni costo hasta que se agoten).<br>':'')+(c.pendientes?'Para cambiar: <b>'+c.pendientes+'</b> '+(c.pendientes===1?'producto':'productos')+(c.revisar?' · '+c.revisar+' para revisar a mano (el agente no los toca)':'')
     :'No hay cambios de costos pendientes'+(c.revisar?' (quedan '+c.revisar+' para revisar a mano)':'')+'.');
   var b=$('agcosya');b.disabled=!!d.activa||!c.pendientes||!d.tieneClave;
   b.textContent=o?'Cambiando precios…':otra?'Esperando a que termine la descarga…':'Cambiar costos ahora';
@@ -3459,7 +3460,7 @@ function admSec(s){
 document.querySelectorAll('#admsec button').forEach(function(b){b.onclick=function(){admSec(b.dataset.s)}});
 // v94: Cajeras va en un marco propio (su pantalla ocupa el resto de la pantalla y tiene su propio desplazamiento).
 function cajAlto(){var f=$('cajframe');if(!f||$('a-cajeras').classList.contains('oculto'))return;var top=f.getBoundingClientRect().top+(window.scrollY||0),bn=$('bnav')?$('bnav').offsetHeight:0;f.style.height=Math.max(240,window.innerHeight-Math.max(0,top-(window.scrollY||0))-4-bn)+'px'}
-function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=213');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
+function cajAbrir(){var f=$('cajframe');if(!f.getAttribute('src'))f.setAttribute('src','cajas/index.html?v=214');try{window.scrollTo(0,0)}catch(e){}cajFija();setTimeout(cajAlto,0)}
 function cajFija(){var f=$('cajframe'),v=!!(f&&f.getAttribute('src')&&f.offsetParent!==null);if(v&&!document.documentElement.classList.contains('cajfija')){try{window.scrollTo(0,0)}catch(e){}}document.documentElement.classList.toggle('cajfija',v);if(v)cajAlto()}
 window.addEventListener('resize',function(){cajFija();cajAlto()});
 document.addEventListener('click',function(){setTimeout(cajFija,0);setTimeout(cajFija,400)},true);
