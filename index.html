@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=215;
+var APP_V=216;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1170,7 +1170,7 @@ function agCosPintar(d){
   if(document.activeElement!==$('agcosdesde'))$('agcosdesde').value=g.desde||'01:00';
   if(document.activeElement!==$('agcoshasta'))$('agcoshasta').value=g.hasta||'09:00';
   $('agcosprog').textContent=g.activo?'Desactivar':'Activar';$('agcosprog').dataset.on=g.activo?'1':'';
-  $('agcosmsg').innerHTML=g.activo?'Activado: todos los días de <b>'+esc(g.desde)+'</b> a <b>'+esc(g.hasta)+'</b> cambia en Civil lo que haya en CAMBIOS COSTOS (después de la descarga y la actualización de la noche). A las '+esc(g.hasta)+' termina el producto que está haciendo y para. Al final transfiere a las cajas y te manda el PDF por WhatsApp.'
+  $('agcosmsg').innerHTML=g.activo?'Activado: todos los días de <b>'+esc(g.desde)+'</b> a <b>'+esc(g.hasta)+'</b> cambia en Civil lo que haya en TAREAS AGENTE ECHULITO (después de la descarga y la actualización de la noche). A las '+esc(g.hasta)+' termina el producto que está haciendo y para. Al final transfiere a las cajas y te manda el PDF por WhatsApp.'
     :'Desactivado: solo cambia cuando tocás "Cambiar costos ahora".';
 }
 // v176: el recorrido en vivo: la hora en que terminó cada producto (los últimos 8; el más nuevo arriba).
