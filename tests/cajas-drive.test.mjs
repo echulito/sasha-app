@@ -199,3 +199,31 @@ test('v210: al abrir no se vuelven a bajar los PDF ya probados (marca vieja o de
     DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
   }
 });
+
+test('v211: un cierre de hoy o ayer que no está cargado se vuelve a probar aunque tenga marca de fallido', async () => {
+  const cierre = await pdfDeLineas(['*** C I E R R E D E C A J A ***', 'Vuelco: 2399 - Miercoles', 'Sucursal: GON-1970 Caja: 0003', 'Cajero/a: FERNANDA',
+    'Fecha Cierre: 25/11/2026 19:34', 'Apertura: 25/11/2026 15:33', 'Tickets: 00094568 al 00094579', 'Cantidad de Operaciones: 12',
+    'Saldo Inicial Efectivo $ 50950.00', 'Saldo Inicial [TC=1.00] 50950.00', 'Ing. x Venta Efectivo $ 114467.00', 'Ing. x Venta [TC=1.00] 114467.00',
+    'Movimientos Efectivo $ 0.00', 'Saldo Final Efectivo $ 165417.00', 'Saldo Final [TC=1.00] 165417.00', 'TOTAL Declarado Efectivo $ 165500.00',
+    'T0TAL Declarado [TC=1.00] 165500.00', 'Diferencia Efectivo $ -83.00', 'Diferencia [TC=1.00] -83.00', 'RETIRO EFECTIVO X CIERRE -120000.00', 'Resto en Caja Efectivo $ 45500.00']);
+  const hoy = new Date().toISOString().slice(0, 10), antes = {e: DATOS.cajas_estado, n: DATOS.cajas_pdf_nuevos, b: DATOS.cajas_pdf_bajar, h: DATOS.cajas_pdf_hechos};
+  const bajados = [];
+  DATOS.cajas_estado = {state: {reports: [], manual: []}, revision: 1, sheetUrl: ''};
+  DATOS.cajas_pdf_nuevos = {archivos: [{id: 'PDF_MARCADO_HOY', nombre: 'cierre caja 0003 vuelco 2399 25.11.26.pdf', fecha: hoy, tam: 3136, hecho: 1},
+    {id: 'PDF_MARCADO_VIEJO', nombre: 'cierre viejo.pdf', fecha: '2026-11-01', tam: 3136, hecho: 1}]};
+  DATOS.cajas_pdf_bajar = p => { bajados.push(p.id); return {id: p.id, nombre: 'x.pdf', data: cierre}; };
+  DATOS.cajas_pdf_hechos = () => ({hechos: 0});
+  const b = await chromium.launch(), web = await servir();
+  try {
+    const ctx = await b.newContext({serviceWorkers: 'block'});
+    const echu = crearECHU(); await ctx.route(URL_ECHU + '**', r => echu.manejar(r));
+    await ctx.addInitScript(([u, t]) => { localStorage.setItem('echu_url', u); localStorage.setItem('echu_token', t); localStorage.setItem('cajas_pdf_fallos', JSON.stringify({PDF_MARCADO_HOY: 208, PDF_MARCADO_VIEJO: 208})); }, [URL_ECHU, TOKEN]);
+    const page = await ctx.newPage();
+    await page.goto(web.url + 'cajas/index.html');
+    await page.waitForFunction(() => /importado de Drive/.test(document.getElementById('message')?.textContent || ''), null, {timeout: 20000});
+    assert.deepEqual(bajados, ['PDF_MARCADO_HOY'], 'solo el reciente');
+  } finally {
+    await b.close(); web.cerrar();
+    DATOS.cajas_estado = antes.e; for (const [k, v] of [['cajas_pdf_nuevos', antes.n], ['cajas_pdf_bajar', antes.b], ['cajas_pdf_hechos', antes.h]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
+  }
+});

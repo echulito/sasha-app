@@ -484,7 +484,9 @@ function anotarFallo(id){try{const f=fallos();f[id]=LECTOR_V;const k=Object.keys
 // v207: el agente sube los cierres de a uno (tarda 1-2 min): si una importación trajo PDF nuevos, se vuelve a mirar Drive a los 90 s
 // sin esperar los 5 min, así no queda afuera el último cierre que llegó mientras se importaba.
 export async function importarDrive(forzar){const espera=forzar===true?60000:300000;if(busy&&online&&Date.now()-DRIVE_ULTIMO>=espera){setTimeout(()=>importarDrive(forzar),1500);return;}if(!online||busy||Date.now()-DRIVE_ULTIMO<espera)return;DRIVE_ULTIMO=Date.now();let lista;try{lista=(await echu('cajas_pdf_nuevos',undefined,{todos:'1'})).archivos||[];}catch{return;}
- const yaFallo=fallos(),cargados=new Set(state.reports.map(r=>r.filename).filter(Boolean));lista=lista.filter(a=>!(a.hecho&&(cargados.has(a.nombre)||yaFallo[a.id]>=LECTOR_V)));if(!lista.length)return;
+ const yaFallo=fallos(),cargados=new Set(state.reports.map(r=>r.filename).filter(Boolean));const recien=new Date(Date.now()-2*86400000).toISOString().slice(0,10);
+ // v211: los de hoy y ayer que no están cargados se prueban siempre (aunque tengan marca): así entra un cierre que falló una vez.
+ lista=lista.filter(a=>!(a.hecho&&(cargados.has(a.nombre)||(yaFallo[a.id]>=LECTOR_V&&!(a.fecha>=recien)))));if(!lista.length)return;
  busy=true;const hechos=[],avisos=[];let nuevos=0;msg('Trayendo '+lista.length+' PDF de Drive…',true);
  try{for(const a of lista){let d;try{d=await echu('cajas_pdf_bajar',undefined,{id:a.id});}catch(e){if(e.status===401||e.status===503)break;avisos.push(a.nombre+': no se pudo bajar ('+e.message+'), se reintenta');continue;}
   try{const bin=atob(d.data),buf=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
