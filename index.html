@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=214;
+var APP_V=215;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1127,7 +1127,8 @@ function agCosPintar(d){
   if(pt&&!tp.contains(document.activeElement)){
     var el=c.tipos||[];
     // v214 (ECHU 7.06): también "Solo precio" (el agente entra con F8 al precio de venta).
-    tp.innerHTML=[['SUBIR','Subir costo y precio'],['BAJAR','Bajar costo y precio'],['SOLO COSTO','Solo costo']].concat('SOLO PRECIO' in pt?[['SOLO PRECIO','Solo precio']]:[]).map(function(t){var on=el.indexOf(t[0])>=0;
+    // v215 (ECHU 7.08): "Cambiar proveedor" (más barato en otro proveedor, sin stock y sin cabecera: F2 en Civil).
+    tp.innerHTML=[['SUBIR','Subir costo y precio'],['BAJAR','Bajar costo y precio'],['SOLO COSTO','Solo costo']].concat('SOLO PRECIO' in pt?[['SOLO PRECIO','Solo precio']]:[]).concat('CAMBIAR PROVEEDOR' in pt?[['CAMBIAR PROVEEDOR','Cambiar proveedor']]:[]).map(function(t){var on=el.indexOf(t[0])>=0;
       return '<label class="'+(on?'on':'')+'"><input type="checkbox" data-t="'+t[0]+'"'+(on?' checked':'')+'>'+t[1]+' <small>'+(pt[t[0]]||0)+'</small></label>'}).join('');
     tp.querySelectorAll('input').forEach(function(x){x.onchange=agCosTipos});
   }
