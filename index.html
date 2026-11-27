@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=222;
+var APP_V=223;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1741,7 +1741,8 @@ function verProducto(c){
 /* v220 (ECHU 7.17): precios de la competencia (las tiendas de la solapa COMPETENCIA), por código de barras y SIN descuento.
    Arriba, chico, el más barato con stock; más abajo, cada tienda. Lo buscado queda en la base de ECHU (20 h). */
 var COMPC={};
-function cmpDif(pv,x){if(!pv||!x)return '';var d=Math.round((pv/x-1)*100);return d===0?' · mismo precio':' · estás '+Math.abs(d)+'% '+(d>0?'arriba':'abajo')}
+// v223: el % en negrita, rojo si estás arriba y verde si estás abajo.
+function cmpDif(pv,x){if(!pv||!x)return '';var d=Math.round((pv/x-1)*100);return d===0?' · mismo precio':' · estás <b class="'+(d>0?'neg':'pos')+'">'+Math.abs(d)+'% '+(d>0?'arriba':'abajo')+'</b>'}
 function cmpLineaChica(d,pv){
   if(!d||d.sinBarras||d.sinTiendas)return '';
   if(d.min)return 'Competencia: '+pesos(d.min.lista)+' ('+esc(d.min.tienda)+')'+cmpDif(pv,d.min.lista);

@@ -1110,6 +1110,10 @@ test('Ficha v220 (ECHU 7.17): el más barato de la competencia chico abajo del p
   const chico = await page.locator('#fcmpmin').innerText();
   assert.equal(chico, 'Competencia: $ 11.100 (DIA) · estás 4% arriba');
   assert.equal(await page.locator('#fcmpmin').evaluate(e => getComputedStyle(e).fontSize), '12px', 'chico, no resaltado');
+  const pctArriba = page.locator('#fcmpmin b');
+  assert.equal(await pctArriba.innerText(), '4% arriba');
+  assert.deepEqual(await pctArriba.evaluate(e => [e.className, getComputedStyle(e).fontWeight]), ['neg', '700'], 'arriba: rojo y en negrita');
+  assert.equal(await page.evaluate(() => cmpDif(9000, 10000)), ' · estás <b class="pos">10% abajo</b>', 'abajo: verde');
   const precio = await page.locator('.card', {hasText: 'Precio y margen'}).innerText();
   assert.ok(precio.indexOf('Precio de venta') < precio.indexOf('Competencia: $ 11.100'), 'abajo del precio de venta');
   const c = await page.locator('#fcomp').innerText();
