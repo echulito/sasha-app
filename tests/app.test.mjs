@@ -789,6 +789,28 @@ test('Inicio v220 (ECHU 7.17): lista nueva en la carpeta de un proveedor: aviso 
   } finally { DATOS.inicio.avisos = antes; DATOS.actualizar_echu = antesAct; }
 });
 
+test('Ajustes v221 (ECHU 7.18): la actualización automática se ve, se cambia de hora y se apaga', async () => {
+  const antes = DATOS.estado_echu, pedidos = [];
+  DATOS.estado_echu = Object.assign({}, antes, {prog: {activo: true, hora: '00:00'}});
+  DATOS.act_prog = p => { pedidos.push([p.activo, p.hora]); return {activo: p.activo === 'true', hora: p.hora}; };
+  try {
+    const {ctx, page, errores} = await abrir();
+    await page.evaluate(() => irA('ajustes'));
+    await page.locator('#actprogmsg', {hasText: 'Activa'}).waitFor();
+    assert.match(await page.locator('#actprogmsg').innerText(), /Activa: ECHU se actualiza solo todos los días a las 00:00/);
+    assert.equal(await page.locator('#acthora').inputValue(), '00:00');
+    await page.fill('#acthora', '21:30');
+    await page.click('#actguardar');
+    await page.locator('#actprogmsg', {hasText: '21:30'}).waitFor();
+    await page.click('#actprog');
+    await page.locator('#actprogmsg', {hasText: 'Apagada'}).waitFor();
+    await page.waitForFunction(() => document.getElementById('actprog').textContent === 'Activar');
+    assert.deepEqual(pedidos, [['true', '21:30'], ['false', '21:30']]);
+    assert.deepEqual(errores, []);
+    await ctx.close();
+  } finally { DATOS.estado_echu = antes; delete DATOS.act_prog; }
+});
+
 // ---------- Regresión de pantallas: tienen que verse igual que las aprobadas ----------
 async function diferencia(page, a, b) {
   return page.evaluate(async ([a, b]) => {

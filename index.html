@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=220;
+var APP_V=221;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -445,6 +445,10 @@ body.consulta #admsec,body.consulta #csub{display:none!important}
       <div id="echuest" class="note" style="margin-top:0">Cargando el estado…</div>
       <div class="btns"><button class="btn" id="bact">Actualizar</button><button class="btn sec" id="brec">Reconstrucción completa</button></div>
       <div id="echumsg" class="note"></div>
+      <div class="lbl" style="margin-top:14px">Actualización automática</div>
+      <div class="two"><div><label>Todos los días a las</label><input id="acthora" type="time" value="00:00"></div><div></div></div>
+      <div class="btns"><button class="btn" id="actguardar">Guardar horario</button><button class="btn sec" id="actprog">Desactivar</button></div>
+      <div id="actprogmsg" class="note"></div>
       <div class="note">Actualizar lee los archivos nuevos (listas, stock, ventas, productos). Reconstrucción completa relee <b>todas</b> las listas desde cero, tarda más y vuelve a mostrar las tareas que tildaste como hechas.</div>
     </div>
     <div class="card" style="margin-top:12px">
@@ -610,7 +614,7 @@ function postECHU(cuerpoObj,ms){
 // Acciones que guardan algo en ECHU (para el aviso verde).
 var ESCRITURAS={guardar_propuesta:'Guardado',borrar_propuesta:'Borrado',marcar_pedido:'Guardado',marcar_cargado:'Guardado',marcar_pedido_grupo:'Guardado',
   guardar_pedido:'Guardado',borrar_pedido:'Borrado',limpieza_config_guardar:'Guardado',limpieza_sync:'Guardado',conta_config_guardar:'Guardado',
-  conta_proveedor:'Guardado',conta_borrar:'Borrado',sue_empleado:'Guardado',sue_borrar_liq:'Borrado',actualizar_echu:'Pedido',
+  conta_proveedor:'Guardado',act_prog:'Guardado',conta_borrar:'Borrado',sue_empleado:'Guardado',sue_borrar_liq:'Borrado',actualizar_echu:'Pedido',
   limpieza_importar:'Guardado',limpieza_emitir:'Guardado',gastos_guardar:'Guardado',pago_registrar:'Guardado',sue_liquidar:'Guardado',sue_config:'Guardado',conta_guardar:'Guardado',sue_doc_subir:'Guardado',sue_monotributo:'Guardado',contador_subir:'Guardado',contador_enviar:'Mandado'};
 // Cargas que muestran "Llegó completo" arriba (no las que corren solas de fondo).
 var CARGAS_AVISO={resumen:1,producto:1,oportunidades:1,sugerencias:1,ranking:1,propuestas:1,conta_mes:1,sue_datos:1,gastos_datos:1,limpieza_recibos:1,candidatos_pedido:1,candidatos_gama:1};
@@ -2928,6 +2932,7 @@ document.querySelector('nav button[data-tab="ajustes"]').addEventListener('click
 var ECHUPOLL=null;
 function pintarEstadoEchu(e){
   if(!e)return;
+  if(e.prog)pintarActProg(e.prog);else if($('actprogmsg')&&!ACTPROG)$('actprogmsg').textContent='Se puede configurar cuando ECHU esté en la versión 7.18.';
   // v219: también cuánto falta (lo que dice ECHU después del %).
   var eta=e.enCurso&&/·/.test(String(e.detalle||''))?' · '+esc(String(e.detalle).split('·').slice(1).join('·').trim()):'';
   var txt=e.enCurso?'<b>Actualizando…</b>'+(e.pct?' '+e.pct+'%':'')+eta+' Podés seguir usando la app.'
@@ -2939,6 +2944,23 @@ function pintarEstadoEchu(e){
   else if(window.__echuCorria){window.__echuCorria=false;$('echumsg').innerHTML='Terminó. Tocá <b>↻ Actualizar</b> arriba para ver los datos nuevos.'}
   if(e.enCurso)window.__echuCorria=true;
 }
+/* v221 (ECHU 7.18): actualización automática de todos los días (hora o apagada). Las listas que llegan solo avisan en el Inicio. */
+var ACTPROG=null;
+function pintarActProg(pr){
+  if(!pr||!$('acthora'))return;ACTPROG=pr;
+  $('acthora').value=pr.hora||'00:00';
+  $('actprog').textContent=pr.activo?'Desactivar':'Activar';
+  $('actprogmsg').innerHTML=pr.activo?'<b class="pos">Activa:</b> ECHU se actualiza solo todos los días a las <b>'+esc(pr.hora)+'</b> (si ya se actualizó hace menos de 3 horas y no hay listas nuevas, no la repite).'
+    :'<b>Apagada:</b> ECHU se actualiza solo cuando tocás Actualizar (y cuando llegan los archivos del agente).';
+}
+function guardarActProg(activo){
+  var h=$('acthora').value;if(!/^\d{2}:\d{2}$/.test(h)){$('actprogmsg').innerHTML='<span class="neg">Poné un horario.</span>';return}
+  $('actguardar').disabled=$('actprog').disabled=true;$('actprogmsg').textContent='Guardando…';
+  api('act_prog',{activo:activo?'true':'false',hora:h}).then(pintarActProg).catch(function(e){$('actprogmsg').innerHTML='<span class="neg">'+esc(/desconocida/i.test(e.message)?'Se puede cuando ECHU esté en la versión 7.18.':e.message)+'</span>'})
+    .then(function(){$('actguardar').disabled=$('actprog').disabled=false});
+}
+$('actguardar').onclick=function(){guardarActProg(true)};
+$('actprog').onclick=function(){guardarActProg(!(ACTPROG&&ACTPROG.activo))};
 function cargarEstadoEchu(){
   if(!CFG.token||esConsulta())return;
   api('estado_echu').then(pintarEstadoEchu).catch(function(err){$('echuest').innerHTML=/accion|Acci/i.test(err.message)?'Para usar esto, pegá la versión 5.74 de ECHU (Nueva versión).':'<span class="neg">'+esc(err.message)+'</span>'});
