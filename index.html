@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=224;
+var APP_V=225;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1646,7 +1646,7 @@ function verProducto(c){
       var hv='<div class="card" style="margin-top:12px"><h2>Ventas: precio, oferta y margen</h2>';
       if(vt.ultimas&&vt.ultimas.length){
         hv+='<div class="note" style="margin-top:0">Últimas ventas (de control de cajas)</div><table><tr><th>Día</th><th>U.</th><th>Cobrado</th><th>Costo</th><th>Margen</th></tr>';
-        vt.ultimas.forEach(function(x){
+        ventasPorDia(vt.ultimas).forEach(function(x){
           hv+='<tr><td>'+esc(x.fecha.slice(0,5))+(x.oferta?'<br><span class="chip a" style="font-size:10px">'+esc(x.oferta)+'</span>':'')+'</td><td>'+$$(x.unidades)+'</td>'+
             '<td>'+pesos(x.cobrado)+(x.oferta&&x.lista>x.cobrado?'<br><s class="note" style="margin:0">'+pesos(x.lista)+'</s>':'')+'</td>'+
             '<td>'+(x.costo?pesos(x.costo):'-')+'</td><td class="'+(x.margen===null?'':(x.margen<(p.minimo||0)?'neg':'pos'))+'">'+(x.margen===null?'-':pct(x.margen))+'</td></tr>';
@@ -1743,6 +1743,21 @@ function verProducto(c){
   }).catch(function(e){$('detalle').innerHTML=err(e)});
 }
 
+/* v225: últimas ventas, UNA fila por día (se suman los tickets del día). Precio cobrado y costo: promedio por unidad. */
+function ventasPorDia(ultimas){
+  var orden=[],por={};
+  (ultimas||[]).forEach(function(x){
+    var k=String(x.fecha||''),u=Number(x.unidades)||0,g=por[k];
+    if(!g){g=por[k]={fecha:k,unidades:0,_c:0,_l:0,_k:0,_ku:0,ofertas:[]};orden.push(g)}
+    g.unidades+=u;g._c+=(Number(x.cobrado)||0)*u;g._l+=(Number(x.lista)||0)*u;
+    if(x.costo){g._k+=x.costo*u;g._ku+=u}
+    if(x.oferta&&g.ofertas.indexOf(x.oferta)<0)g.ofertas.push(x.oferta);
+  });
+  return orden.map(function(g){
+    var u=g.unidades||1,cob=g._c/u,cos=g._ku?g._k/g._ku:0;
+    return {fecha:g.fecha,unidades:g.unidades,cobrado:cob,lista:g._l/u,costo:cos,oferta:g.ofertas.join(' · '),margen:cob&&cos?1-cos/cob:null};
+  });
+}
 /* v220 (ECHU 7.17): precios de la competencia (las tiendas de la solapa COMPETENCIA), por código de barras y SIN descuento.
    Arriba, chico, el más barato con stock; más abajo, cada tienda. Lo buscado queda en la base de ECHU (20 h). */
 var COMPC={};

@@ -1155,6 +1155,25 @@ test('Ficha v224: el costo actual es el del sistema; si la lista del proveedor a
   await ctx.close();
 });
 
+test('Ficha v225: últimas ventas, una fila por día con el total de unidades (no una por ticket)', async () => {
+  DATOS.producto = {codigo: '26779', producto: 'CREMA PRUEBA', proveedor: 'DOAN MAYORISTA', codigoProveedor: '35923', precio: 4200, costo: 2710, costoSistema: 2710, margen: 0.35, stock: 2,
+    ventaDiaria: 0.2, ventaMensual: 6, evaluacion: {nivel: 'ok', texto: 'ACEPTABLE'}, ficha: {}, mejorCosto: 0, bultos: [],
+    ventas: {meses: [], ultimas: [{fecha: '25/11/2026', unidades: 1, lista: 4200, cobrado: 4200, oferta: '', costo: 2710, margen: 0.355},
+      {fecha: '25/11/2026', unidades: 2, lista: 4200, cobrado: 4200, oferta: '', costo: 2710, margen: 0.355},
+      {fecha: '14/10/2026', unidades: 1, lista: 2400, cobrado: 2400, oferta: '', costo: 1600, margen: 0.333},
+      {fecha: '14/10/2026', unidades: 1, lista: 2400, cobrado: 1800, oferta: '25% OFF', costo: 1600, margen: 0.111}]}};
+  const {ctx, page, errores} = await abrir();
+  await page.evaluate(() => verProducto('26779'));
+  await page.locator('#bsim').waitFor();
+  const filas = await page.locator('table', {hasText: 'Cobrado'}).locator('tr').allInnerTexts();
+  assert.equal(filas.length, 3, 'encabezado + 2 días');
+  assert.match(filas[1], /^25\/11\s+3\s+\$ 4\.200\s+\$ 2\.710\s+35,5%/);
+  assert.match(filas[2], /^14\/10\s+25% OFF\s+2\s+\$ 2\.100/);
+  assert.deepEqual(errores, []);
+  delete DATOS.producto;
+  await ctx.close();
+});
+
 test('Ficha v186: el mes en curso aparece en el historial y en la tabla por mes, aclarando que no es el número final', async () => {
   DATOS.producto = {codigo: '40224', producto: 'REXONA CREMA PRUEBA', proveedor: 'TORNADO', codigoProveedor: '4376', precio: 3199, costo: 1690, costoSistema: 1690, margen: 0.47, stock: 20,
     ventaDiaria: 1.7, ventaMensual: 48.7, evaluacion: {nivel: 'ok', texto: 'ACEPTABLE'}, mejorCosto: 0, bultos: [],
