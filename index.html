@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=218;
+var APP_V=219;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -2863,7 +2863,9 @@ document.querySelector('nav button[data-tab="ajustes"]').addEventListener('click
 var ECHUPOLL=null;
 function pintarEstadoEchu(e){
   if(!e)return;
-  var txt=e.enCurso?'<b>Actualizando…</b>'+(e.pct?' '+e.pct+'%':'')+' Podés seguir usando la app.'
+  // v219: también cuánto falta (lo que dice ECHU después del %).
+  var eta=e.enCurso&&/·/.test(String(e.detalle||''))?' · '+esc(String(e.detalle).split('·').slice(1).join('·').trim()):'';
+  var txt=e.enCurso?'<b>Actualizando…</b>'+(e.pct?' '+e.pct+'%':'')+eta+' Podés seguir usando la app.'
     :'Estado: <b>'+esc(e.estado||'-')+'</b>'+(e.ultima?' · última: '+esc(e.ultima):'')+(e.estado==='ERROR'&&e.detalle?'<br><span class="neg">'+esc(e.detalle)+'</span>':'');
   $('echuest').innerHTML=txt;
   $('bact').disabled=!!e.enCurso;$('brec').disabled=!!e.enCurso;
@@ -3865,11 +3867,15 @@ function sCalcular(e,per,nov){
   var hora=(bas+ant+pr)/(200*f),he50=Number(nov.he50)||0,he100=Number(nov.he100)||0;
   if(he50)lin('Horas extra al 50%',he50+' h',hora*1.5*he50);
   if(he100)lin('Horas extra al 100%',he100+' h',hora*2*he100);
-  var nrAp=0;
+  // v219: feriado nacional trabajado (art. 166 LCT): el día se paga con el sueldo y se suma otro igual = sueldo / 25 (art. 169 y 155).
+  var fer=Number(nov.feriados)||0,ferU=fer+(fer===1?' día':' días');
+  if(fer)lin('Feriado trabajado (art. 166 LCT)',ferU,(bas+ant+pr)/25*fer);
+  var nrAp=0,nrMes=0,nrMesAp=0;
   es.nr.forEach(function(x){
-    var mo=r2(x.monto*f);if(faltas&&x.adicionales)mo=r2(mo-mo/30*faltas);lin(x.nombre,'',0,mo);if(x.aportes)nrAp+=mo;
-    if(x.adicionales){var a2=r2(mo*an/100),p2=pres?r2((mo+a2)/12):0;if(a2)lin('Antigüedad s/ '+x.nombre.split(' (')[0].toLowerCase(),an+'%',0,a2);if(p2)lin('Presentismo s/ '+x.nombre.split(' (')[0].toLowerCase(),'8,33%',0,p2);if(x.aportes)nrAp+=a2+p2}
+    var mo=r2(x.monto*f);if(faltas&&x.adicionales)mo=r2(mo-mo/30*faltas);lin(x.nombre,'',0,mo);if(x.aportes)nrAp+=mo;nrMes+=mo;if(x.aportes)nrMesAp+=mo;
+    if(x.adicionales){var a2=r2(mo*an/100),p2=pres?r2((mo+a2)/12):0;if(a2)lin('Antigüedad s/ '+x.nombre.split(' (')[0].toLowerCase(),an+'%',0,a2);if(p2)lin('Presentismo s/ '+x.nombre.split(' (')[0].toLowerCase(),'8,33%',0,p2);if(x.aportes)nrAp+=a2+p2;nrMes+=a2+p2;if(x.aportes)nrMesAp+=a2+p2}
   });
+  if(fer&&nrMes>0){lin('Feriado trabajado s/ no remunerativos',ferU,0,nrMes/25*fer);nrAp+=r2(nrMesAp/25*fer)}
   (nov.otros||[]).forEach(function(o){var mo=r2(o.monto);if(!mo||!o.c)return;if(o.t==='rem')lin(o.c,'',mo);else if(o.t==='nr'){lin(o.c,'',0,mo);if(o.aportes)nrAp+=mo}else lin(o.c,'',0,0,mo)});
   var remSinSac=r2(L.reduce(function(a,x){return a+x.rem},0));
   if((m===6||m===12)&&nov.sac!==false){
@@ -3917,7 +3923,20 @@ function sPintar(){
   if($('sliqall'))$('sliqall').onclick=sLiquidarFaltan;
   sBindPago();
 }
-function sAbrir(id){SU.emp=id;var l=sLiq(id);SU.nov=l?JSON.parse(JSON.stringify(l.novedades||{})):{};sPintar();window.scrollTo(0,0)}
+// v219 (ECHU 7.16): feriados del mes según Cajeras (cerrado / trabajado y quiénes estaban).
+function sNomOk(a,b){var n=function(x){return String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z ]/g,' ').split(/\s+/).filter(function(w){return w.length>2})};var A=n(a),B=n(b);if(!A.length||!B.length)return false;var c=A.length<=B.length?A:B,l=A.length<=B.length?B:A;return c.every(function(w){return l.indexOf(w)>=0})}
+function sFeriadosDe(e){return ((SU.D.feriados||{}).dias||[]).filter(function(f){return f.estado==='TRABAJADO'&&(f.personas||[]).some(function(p){return sNomOk(p,e.nombre)})})}
+function sFeriadosNota(e){
+  var F=SU.D.feriados||{},D=F.dias||[];
+  if(F.error)return '<div class="note">No se pudo traer el calendario de feriados: '+esc(F.error)+'</div>';
+  if(!D.length)return '<div class="note">Este mes no hay feriados nacionales.</div>';
+  return '<div class="note">Feriados del mes: '+D.map(function(f){var t=f.fecha.slice(8,10)+'/'+f.fecha.slice(5,7)+' ('+esc(f.nombre)+'): ';
+    if(f.estado==='CERRADO')return t+'local cerrado';if(f.estado==='SIN DATOS')return t+'sin datos en Cajeras';
+    var yo=(f.personas||[]).some(function(p){return sNomOk(p,e.nombre)});return t+'<b>'+(yo?'trabajó':'no trabajó')+'</b>'+(f.personas.length?' (estaban: '+f.personas.map(esc).join(', ')+')':'')}).join(' · ')+'</div>';
+}
+function sAbrir(id){SU.emp=id;var l=sLiq(id);SU.nov=l?JSON.parse(JSON.stringify(l.novedades||{})):{};
+  if(!l){var e=(SU.D.empleados||[]).filter(function(x){return x.id===id})[0];var n=e?sFeriadosDe(e).length:0;if(n)SU.nov.feriados=n}
+  sPintar();window.scrollTo(0,0)}
 function sRecibo(){
   var d=SU.D,per=d.periodo,act=sActivos(),e=(d.empleados||[]).filter(function(x){return x.id===SU.emp})[0];if(!e){SU.emp='';return sPintar()}
   if(e.pago&&e.pago.tipo==='monotributo')return sMonoDetalle(e,act);
@@ -3941,7 +3960,8 @@ function sRecibo(){
     '<div style="display:flex;justify-content:space-between;border-top:1px solid var(--linea);margin-top:6px;padding-top:6px"><b>NETO A COBRAR</b><b>'+sPesos(T.neto)+'</b></div>'+
     '<div class="rk" style="margin-top:4px">Remunerativo '+pesos(T.rem)+' · No rem. '+pesos(T.nr)+' · Descuentos '+pesos(T.desc)+' · Costo empresa ≈ '+pesos(T.costo)+'</div></div>'+
     '<div class="card" style="margin-top:8px"><div class="g2"><div><label>Horas extra 50%</label><input id="sn_he50" inputmode="decimal" value="'+(SU.nov.he50||'')+'" placeholder="0"></div><div><label>Horas extra 100%</label><input id="sn_he100" inputmode="decimal" value="'+(SU.nov.he100||'')+'" placeholder="0"></div>'+
-    '<div><label>Faltas sin aviso (días)</label><input id="sn_faltas" inputmode="numeric" value="'+(SU.nov.faltas||'')+'" placeholder="0"></div><div><label>Presentismo</label><select id="sn_pres"><option value="">'+(Number(SU.nov.faltas)>0?'No lo cobra (tiene faltas)':'Lo cobra')+'</option><option value="si"'+(SU.nov.presentismo===true?' selected':'')+'>Lo cobra igual</option><option value="no"'+(SU.nov.presentismo===false?' selected':'')+'>No lo cobra</option></select></div></div>'+
+    '<div><label>Faltas sin aviso (días)</label><input id="sn_faltas" inputmode="numeric" value="'+(SU.nov.faltas||'')+'" placeholder="0"></div><div><label>Presentismo</label><select id="sn_pres"><option value="">'+(Number(SU.nov.faltas)>0?'No lo cobra (tiene faltas)':'Lo cobra')+'</option><option value="si"'+(SU.nov.presentismo===true?' selected':'')+'>Lo cobra igual</option><option value="no"'+(SU.nov.presentismo===false?' selected':'')+'>No lo cobra</option></select></div>'+
+    '<div><label>Feriados trabajados (días)</label><input id="sn_fer" inputmode="numeric" value="'+(SU.nov.feriados||'')+'" placeholder="0"></div></div>'+sFeriadosNota(e)+
     ((m===6||m===12)?'<label style="display:flex;gap:8px;align-items:center;margin-top:10px;font-size:14px;color:var(--txt)"><input type="checkbox" id="sn_sac" style="width:auto"'+(SU.nov.sac!==false?' checked':'')+'> Incluir el aguinaldo en este recibo</label>':'')+
     '<label style="margin-top:10px">Otros conceptos (premios, adelantos, etc.)</label><div id="sn_otros">'+(SU.nov.otros||[]).map(function(o,i){return '<div class="rowb"><span>'+esc(o.c)+' <span class="rk">'+({rem:'remunerativo',nr:'no remunerativo',desc:'descuento'})[o.t]+'</span></span><span>'+pesos(o.monto)+' <button class="lnk" onclick="SU.nov.otros.splice('+i+',1);sRecibo()">quitar</button></span></div>'}).join('')+'</div>'+
     '<div class="g3"><input id="sn_oc" placeholder="Concepto"><input id="sn_om" inputmode="decimal" placeholder="$ 0"><select id="sn_ot"><option value="rem">Remunerativo</option><option value="nr">No remunerativo</option><option value="desc">Descuento / adelanto</option></select></div><div class="btns" style="margin-top:4px"><button class="btn sec" id="sn_oadd">Agregar concepto</button></div>'+
@@ -3951,9 +3971,9 @@ function sRecibo(){
   if($('sverdoc'))$('sverdoc').onclick=function(){var b=this;b.disabled=true;b.textContent='Bajando…';
     api('sue_doc_pdf',{id:rdoc.id}).then(function(f){var by=Uint8Array.from(atob(f.b64),function(c){return c.charCodeAt(0)});ULT_PDF={bytes:by,nombre:f.nombre||'recibo.pdf'};compartirPDF();b.disabled=false;b.textContent='Ver el PDF'})
       .catch(function(err2){b.disabled=false;b.textContent='Ver el PDF';alert(err2.message)})};
-  var leer=function(){SU.nov.he50=Number(String($('sn_he50').value).replace(',','.'))||0;SU.nov.he100=Number(String($('sn_he100').value).replace(',','.'))||0;SU.nov.faltas=Number($('sn_faltas').value)||0;
+  var leer=function(){SU.nov.he50=Number(String($('sn_he50').value).replace(',','.'))||0;SU.nov.he100=Number(String($('sn_he100').value).replace(',','.'))||0;SU.nov.faltas=Number($('sn_faltas').value)||0;SU.nov.feriados=Number($('sn_fer').value)||0;
     var p=$('sn_pres').value;SU.nov.presentismo=p==='si'?true:p==='no'?false:undefined;if($('sn_sac'))SU.nov.sac=$('sn_sac').checked;};
-  ['sn_he50','sn_he100','sn_faltas','sn_pres','sn_sac'].forEach(function(id){var x=$(id);if(x)x.onchange=function(){leer();var y=window.scrollY;sRecibo();window.scrollTo(0,y)}});
+  ['sn_he50','sn_he100','sn_faltas','sn_pres','sn_sac','sn_fer'].forEach(function(id){var x=$(id);if(x)x.onchange=function(){leer();var y=window.scrollY;sRecibo();window.scrollTo(0,y)}});
   $('sn_oadd').onclick=function(){leer();var c2=$('sn_oc').value.trim(),mo=parsePesos($('sn_om').value);if(!c2||!mo)return;SU.nov.otros=SU.nov.otros||[];SU.nov.otros.push({c:c2,monto:mo,t:$('sn_ot').value,aportes:$('sn_ot').value==='nr'});var y=window.scrollY;sRecibo();window.scrollTo(0,y)};
   $('sguardar').onclick=function(){leer();sGuardar(e,this)};
 }
@@ -3986,10 +4006,10 @@ function sGuardar(e,b){
 }
 function sLiquidarFaltan(){
   var b=$('sliqall'),per=SU.D.periodo,fal=sActivos().filter(function(e){return !sLiq(e.id)&&!(e.pago&&e.pago.tipo==='monotributo')});
-  if(!confirm('Se liquidan '+fal.length+' empleados sin horas extra ni faltas. Si alguno tuvo novedades, abrilo y corregilo después. ¿Seguimos?'))return;
+  if(!confirm('Se liquidan '+fal.length+' empleados sin horas extra ni faltas (con los feriados que trabajaron según Cajeras). Si alguno tuvo novedades, abrilo y corregilo después. ¿Seguimos?'))return;
   b.disabled=true;var i=0;
-  var sig=function(){if(i>=fal.length){sPintar();return}var e=fal[i++];b.textContent='Liquidando '+i+' de '+fal.length+'…';var c=sCalcular(e,per,{});
-    return lPost('sue_liquidar',{datos:JSON.stringify({periodo:per,empleado:e,novedades:{},lineas:c.lineas,totales:c.totales,escala:c.escala})}).then(function(o){SU.D.liquidaciones.push(o);return sig()})};
+  var sig=function(){if(i>=fal.length){sPintar();return}var e=fal[i++];b.textContent='Liquidando '+i+' de '+fal.length+'…';var nf=sFeriadosDe(e).length,nv=nf?{feriados:nf}:{},c=sCalcular(e,per,nv);
+    return lPost('sue_liquidar',{datos:JSON.stringify({periodo:per,empleado:e,novedades:nv,lineas:c.lineas,totales:c.totales,escala:c.escala})}).then(function(o){SU.D.liquidaciones.push(o);return sig()})};
   sig().catch(function(err2){alert(err2.message);sPintar()});
 }
 function sBorrarLiq(id){if(!confirm('¿Borrar esta liquidación?'))return;api('sue_borrar_liq',{id:id}).then(function(){SU.D.liquidaciones=SU.D.liquidaciones.filter(function(x){return x.id!==id});sRecibo()}).catch(function(e){alert(e.message)})}

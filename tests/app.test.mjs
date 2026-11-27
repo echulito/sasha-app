@@ -1594,3 +1594,29 @@ test('v169: pagar un gasto desde la app con el comprobante (foto o PDF) y anotar
     for (const [k, v] of [['pagos_historial', antes.h], ['pago_registrar', antes.r]]) { if (v === undefined) delete DATOS[k]; else DATOS[k] = v; }
   }
 });
+
+test('v219: feriado trabajado en el recibo (según Cajeras) con el día pagado aparte (sueldo / 25)', async () => {
+  const antes = DATOS.sue_datos.feriados;
+  DATOS.sue_datos.feriados = {dias: [{fecha: '2026-11-20', nombre: 'Soberanía Nacional', estado: 'TRABAJADO', personas: ['Empleada Uno']},
+    {fecha: '2026-11-23', nombre: 'Puente', estado: 'CERRADO', personas: []}]};
+  try {
+    const {ctx, page, errores} = await abrir();
+    await page.click('#bnav button[data-b="mas"]'); await page.click('#mas [data-ir="conta"]'); await page.click('#csub button[data-s="sue"]');
+    await page.locator('#slista .cmp').nth(0).waitFor();
+    await page.evaluate(() => sAbrir('E1'));
+    await page.locator('#sn_fer').waitFor({state: 'attached'});
+    assert.equal(await page.inputValue('#sn_fer'), '1', 'trabajó el 20/11 según Cajeras');
+    const t = await page.locator('#slista').textContent();   // el cálculo queda plegado (llegó el recibo de la contadora)
+    assert.match(t, /Feriado trabajado \(art\. 166 LCT\)/);
+    assert.match(t, /Feriado trabajado s\/ no remunerativos/);
+    assert.match(t, /20\/11 \(Soberanía Nacional\): trabajó/);
+    assert.match(t, /23\/11 \(Puente\): local cerrado/);
+    // el monto: (básico + antigüedad + presentismo) / 25
+    const v = await page.evaluate(() => { const e = SU.D.empleados[0], c = sCalcular(e, '2026-11', {feriados: 1}), c0 = sCalcular(e, '2026-11', {});
+      const b = c0.lineas.filter(x => /^(Sueldo básico|Antigüedad|Asistencia)/.test(x.c)).reduce((a, x) => a + x.rem, 0);
+      return [c.lineas.filter(x => x.c === 'Feriado trabajado (art. 166 LCT)')[0].rem, Math.round(b / 25 * 100) / 100]; });
+    assert.equal(v[0], v[1]);
+    assert.deepEqual(errores, []);
+    await ctx.close();
+  } finally { DATOS.sue_datos.feriados = antes; }
+});
