@@ -1089,7 +1089,7 @@ test('Ficha v150: "Proveedor y costo" separa el proveedor actual de los precios 
   await page.evaluate(() => verProducto('900'));
   await page.locator('#bsim').waitFor();
   const t = await page.locator('.card', {hasText: 'Proveedor y costo'}).innerText();
-  assert.match(t, /Proveedor actual\s*COMPRA BEAUTY \(DAI NIPPON\)\s*Código en COMPRA BEAUTY \(DAI NIPPON\)\s*791\s*Costo actual \(el que usa ECHU\)\s*\$ 4\.749,42 c\/u/);
+  assert.match(t, /Proveedor actual\s*COMPRA BEAUTY \(DAI NIPPON\)\s*Código en COMPRA BEAUTY \(DAI NIPPON\)\s*791\s*Costo actual \(en el sistema\)\s*\$ 4\.749,42 c\/u/);
   assert.match(t, /DAI NIPPON\s*cód\. 791 · lista del 10\/11 · bulto 6 u\.\s*\$ 2\.630,00 c\/u[\s\S]*UPA PAÑALERA\s*cód\. U-5 · lista del 07\/09 · vencida/);
   assert.match(t, /Mejor costo: \$ 2\.630,00 en DAI NIPPON \(cód\. 791\) · 45% menos que el actual/);
   assert.deepEqual(errores, []);
@@ -1133,6 +1133,25 @@ test('Ficha v220 (ECHU 7.17): el más barato de la competencia chico abajo del p
   assert.equal(await page.locator('#fcmpmin').innerText(), '');
   assert.deepEqual(errores, []);
   delete DATOS.producto; delete DATOS.competencia;
+  await ctx.close();
+});
+
+test('Ficha v224: el costo actual es el del sistema; si la lista del proveedor actual bajó, se dice aparte (no se repite)', async () => {
+  DATOS.producto = {codigo: '26779', producto: 'CREMA PRUEBA', proveedor: 'DOAN MAYORISTA', codigoProveedor: '35923', precio: 4200, costo: 1568.6, costoSistema: 2709.88, margen: 0.35, stock: 0,
+    ventaDiaria: 0.2, ventaMensual: 6, evaluacion: {nivel: 'ok', texto: 'ACEPTABLE'}, ficha: {}, ventas: {ultimas: []}, mejorCosto: 1568.6, mejorDonde: 'DOAN MAYORISTA',
+    bultos: [{proveedor: 'DOAN MAYORISTA', codigo: '35923', costo: 1568.6, unidades: 1, actual: true, fecha: '24/11', vencida: false},
+      {proveedor: 'DAI NIPPON', codigo: '180170002', costo: 2932.47, unidades: 12, actual: false, fecha: '24/11', vencida: false}]};
+  const {ctx, page, errores} = await abrir();
+  await page.evaluate(() => verProducto('26779'));
+  await page.locator('#bsim').waitFor();
+  const t = await page.locator('.card', {hasText: 'Proveedor y costo'}).innerText();
+  assert.match(t, /Costo actual \(en el sistema\)\s*\$ 2\.709,88 c\/u/);
+  assert.match(t, /En la lista de DOAN MAYORISTA hoy está a \$ 1\.568,60: 42% menos que el costo del sistema\./);
+  assert.match(t, /La lista de DOAN MAYORISTA es la más barata de las vigentes\./);
+  assert.doesNotMatch(t, /Mejor costo/);
+  assert.equal(await page.locator('.card', {hasText: 'Proveedor y costo'}).locator('b.pos', {hasText: '42% menos'}).count(), 1);
+  assert.deepEqual(errores, []);
+  delete DATOS.producto;
   await ctx.close();
 });
 
