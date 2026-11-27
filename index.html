@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=225;
+var APP_V=226;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1692,6 +1692,7 @@ function verProducto(c){
       (f.tendencia?'<div class="row"><span>Tendencia</span><span>'+esc(f.tendencia)+'</span></div>':'')+
       '<div class="row"><span>Peor período sin stock</span><span class="'+(f.peorQuiebre?'neg':'pos')+'">'+(f.peorQuiebre?f.peorQuiebre.dias+' días ('+esc(f.peorQuiebre.desde)+(f.peorQuiebre.sigue?' y sigue':' al '+esc(f.peorQuiebre.hasta))+')':'nunca se quedó sin stock')+'</span></div>'+
       (f.quiebres?'<div class="row"><span>Veces que se agotó</span><span>'+f.quiebres+'</span></div>':'')+
+      fichaCompras(f.compras)+
       (f.movimientos?'<div class="note">'+esc(f.movimientos)+'</div>':'')+'</div>';
     // v39: artículo de cabecera (el precio y el costo se cambian en la cabecera y se cambia toda la gama).
     if(p.cabecera){var cb=p.cabecera;
@@ -1743,6 +1744,19 @@ function verProducto(c){
   }).catch(function(e){$('detalle').innerHTML=err(e)});
 }
 
+/* v226 (ECHU 7.23): cada compra: cuántas, en cuántos días la primera venta y en cuántos se agotó (ahí volvió la plata). */
+function cmpDias(n){return n===0?'mismo día':n===1?'1 día':n+' días'}
+function fichaCompras(cs){
+  if(!cs||!cs.length)return '';
+  var h='<div class="lbl" style="margin-top:12px">Compras</div><table class="tbl"><tr><th>Compra</th><th>U.</th><th>1ª venta</th><th>Se agotó</th></tr>'+
+    cs.map(function(c){
+      var ag=c.agotar!=null?'<b>'+cmpDias(c.agotar)+'</b>':'<span class="rk" style="margin:0">no · vendió '+$$(c.vendidas)+' de '+$$(c.cantidad)+(c.hayOtra?'':' en '+cmpDias(c.dias))+'</span>';
+      return '<tr><td>'+esc(c.fecha)+'</td><td>'+$$(c.cantidad)+'</td><td>'+(c.primera!=null?cmpDias(c.primera):'<span class="rk" style="margin:0">sin ventas</span>')+'</td><td>'+ag+'</td></tr>';
+    }).join('')+'</table>';
+  var ags=cs.filter(function(c){return c.agotar!=null}).map(function(c){return c.agotar});
+  if(ags.length)h+='<div class="note">Cuando se agota, volvió toda la plata de esa compra: en promedio <b>~'+Math.round(ags.reduce(function(a,b){return a+b},0)/ags.length)+' días</b>'+(ags.length>1?' ('+ags.length+' compras)':'')+'.</div>';
+  return h;
+}
 /* v225: últimas ventas, UNA fila por día (se suman los tickets del día). Precio cobrado y costo: promedio por unidad. */
 function ventasPorDia(ultimas){
   var orden=[],por={};

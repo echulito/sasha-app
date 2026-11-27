@@ -1174,6 +1174,26 @@ test('Ficha v225: últimas ventas, una fila por día con el total de unidades (n
   await ctx.close();
 });
 
+test('Ficha v226 (ECHU 7.23): historial de compras: primera venta y en cuántos días se agotó cada una', async () => {
+  DATOS.producto = {codigo: '26779', producto: 'CREMA PRUEBA', proveedor: 'DOAN MAYORISTA', codigoProveedor: '1', precio: 7599, costo: 4000, costoSistema: 4000, margen: 0.4, stock: 0,
+    ventaDiaria: 0.03, ventaMensual: 0.8, evaluacion: {nivel: 'ok', texto: 'ACEPTABLE'}, mejorCosto: 0, bultos: [], ventas: {meses: [], ultimas: []},
+    ficha: {quiebres: 7, compras: [{fecha: '20/11/26', cantidad: 4, primera: 0, agotar: null, sigueSin: false, vendidas: 2, dias: 7, hayOtra: false},
+      {fecha: '07/10/26', cantidad: 2, primera: 2, agotar: 8, sigueSin: false, vendidas: 2, dias: 44, hayOtra: true},
+      {fecha: '01/09/26', cantidad: 3, primera: 3, agotar: 9, sigueSin: false, vendidas: 3, dias: 36, hayOtra: true}]}};
+  const {ctx, page, errores} = await abrir();
+  await page.evaluate(() => verProducto('26779'));
+  await page.locator('#bsim').waitFor();
+  const card = page.locator('.card', {hasText: 'Veces que se agotó'});
+  const filas = await card.locator('table tr').allInnerTexts();
+  assert.equal(filas.length, 4);
+  assert.match(filas[1], /^20\/11\/26\s+4\s+mismo día\s+no · vendió 2 de 4 en 7 días$/);
+  assert.match(filas[2], /^07\/10\/26\s+2\s+2 días\s+8 días$/);
+  assert.match(await card.innerText(), /Cuando se agota, volvió toda la plata de esa compra: en promedio ~9 días \(2 compras\)\./);
+  assert.deepEqual(errores, []);
+  delete DATOS.producto;
+  await ctx.close();
+});
+
 test('Ficha v186: el mes en curso aparece en el historial y en la tabla por mes, aclarando que no es el número final', async () => {
   DATOS.producto = {codigo: '40224', producto: 'REXONA CREMA PRUEBA', proveedor: 'TORNADO', codigoProveedor: '4376', precio: 3199, costo: 1690, costoSistema: 1690, margen: 0.47, stock: 20,
     ventaDiaria: 1.7, ventaMensual: 48.7, evaluacion: {nivel: 'ok', texto: 'ACEPTABLE'}, mejorCosto: 0, bultos: [],
