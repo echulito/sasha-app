@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=216;
+var APP_V=217;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -289,6 +289,7 @@ body.consulta #admsec,body.consulta #csub{display:none!important}
         <label>Qué cambia el agente</label>
         <div id="agcostipos" class="agtipos"></div>
         <div id="agcosprecio" class="agtipos oculto"></div>
+        <div id="agcosrep" class="agtipos oculto"></div>
         <label for="agcoscods">Solo estos códigos (opcional)</label>
         <input id="agcoscods" type="text" inputmode="numeric" placeholder="Ej: 56079, 15130 — vacío = todos">
         <div class="btns"><button class="btn" id="agcosya">Cambiar costos ahora</button></div>
@@ -1141,6 +1142,12 @@ function agCosPintar(d){
       (con?'':'<div class="note" style="margin:4px 0 0">Solo el costo: el precio de venta queda como está y esos productos pasan a <b>solo precio</b> (a mano).</div>');
     $('agcospreciochk').onchange=agCosPrecio;
   }
+  // v217 (ECHU 7.11): al terminar, ¿baja PRODUCTOS y actualiza ECHU? Se elige acá y vale para la próxima orden.
+  var rp=$('agcosrep');rp.classList.toggle('oculto',c.reporte===undefined);
+  if(c.reporte!==undefined&&!rp.contains(document.activeElement)){
+    rp.innerHTML='<label class="'+(c.reporte?'on':'')+'"><input type="checkbox" id="agcosrepchk"'+(c.reporte?' checked':'')+'>Al terminar, hacer el reporte (bajar PRODUCTOS y actualizar ECHU)</label>';
+    $('agcosrepchk').onchange=agCosReporte;
+  }
   $('agcosest').innerHTML=(c.soloPrecio&&!(pt&&'SOLO PRECIO' in pt)?'<b>'+c.soloPrecio+'</b> '+(c.soloPrecio===1?'cambio':'cambios')+' de solo precio (el costo ya está bien): por ahora a mano.<br>':'')+(c.conStock?'<b>'+c.conStock+'</b> '+(c.conStock===1?'baja espera':'bajas esperan')+': tienen stock (no se baja precio ni costo hasta que se agoten).<br>':'')+(c.pendientes?'Para cambiar: <b>'+c.pendientes+'</b> '+(c.pendientes===1?'producto':'productos')+(c.revisar?' · '+c.revisar+' para revisar a mano (el agente no los toca)':'')
     :'No hay cambios de costos pendientes'+(c.revisar?' (quedan '+c.revisar+' para revisar a mano)':'')+'.');
   var b=$('agcosya');b.disabled=!!d.activa||!c.pendientes||!d.tieneClave;
@@ -1191,6 +1198,10 @@ function agCosTipos(){
   document.querySelectorAll('#agcostipos label').forEach(function(l){l.classList.toggle('on',l.querySelector('input').checked)});
   if(!t.length){$('agcosest').insertAdjacentHTML('afterbegin','<span class="neg">Elegí al menos uno.</span> ');return}
   api('agente_costos_tipos',{tipos:t.join(',')}).then(function(d){document.activeElement&&document.activeElement.blur&&document.activeElement.blur();agPintar(d)}).catch(function(e){$('agcosest').insertAdjacentHTML('afterbegin','<span class="neg">'+esc(e.message)+'</span> ')});
+}
+function agCosReporte(){
+  var on=$('agcosrepchk').checked;$('agcosrepchk').parentNode.classList.toggle('on',on);
+  api('agente_costos_tipos',{reporte:on?'1':'0'}).then(function(d){document.activeElement&&document.activeElement.blur&&document.activeElement.blur();agPintar(d)}).catch(function(e){$('agcosest').insertAdjacentHTML('afterbegin','<span class="neg">'+esc(e.message)+'</span> ')});
 }
 function agCosPrecio(){
   var on=$('agcospreciochk').checked;$('agcospreciochk').parentNode.classList.toggle('on',on);

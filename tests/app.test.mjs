@@ -1437,6 +1437,29 @@ test('v215: con ECHU 7.08 aparece "Cambiar proveedor" en qué cambia el agente (
   } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_costos_tipos: antes.t}); }
 });
 
+test('v217: con ECHU 7.11 se elige si al terminar de cambiar precios hace el reporte', async () => {
+  const antes = {e: DATOS.agente_estado, t: DATOS.agente_costos_tipos};
+  try {
+    const {ctx, page, errores} = await abrir();
+    await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+    let pedido = null;
+    const base = () => ({tieneClave: true, agente: {disponible: true, hace: 8, civil: true, sesion: 'ok'}, activa: null, ultima: null, historial: [],
+      prog: {activo: true, hora: '23:00', horaAct: 'YA'}, proximo: '', tipos: [], ahora: '2026-11-26 12:00:00', ayer: '2026-11-25',
+      costos: {pendientes: 3, revisar: 0, conStock: 0, tildados: 0, soloPrecio: 0, porTipo: {SUBIR: 3, BAJAR: 0, 'SOLO COSTO': 0}, tipos: ['SUBIR'], reporte: pedido === null ? true : pedido === '1', prog: {activo: false, desde: '01:00', hasta: '09:00'}, ultimo: null}});
+    DATOS.agente_estado = base;
+    DATOS.agente_costos_tipos = p => { pedido = p.reporte; return base(); };
+    await page.click('#bnav button[data-b="mas"]');
+    await page.click('#mas [data-ir="agentes"]');
+    await page.locator('#agcosest', {hasText: 'Para cambiar: 3'}).waitFor();
+    assert.equal(await page.locator('#agcosrepchk:checked').count(), 1, 'por defecto, sí');
+    await page.click('#agcosrepchk');
+    await page.waitForFunction(() => !document.getElementById('agcosrepchk').checked && !document.getElementById('agcosrepchk').parentNode.classList.contains('on'));
+    assert.equal(pedido, '0');
+    assert.deepEqual(errores, []);
+    await ctx.close();
+  } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_costos_tipos: antes.t}); }
+});
+
 test('v174: bajar solo algunos reportes; la lista muestra solo lo pedido', async () => {
   const antes = {e: DATOS.agente_estado, c: DATOS.agente_crear_orden};
   try {
