@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=221;
+var APP_V=222;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -72,7 +72,7 @@ label{font-size:12px;color:var(--gris);font-weight:600;display:block;margin:10px
 #fichaov .cuerpo{max-width:980px;margin:0 auto;padding:12px 16px 40px}
 .seg4{flex-wrap:wrap}.seg4 button{flex:1 1 45%}
 .rk{font-size:12px;color:var(--gris);margin-top:2px}.rk b{color:var(--txt)}
-.cmpmin{font-size:12px;color:var(--gris);text-align:right;margin:-4px 0 4px}.cmpmin:empty{display:none}
+.row.concmp{border-bottom:0;padding-bottom:2px}.cmpmin{font-size:12px;line-height:1.35;color:var(--gris);text-align:right;padding:6px 0 10px;border-bottom:1px dashed var(--linea)}.cmpmin:empty{padding:0}
 .num{width:28px;height:28px;border-radius:50%;background:var(--celeste);color:var(--azul2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
 .item{background:#fff;border:1px solid var(--linea);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;gap:10px;align-items:center}
 .item:hover{border-color:var(--azul2)}
@@ -1623,7 +1623,7 @@ function verProducto(c){
     // Si para el análisis corresponde otro costo (la lista subió, o una compra a otro costo), va aparte.
     var cMos=cs||cUso, mMos=pv&&cMos?(pv-cMos)/pv:null, gMos=pv&&cMos?pv-cMos:null, otroCosto=cUso&&cMos&&Math.abs(cUso-cMos)>1;
     h+='<div class="card"><h2>Precio y margen</h2>'+
-      '<div class="row"><span>Precio de venta</span><span>'+pesos(pv)+'</span></div>'+
+      '<div class="row concmp"><span>Precio de venta</span><span>'+pesos(pv)+'</span></div>'+
       // v220 (ECHU 7.17): el más barato de la competencia, chico, abajo del precio.
       '<div class="cmpmin" id="fcmpmin">Competencia: buscando…</div>'+
       // v178 (ECHU 6.87): la oferta activada en Civil: lo que de verdad paga el cliente y el margen real.
