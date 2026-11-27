@@ -769,6 +769,26 @@ test('Inicio: el aviso de la contadora lleva a la pantalla Contadora', async () 
   } finally { DATOS.inicio.avisos = antes; }
 });
 
+test('Inicio v220 (ECHU 7.17): lista nueva en la carpeta de un proveedor: aviso informativo y botón para actualizar ECHU', async () => {
+  const antes = DATOS.inicio.avisos, antesAct = DATOS.actualizar_echu;
+  const pedidos = [];
+  DATOS.inicio.avisos = antes.concat([{nivel: 'azul', titulo: 'Listas nuevas de DAI NIPPON y JESELS', detalle: 'Actualizá ECHU para que tome los precios nuevos.', ir: 'listas', proveedores: ['DAI NIPPON', 'JESELS']}]);
+  DATOS.actualizar_echu = p => { pedidos.push(p.tipo); return {lanzada: true, tipo: p.tipo, estado: {enCurso: true, estado: 'EN PROCESO'}}; };
+  try {
+    const {ctx, page, errores} = await abrir();
+    const av = page.locator('#inicio .iav', {hasText: 'Listas nuevas de DAI NIPPON y JESELS'});
+    await av.waitFor();
+    assert.equal(await av.locator('.ic').innerText(), '↻');
+    assert.match(await av.innerText(), /Actualizá ECHU para que tome los precios nuevos\.\s*Actualizar ECHU/);
+    await av.locator('[data-ir="listas"]').click();
+    await av.locator('[data-listasmsg]', {hasText: 'Arrancó Actualizar'}).waitFor();
+    assert.deepEqual(pedidos, ['actualizar']);
+    assert.equal(await av.locator('[data-ir="listas"]').isDisabled(), true);
+    assert.deepEqual(errores, []);
+    await ctx.close();
+  } finally { DATOS.inicio.avisos = antes; DATOS.actualizar_echu = antesAct; }
+});
+
 // ---------- Regresión de pantallas: tienen que verse igual que las aprobadas ----------
 async function diferencia(page, a, b) {
   return page.evaluate(async ([a, b]) => {
@@ -1052,6 +1072,41 @@ test('Ficha v150: "Proveedor y costo" separa el proveedor actual de los precios 
   assert.match(t, /Mejor costo: \$ 2\.630,00 en DAI NIPPON \(cód\. 791\) · 45% menos que el actual/);
   assert.deepEqual(errores, []);
   delete DATOS.producto;
+  await ctx.close();
+});
+
+test('Ficha v220 (ECHU 7.17): el más barato de la competencia chico abajo del precio y una parte Competencia con todas las tiendas', async () => {
+  DATOS.producto = {codigo: '700', producto: 'SHAMPOO COMPETENCIA PRUEBA', proveedor: 'DISTRIBUIDORA UNO', codigoProveedor: '7', precio: 11500, costo: 7000, costoSistema: 7000, margen: 0.39, stock: 4,
+    barras: '7790000000011', ventaDiaria: 0.5, ventaMensual: 15, evaluacion: {nivel: 'ok', texto: 'ACEPTABLE'}, ficha: {}, ventas: {ultimas: []}, mejorCosto: 0, bultos: []};
+  const pedidas = [];
+  DATOS.competencia = p => { pedidas.push([p.barras, p.forzar]); return {barras: p.barras, buscado: Date.now(), min: {tienda: 'DIA', lista: 11100},
+    tiendas: [{tienda: 'DIA', estado: 'OK', lista: 11100, conDescuento: 7210, disponible: true, link: 'https://tienda.ejemplo/p'},
+      {tienda: 'PIGMENTO', estado: 'OK', lista: 9900, conDescuento: 0, disponible: false, link: ''}, {tienda: 'OTRA', estado: 'NO_LO_TIENE'}]}; };
+  const {ctx, page, errores} = await abrir();
+  await page.evaluate(() => verProducto('700'));
+  await page.locator('#fcomp .row').first().waitFor();
+  const chico = await page.locator('#fcmpmin').innerText();
+  assert.equal(chico, 'Competencia: $ 11.100 (DIA) · estás 4% arriba');
+  assert.equal(await page.locator('#fcmpmin').evaluate(e => getComputedStyle(e).fontSize), '12px', 'chico, no resaltado');
+  const precio = await page.locator('.card', {hasText: 'Precio y margen'}).innerText();
+  assert.ok(precio.indexOf('Precio de venta') < precio.indexOf('Competencia: $ 11.100'), 'abajo del precio de venta');
+  const c = await page.locator('#fcomp').innerText();
+  assert.match(c, /^Competencia\s*DIA MÁS BARATO\s*con descuento \$ 7\.210 · ver\s*\$ 11\.100\s*PIGMENTO\s*sin stock\s*\$ 9\.900\s*OTRA\s*no lo tiene/i);
+  assert.match(c, /Tu precio \$ 11\.500 · estás 4% arriba del más barato con stock\./);
+  assert.match(c, /Precio sin descuento, buscado por código de barras · hoy \d\d:\d\d · buscar de nuevo/);
+  assert.equal(await page.locator('#fcomp a', {hasText: 'ver'}).getAttribute('href'), 'https://tienda.ejemplo/p');
+  assert.deepEqual(pedidas, [['7790000000011', '']]);
+  await page.locator('#fcompotra').click();
+  await page.waitForFunction(() => document.querySelector('#fcomp .row'));
+  assert.deepEqual(pedidas[1], ['7790000000011', '1'], 'buscar de nuevo = forzar');
+  // Sin código de barras.
+  DATOS.competencia = () => ({sinBarras: true, tiendas: [], min: null});
+  DATOS.producto = Object.assign({}, DATOS.producto, {codigo: '701', barras: ''});
+  await page.evaluate(() => verProducto('701'));
+  await page.locator('#fcomp', {hasText: 'no tiene código de barras'}).waitFor();
+  assert.equal(await page.locator('#fcmpmin').innerText(), '');
+  assert.deepEqual(errores, []);
+  delete DATOS.producto; delete DATOS.competencia;
   await ctx.close();
 });
 

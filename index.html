@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=219;
+var APP_V=220;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -72,6 +72,7 @@ label{font-size:12px;color:var(--gris);font-weight:600;display:block;margin:10px
 #fichaov .cuerpo{max-width:980px;margin:0 auto;padding:12px 16px 40px}
 .seg4{flex-wrap:wrap}.seg4 button{flex:1 1 45%}
 .rk{font-size:12px;color:var(--gris);margin-top:2px}.rk b{color:var(--txt)}
+.cmpmin{font-size:12px;color:var(--gris);text-align:right;margin:-4px 0 4px}.cmpmin:empty{display:none}
 .num{width:28px;height:28px;border-radius:50%;background:var(--celeste);color:var(--azul2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none}
 .item{background:#fff;border:1px solid var(--linea);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;gap:10px;align-items:center}
 .item:hover{border-color:var(--azul2)}
@@ -761,7 +762,7 @@ function iniDatosAlDia(){
   return '<div class="idat"><i style="background:'+col+'"></i>'+esc(txt)+'</div>';
 }
 function iniBoton(a){
-  var t={caja:['Resolver',''],pagos:['Ver pagos','sec'],pedido:['Armar pedido','sec'],tareas:['Ver tareas','sec'],costos:['Cambiar precios',''],gastos:['Ver y aprobar','']}[a.ir]||['Ver','sec'];
+  var t={caja:['Resolver',''],pagos:['Ver pagos','sec'],pedido:['Armar pedido','sec'],tareas:['Ver tareas','sec'],costos:['Cambiar precios',''],gastos:['Ver y aprobar',''],listas:['Actualizar ECHU','']}[a.ir]||['Ver','sec'];
   return '<button class="btn '+t[1]+'" data-ir="'+esc(a.ir)+'">'+t[0]+'</button>';
 }
 function pintarInicio(){
@@ -780,7 +781,7 @@ function pintarInicio(){
     h+='<div class="itit">Para resolver · '+av.length+'</div>';
     if(!av.length)h+='<div class="card"><b class="pos">✓ Todo al día.</b> <span class="note">No hay diferencias de caja, vencimientos ni tareas pendientes.</span></div>';
     av.forEach(function(a){
-      var ic={rojo:'!',amarillo:a.ir==='pagos'?'◷':'▦',azul:'✓'}[a.nivel]||'·';
+      var ic=a.ir==='listas'?'↻':({rojo:'!',amarillo:a.ir==='pagos'?'◷':'▦',azul:'✓'}[a.nivel]||'·');
       // v176: los productos para contar: el PDF para las cajeras sale directo de acá.
       var contar=/para contar/i.test(a.titulo||'')?' <button class="btn" data-contar="1">PDF para las cajeras</button>':'';
       h+='<div class="card iav"><div class="ic '+esc(a.nivel)+'">'+ic+'</div><div><b>'+esc(a.titulo)+'</b><p>'+esc(a.detalle)+'</p>'+iniBoton(a)+contar+'<div class="note oculto" data-contarmsg></div></div></div>';
@@ -788,7 +789,7 @@ function pintarInicio(){
     if((INI.errores||[]).length)h+='<div class="note">No se pudo leer: '+esc(INI.errores.join(' · '))+'</div>';
   }
   el.innerHTML=h;
-  el.querySelectorAll('[data-ir]').forEach(function(x){x.onclick=function(ev){ev.stopPropagation();iniIr(x.dataset.ir)}});
+  el.querySelectorAll('[data-ir]').forEach(function(x){x.onclick=function(ev){ev.stopPropagation();iniIr(x.dataset.ir,x)}});
   el.querySelectorAll('[data-contar]').forEach(function(b){b.onclick=function(ev){ev.stopPropagation();iniPdfContar(b)}});
 }
 // v176 (ECHU 6.86): arma el PDF de la lista para contar (stock negativo y no coincide) y lo comparte (WhatsApp) o lo abre.
@@ -803,8 +804,10 @@ function iniPdfContar(b){
     else{var u=URL.createObjectURL(blob),l=document.createElement('a');l.href=u;l.download=d.nombre;document.body.appendChild(l);l.click();l.remove();setTimeout(function(){URL.revokeObjectURL(u)},60000)}
   }).catch(function(e){b.disabled=false;b.textContent='PDF para las cajeras';msg.classList.remove('oculto');msg.innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
-function iniIr(ir){
+function iniIr(ir,btn){
   if(ir==='ventas')return irA('resumen');
+  // v220 (ECHU 7.17): lista nueva en la carpeta de un proveedor: se actualiza ECHU desde acá.
+  if(ir==='listas')return iniActualizarListas(btn);
   if(ir==='caja'){cajSec('cajas');return irA('caja')}
   if(ir==='pagos'){cajSec('plata');return irA('caja')}
   if(ir==='pedido'){try{localStorage.setItem('sasha_compras','simulador')}catch(e){}irA('simulador');var b=document.querySelector('#simmodo button[data-m="ped"]');if(b)b.click();return}
@@ -814,6 +817,16 @@ function iniIr(ir){
   if(ir==='tareas'){if(INI&&INI.tareasUrl)window.open(INI.tareasUrl,'_blank','noopener');return}
   // v170: los cambios de costo los carga el agente en Civil (Más › Agentes automáticos › Cambiar precios).
   if(ir==='costos'){irA('mas');agAbrir();setTimeout(function(){var c=$('agcostos');if(c&&c.scrollIntoView)c.scrollIntoView({block:'start'})},60);return}
+}
+function iniActualizarListas(b){
+  if(!b)return;
+  var msg=b.parentNode.querySelector('[data-listasmsg]');
+  if(!msg){msg=document.createElement('div');msg.className='note';msg.setAttribute('data-listasmsg','1');b.parentNode.appendChild(msg)}
+  b.disabled=true;b.textContent='Pidiendo…';msg.textContent='';
+  api('actualizar_echu',{tipo:'actualizar'}).then(function(r){
+    b.textContent=r.lanzada?'Actualizando…':'Ya se está actualizando';
+    msg.textContent=r.lanzada?'Arrancó Actualizar. Cuando termine, ECHU ya trabaja con la lista nueva.':'ECHU ya se está actualizando: cuando termine, fijate si tomó la lista.';
+  }).catch(function(e){b.disabled=false;b.textContent='Actualizar ECHU';msg.innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
 /* ---------------- v107: CAJA Y PLATA ---------------- */
 var CAJSEC='cajas';
@@ -1607,6 +1620,8 @@ function verProducto(c){
     var cMos=cs||cUso, mMos=pv&&cMos?(pv-cMos)/pv:null, gMos=pv&&cMos?pv-cMos:null, otroCosto=cUso&&cMos&&Math.abs(cUso-cMos)>1;
     h+='<div class="card"><h2>Precio y margen</h2>'+
       '<div class="row"><span>Precio de venta</span><span>'+pesos(pv)+'</span></div>'+
+      // v220 (ECHU 7.17): el más barato de la competencia, chico, abajo del precio.
+      '<div class="cmpmin" id="fcmpmin">Competencia: buscando…</div>'+
       // v178 (ECHU 6.87): la oferta activada en Civil: lo que de verdad paga el cliente y el margen real.
       (p.oferta?'<div class="row"><span><b>Con la oferta</b> · '+esc(p.oferta.texto)+(p.oferta.lista==='Descontinuados'?' (descontinuados)':'')+'</span><span class="neg"><b>'+pesos(p.oferta.precio)+'</b></span></div>'+
         (p.oferta.margenReal!=null?'<div class="row"><span>Margen real (con la oferta)</span><span class="'+(p.oferta.margenReal>=0?'':'neg')+'">'+String(p.oferta.margenReal).replace('.',',')+'%</span></div>':'')+
@@ -1619,6 +1634,8 @@ function verProducto(c){
       '<div class="eval '+nivel+'">'+esc(txtNivel)+'</div>'+ev.filas+aviso+
       (!otroCosto&&cs&&cl&&Math.abs(cl-cs)>1?'<div class="row" style="margin-top:8px"><span>Costo en el sistema · en la lista</span><span>'+pesos(cs)+' · '+pesos(cl)+'</span></div>':'')+
       (p.precioSugerido?'<div class="note">Precio sugerido este mes: <b>'+pesos(p.precioSugerido)+'</b></div>':'')+'</div>';
+    // v220 (ECHU 7.17): todas las tiendas de la solapa COMPETENCIA con su precio.
+    h+='<div class="card" id="fcomp"><h2>Competencia</h2><div class="note" style="margin-top:0">Buscando por código de barras…</div></div>';
     // Ventas: a qué precio, con qué oferta, a qué costo y con qué margen se vendió.
     var vt=p.ventas||{meses:[],ultimas:[]};
     if((vt.meses&&vt.meses.length)||(vt.ultimas&&vt.ultimas.length)){
@@ -1713,9 +1730,57 @@ function verProducto(c){
     $('bsim').onclick=function(){cerrarFicha();elegirSim(p);irA('simulador')};
     pintarBotonSinEst(p);
     fichaMarcas(p.codigo);
+    fichaCompetencia(p,false);
   }).catch(function(e){$('detalle').innerHTML=err(e)});
 }
 
+/* v220 (ECHU 7.17): precios de la competencia (las tiendas de la solapa COMPETENCIA), por código de barras y SIN descuento.
+   Arriba, chico, el más barato con stock; más abajo, cada tienda. Lo buscado queda en la base de ECHU (20 h). */
+var COMPC={};
+function cmpDif(pv,x){if(!pv||!x)return '';var d=Math.round((pv/x-1)*100);return d===0?' · mismo precio':' · estás '+Math.abs(d)+'% '+(d>0?'arriba':'abajo')}
+function cmpLineaChica(d,pv){
+  if(!d||d.sinBarras||d.sinTiendas)return '';
+  if(d.min)return 'Competencia: '+pesos(d.min.lista)+' ('+esc(d.min.tienda)+')'+cmpDif(pv,d.min.lista);
+  var ok=(d.tiendas||[]).filter(function(t){return t.estado==='OK'});
+  return ok.length?'Competencia: sin stock'+' ('+esc(ok[0].tienda)+' '+pesos(ok[0].lista)+')':'Competencia: no lo tienen';
+}
+function cmpTarjeta(d,pv){
+  if(d.sinTiendas)return '<div class="note" style="margin-top:0">No hay tiendas cargadas en la solapa COMPETENCIA de ECHU.</div>';
+  if(d.sinBarras)return '<div class="note" style="margin-top:0">Este producto no tiene código de barras: no se puede buscar en la competencia.</div>';
+  var h=(d.tiendas||[]).map(function(t){
+    var izq=esc(t.tienda), der, sub=[];
+    if(t.estado==='OK'){
+      der='<b>'+pesos(t.lista)+'</b>';
+      if(t.conDescuento)sub.push('con descuento '+pesos(t.conDescuento));
+      if(!t.disponible)sub.push('<span class="warn">sin stock</span>');
+      if(t.link)sub.push('<a href="'+esc(t.link)+'" target="_blank" rel="noopener">ver</a>');
+      if(d.min&&d.min.tienda===t.tienda)izq+=' <span class="chip v" style="font-size:10px;padding:1px 6px">MÁS BARATO</span>';
+    } else der='<span class="rk" style="margin:0">'+(t.estado==='NO_LO_TIENE'?'no lo tiene':'no respondió')+'</span>';
+    return '<div class="row"><span>'+izq+(sub.length?'<br><span class="rk">'+sub.join(' · ')+'</span>':'')+'</span><span>'+der+'</span></div>';
+  }).join('');
+  if(d.min&&pv)h+='<div class="note">Tu precio '+pesos(pv)+cmpDif(pv,d.min.lista)+' del más barato con stock.</div>';
+  var hora=d.buscado?new Date(d.buscado):null;
+  h+='<div class="note">Precio sin descuento, buscado por código de barras'+(hora?' · '+(hora.toDateString()===new Date().toDateString()?'hoy':hora.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit'}))+' '+hora.toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',hour12:false}):'')+
+    ' · <a href="#" id="fcompotra">buscar de nuevo</a></div>';
+  return h;
+}
+function fichaCompetencia(p,forzar){
+  var box=$('fcomp'),chico=$('fcmpmin');if(!box)return;
+  var b=String(p.barras||p.barrasVer||'').replace(/\D/g,''), k=b+'|'+p.codigo, pv=p.precio||0;
+  var pintar=function(d){
+    if($('fcomp')!==box)return;   // ya se abrió otro producto
+    chico.innerHTML=cmpLineaChica(d,pv);
+    box.innerHTML='<h2>Competencia</h2>'+cmpTarjeta(d,pv);
+    var o=$('fcompotra');if(o)o.onclick=function(){box.innerHTML='<h2>Competencia</h2><div class="note" style="margin-top:0">Buscando de nuevo…</div>';chico.textContent='Competencia: buscando…';fichaCompetencia(p,true);return false};
+  };
+  var x=COMPC[k];
+  if(!forzar&&x&&Date.now()-x.t<1200000){pintar(x.d);return}
+  api('competencia',{barras:b,codigo:p.codigo,forzar:forzar?'1':''}).then(function(d){COMPC[k]={t:Date.now(),d:d};pintar(d)}).catch(function(e){
+    if($('fcomp')!==box)return;
+    chico.textContent='';
+    box.innerHTML='<h2>Competencia</h2><div class="note" style="margin-top:0">'+(/ACCION|no conoce|desconocida/i.test(e.message)?'Se ve cuando ECHU esté en la versión 7.17.':'No se pudo buscar: '+esc(e.message))+'</div>';
+  });
+}
 function fichaMarcas(cod){
   var box=$('fmarcas');if(!box||esConsulta())return;
   var ins=box.querySelectorAll('input'),msg=$('fmarcasmsg');
