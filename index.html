@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=217;
+var APP_V=218;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -1161,7 +1161,9 @@ function agCosPintar(d){
       +(act&&o.estado!=='PENDIENTE'?'<div><small>'+esc(act)+'</small></div>':'')
       +agCosRecorrido(p)
       +'<small>Pedido '+agFecha(o.pedida)+(o.origen==='PROGRAMADA'?' · automático':'')+(p.hasta?' · hasta las '+esc(p.hasta):'')+'</small></div>'
-      +(p.detener?'<div class="btns"><button class="btn sec" id="agcosdes" onclick="agCosDestrabar(\''+esc(o.id)+'\')">Destrabar</button></div><div class="note">Si no se mueve, tocá Destrabar: cierra la orden desde acá.</div>'
+      // v218: Destrabar recién si la computadora no avisa nada hace 3 minutos (antes, termina el producto y transfiere).
+      +(p.detener&&agSinNovedad(o,d,3)?'<div class="btns"><button class="btn sec" id="agcosdes" onclick="agCosDestrabar(\''+esc(o.id)+'\')">Destrabar</button></div><div class="note">La computadora no avisa nada hace más de 3 minutos. Si no se mueve, tocá Destrabar: cierra la orden desde acá.</div>'
+        :p.detener?'<div class="note">Esperá: termina el producto que está haciendo, transfiere a las cajas y arma el PDF. Si en 3 minutos no avisa nada, aparece Destrabar.</div>'
         :'<div class="btns"><button class="btn sec" id="agcosdet" onclick="agCosDetener(\''+esc(o.id)+'\',\''+esc(o.estado)+'\')">'+(o.estado==='PENDIENTE'?'Cancelar':'Detener')+'</button></div>');
   }else if(c.ultimo){
     var u=c.ultimo;
@@ -1169,7 +1171,9 @@ function agCosPintar(d){
       :u.estado==='CANCELADA'?'<div class="eval mal" style="margin-top:10px"><b>Cancelado</b><br>'+esc(u.detalle||'')
       :'<div class="eval bien" style="margin-top:10px"><b>Última vez: '+esc(u.detalle||'terminado')+'</b>'+(u.total?'<br>'+u.total+' '+(u.total===1?'cambio de precio':'cambios de precios')+' en el PDF':''))
       +'<br><small>'+agFecha(u.fin)+'</small></div>'
-      +(u.pdf?'<div class="btns"><button class="btn sec" id="agcospdf" data-url="'+esc(u.pdf)+'">Ver PDF de cambios de precios</button></div>':'');
+      +(u.pdf?'<div class="btns"><button class="btn sec" id="agcospdf" data-url="'+esc(u.pdf)+'">Ver PDF de cambios de precios</button></div>'
+        // v218 (ECHU 7.12): si cambió precios y no se armó el PDF (por ejemplo, destrabada), se arma desde acá.
+        :u.ok&&u.ok>0?'<div class="btns"><button class="btn sec" id="agcosarmar" onclick="agCosArmarPdf(\''+esc(u.id)+'\')">Armar PDF de cambios de precios</button></div>':'');
   }
   $('agcosorden').innerHTML=h;
   var pdf=$('agcospdf');if(pdf)pdf.onclick=function(){window.open(pdf.dataset.url,'_blank','noopener')};
@@ -1206,6 +1210,15 @@ function agCosReporte(){
 function agCosPrecio(){
   var on=$('agcospreciochk').checked;$('agcospreciochk').parentNode.classList.toggle('on',on);
   api('agente_costos_tipos',{precio:on?'1':'0'}).then(function(d){document.activeElement&&document.activeElement.blur&&document.activeElement.blur();agPintar(d)}).catch(function(e){$('agcosest').insertAdjacentHTML('afterbegin','<span class="neg">'+esc(e.message)+'</span> ')});
+}
+function agSinNovedad(o,d,min){
+  var a=String(o.actualizado||o.inicio||'').replace(' ','T'),b=String(d.ahora||'').replace(' ','T');
+  if(!a||!b)return true;
+  var t=new Date(b)-new Date(a);return !(t>=0)||t>=min*60000;
+}
+function agCosArmarPdf(id){
+  var b=$('agcosarmar');if(b){b.disabled=true;b.textContent='Armando PDF…'}
+  api('agente_costos_pdf',{id:id}).then(function(d){agPintar(d);var r=d.pdfRehecho;if(r&&r.pdf)window.open(r.pdf,'_blank','noopener')}).catch(function(e){if(b){b.disabled=false;b.textContent='Armar PDF de cambios de precios'}$('agcosorden').insertAdjacentHTML('beforeend','<div class="eval mal" style="margin-top:10px">'+esc(e.message)+'</div>')});
 }
 function agCosDestrabar(id){
   if(!confirm('¿Destrabar? Cierra la orden desde acá. Si la computadora ya había cambiado algo, la transferencia a las cajas hacela a mano.'))return;

@@ -1327,7 +1327,15 @@ test('v170: Cambiar precios en Civil: desde Inicio, en vivo con Detener, el PDF 
     await page.locator('#agcosorden', {hasText: 'Deteniendo: termina el producto'}).waitFor();
     assert.deepEqual(canceladas, ['A9']);
     assert.equal(await page.locator('#agcosdet').count(), 0);
+    // v218: Destrabar recién si la computadora no avisa nada hace 3 minutos
+    Object.assign(orden, {actualizado: '2026-11-17 14:05:00'}); base.ahora = '2026-11-17 14:06:00';
+    await page.evaluate(() => agCargar());
+    await page.locator('#agcosorden', {hasText: 'Esperá: termina el producto'}).waitFor();
+    assert.equal(await page.locator('#agcosdes').count(), 0);
     // v171: si no se mueve, "Destrabar" cierra la orden desde la app
+    base.ahora = '2026-11-17 14:08:30';
+    await page.evaluate(() => agCargar());
+    await page.locator('#agcosdes').waitFor();
     assert.equal(await page.locator('#agcosdes').isVisible(), true);
     const forzadas = [];
     DATOS.agente_cancelar = p => { forzadas.push(p.forzar); return base; };
@@ -1458,6 +1466,29 @@ test('v217: con ECHU 7.11 se elige si al terminar de cambiar precios hace el rep
     assert.deepEqual(errores, []);
     await ctx.close();
   } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_costos_tipos: antes.t}); }
+});
+
+test('v218: si cambió precios y no hay PDF (destrabada), se arma desde la app', async () => {
+  const antes = {e: DATOS.agente_estado, p: DATOS.agente_costos_pdf};
+  try {
+    const {ctx, page, errores} = await abrir();
+    await page.getByText('Este mes · noviembre').waitFor({state: 'attached'});
+    const pedidos = [];
+    const base = {tieneClave: true, agente: {disponible: true, hace: 8, civil: true, sesion: 'ok'}, activa: null, ultima: null, historial: [],
+      prog: {activo: true, hora: '23:00', horaAct: 'YA'}, proximo: '', tipos: [], ahora: '2026-11-26 22:10:00', ayer: '2026-11-25',
+      costos: {pendientes: 3, revisar: 0, conStock: 0, tildados: 0, soloPrecio: 0, porTipo: {SUBIR: 3}, tipos: ['SUBIR'], prog: {activo: false, desde: '01:00', hasta: '09:00'},
+        ultimo: {id: 'A9', estado: 'CANCELADA', fin: '2026-11-26 22:04:14', detalle: 'Destrabada desde la app (3 ya cambiados: transferí a mano)', pdf: '', total: 0, ok: 3}}};
+    DATOS.agente_estado = () => base;
+    DATOS.agente_costos_pdf = p => { pedidos.push(p.id); return Object.assign({}, base, {pdfRehecho: {pdf: '', total: 3}}); };
+    await page.click('#bnav button[data-b="mas"]');
+    await page.click('#mas [data-ir="agentes"]');
+    await page.locator('#agcosarmar').waitFor();
+    await page.click('#agcosarmar');
+    await page.waitForFunction(() => true); await page.waitForTimeout(300);
+    assert.deepEqual(pedidos, ['A9']);
+    assert.deepEqual(errores, []);
+    await ctx.close();
+  } finally { Object.assign(DATOS, {agente_estado: antes.e, agente_costos_pdf: antes.p}); }
 });
 
 test('v174: bajar solo algunos reportes; la lista muestra solo lo pedido', async () => {
