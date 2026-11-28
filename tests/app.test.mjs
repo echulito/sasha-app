@@ -1759,3 +1759,31 @@ test('v219: feriado trabajado en el recibo (según Cajeras) con el día pagado a
     await ctx.close();
   } finally { DATOS.sue_datos.feriados = antes; }
 });
+
+test('v227 (ECHU 7.32): Inicio › Ofertas › Bajar PDF de ofertas (como el de la simulación)', async () => {
+  const antes = DATOS.inicio.ofertas, antesPdf = DATOS.ofertas_pdf;
+  DATOS.inicio.ofertas = {activos: 21, descontinuados: 380};
+  DATOS.ofertas_pdf = {base64: Buffer.from('%PDF-1.4\n%%EOF\n').toString('base64'), nombre: 'OFERTAS 27-11-2026 20.30.pdf', url: 'https://drive.google.com/file/d/x/view', activos: 21, descontinuados: 380, total: 401};
+  const {ctx, page, echu, errores} = await abrir();
+  try {
+    await page.locator('#inicio .iof').waitFor();
+    const t = await page.locator('#inicio .iof').innerText();
+    assert.match(t, /Ofertas en góndola/);
+    assert.match(t, /21 activas · 380 descontinuadas/);
+    await page.click('#inicio [data-ofpdf]');
+    await page.locator('#pdfbarra').waitFor();
+    assert.match(await page.locator('#pdfbarra').innerText(), /PDF listo · OFERTAS 27-11-2026 20\.30\.pdf/);
+    assert.match(await page.locator('#inicio .iof').innerText(), /401 productos \(21 activos · 380 descontinuados\)\.\s*Guardado en Drive/);
+    assert.ok(echu.pedidos.some(p => /ofertas_pdf/.test((p.cuerpo || '') + p.url)));
+    // La lista de "Para resolver" no cambia.
+    assert.deepEqual(await page.$$eval('#inicio .iav:not(.iof) b', bs => bs.length), 4);
+    assert.deepEqual(errores, []);
+  } finally { DATOS.inicio.ofertas = antes; DATOS.ofertas_pdf = antesPdf; await ctx.close(); }
+});
+
+test('v227: sin ofertas cargadas no aparece el botón', async () => {
+  const {ctx, page} = await abrir();
+  await page.locator('#inicio .iav').first().waitFor();
+  assert.equal(await page.locator('#inicio .iof').count(), 0);
+  await ctx.close();
+});

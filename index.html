@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <script>
 /* v97: la app se actualiza solo desde GitHub (se sacó la actualización desde ECHU: menos puertas abiertas). */
-var APP_V=226;
+var APP_V=227;
 </script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://script.google.com https://script.googleusercontent.com; connect-src 'self' https://script.google.com https://script.googleusercontent.com; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
@@ -791,10 +791,29 @@ function pintarInicio(){
       h+='<div class="card iav"><div class="ic '+esc(a.nivel)+'">'+ic+'</div><div><b>'+esc(a.titulo)+'</b><p>'+esc(a.detalle)+'</p>'+iniBoton(a)+contar+'<div class="note oculto" data-contarmsg></div></div></div>';
     });
     if((INI.errores||[]).length)h+='<div class="note">No se pudo leer: '+esc(INI.errores.join(' · '))+'</div>';
+    // v227 (ECHU 7.32): el PDF de ofertas (activos y descontinuados) para controlar la góndola.
+    var of=INI.ofertas;
+    if(of&&(of.activos||of.descontinuados)){
+      h+='<div class="itit">Ofertas</div><div class="card iav iof"><div class="ic azul">%</div><div><b>Ofertas en góndola</b><p>'+
+        of.activos+(of.activos===1?' activa':' activas')+' · '+of.descontinuados+(of.descontinuados===1?' descontinuada':' descontinuadas')+'</p>'+
+        '<button class="btn" data-ofpdf="1">Bajar PDF de ofertas</button><div class="note oculto" data-ofmsg></div></div></div>';
+    }
   }
   el.innerHTML=h;
   el.querySelectorAll('[data-ir]').forEach(function(x){x.onclick=function(ev){ev.stopPropagation();iniIr(x.dataset.ir,x)}});
   el.querySelectorAll('[data-contar]').forEach(function(b){b.onclick=function(ev){ev.stopPropagation();iniPdfContar(b)}});
+  el.querySelectorAll('[data-ofpdf]').forEach(function(b){b.onclick=function(ev){ev.stopPropagation();iniPdfOfertas(b)}});
+}
+// v227 (ECHU 7.32): arma el PDF de OFERTAS y lo deja para abrir, compartir o guardar (igual que el de la simulación).
+function iniPdfOfertas(b){
+  var msg=b.parentNode.querySelector('[data-ofmsg]');b.disabled=true;b.textContent='Armando el PDF…';msg.classList.add('oculto');
+  api('ofertas_pdf').then(function(d){
+    var bin=atob(d.base64),arr=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);
+    ULT_PDF={bytes:arr,nombre:d.nombre||'OFERTAS.pdf'};
+    b.disabled=false;b.textContent='Bajar PDF de ofertas';
+    msg.classList.remove('oculto');msg.innerHTML=d.total+' productos ('+d.activos+' activos · '+d.descontinuados+' descontinuados).'+(d.url?' <a href="'+esc(d.url)+'" target="_blank" rel="noopener">Guardado en Drive</a>':'');
+    compartirPDF();
+  }).catch(function(e){b.disabled=false;b.textContent='Bajar PDF de ofertas';msg.classList.remove('oculto');msg.innerHTML='<span class="neg">'+esc(e.message)+'</span>'});
 }
 // v176 (ECHU 6.86): arma el PDF de la lista para contar (stock negativo y no coincide) y lo comparte (WhatsApp) o lo abre.
 function iniPdfContar(b){
